@@ -56,3 +56,6 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
                              const std::function<void(const std::wstring&)>& onItem);
 std::vector<std::wstring> ExpandedPaths(const CleanCategory& c);
 bool IsElevated();
+// A System Restore point (needs administrator rights and System Protection on the system drive).
+// Windows makes at most one per 24 hours by default; within that window it keeps the recent one.
+bool CreateRestorePoint(const std::wstring& description, std::wstring& err);

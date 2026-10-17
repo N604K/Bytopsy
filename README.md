@@ -32,6 +32,8 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Each category is measured first, and only the safe ones are preselected. *Review* lists exactly
   what a category would delete (files, folders or Recycle Bin items) so you can uncheck anything to
   keep; cleaning deletes only that list, and skips entries that changed since they were measured.
+  As administrator, system-level cleanups (Windows temp, update downloads) offer a System Restore
+  point first; if it can't be made, nothing is cleaned.
 - **Who is using this file?** When something can't be deleted because it is open, WinNCDU asks the
   Windows Restart Manager which app holds it and says so ("Close Google Chrome, then try again"),
   in the delete dialog, after Cleanup and in the journal.

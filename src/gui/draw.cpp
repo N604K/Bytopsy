@@ -1676,7 +1676,7 @@ void App::DrawDialog() {
         RectF cr = R(tx, y, card.right - 24, y + 26);
         bool hv = Hovered(HK_DIALOG, -1);
         Checkbox(RWH(tx, y + 4, 18, 18), dialog_.checked, hv);
-        gfx_.Text(dialog_.checkText, R(tx + 28, y, cr.right, cr.bottom), dialog_.checked ? P_.danger : P_.text, TS(13));
+        gfx_.Text(dialog_.checkText, R(tx + 28, y, cr.right, cr.bottom), dialog_.checked && dialog_.checkDanger ? P_.danger : P_.text, TS(13));
         AddHit(cr, HK_DIALOG, -1);
         y += 28;
     }

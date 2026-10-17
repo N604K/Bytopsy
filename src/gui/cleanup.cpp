@@ -123,6 +123,48 @@ bool IsElevated() {
     return elevated;
 }
 
+bool CreateRestorePoint(const std::wstring& description, std::wstring& err) {
+    // srclient.dll is loaded on demand: it doesn't exist on Windows Server without the feature.
+    struct RpInfo {  // RESTOREPOINTINFOW
+        DWORD dwEventType;
+        DWORD dwRestorePtType;
+        INT64 llSequenceNumber;
+        WCHAR szDescription[256];
+    };
+    struct SmgrStatus {  // STATEMGRSTATUS
+        UINT nStatus;
+        INT64 llSequenceNumber;
+    };
+    using SetFn = BOOL(WINAPI*)(RpInfo*, SmgrStatus*);
+    HMODULE lib = LoadLibraryExW(L"srclient.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    auto set = lib ? reinterpret_cast<SetFn>(GetProcAddress(lib, "SRSetRestorePointW")) : nullptr;
+    if (!set) {
+        err = L"System Restore is not available on this PC.";
+        if (lib) FreeLibrary(lib);
+        return false;
+    }
+    const DWORD kBegin = 100, kEnd = 101, kModifySettings = 12;  // BEGIN/END_SYSTEM_CHANGE, MODIFY_SETTINGS
+    RpInfo info{};
+    info.dwEventType = kBegin;
+    info.dwRestorePtType = kModifySettings;
+    wcsncpy_s(info.szDescription, description.c_str(), _TRUNCATE);
+    SmgrStatus status{};
+    bool ok = set(&info, &status) != FALSE;
+    if (ok) {
+        RpInfo end{};
+        end.dwEventType = kEnd;
+        end.llSequenceNumber = status.llSequenceNumber;
+        SmgrStatus s2{};
+        set(&end, &s2);
+    } else if (status.nStatus == ERROR_SERVICE_DISABLED) {
+        err = L"System Protection is turned off for the system drive (System Properties \u2192 System Protection).";
+    } else {
+        err = util::Win32ErrorMessage(status.nStatus ? status.nStatus : GetLastError());
+    }
+    FreeLibrary(lib);
+    return ok;
+}
+
 std::vector<CleanCategory> BuildCleanupCategories() {
     std::vector<CleanCategory> v;
     {

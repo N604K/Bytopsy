@@ -155,6 +155,7 @@ struct Dialog {
     int cancel = -1;  // button chosen by Escape (-1: the first non-primary button)
     bool hasCheck = false, checked = false;
     std::wstring checkText;
+    bool checkDanger = true;  // checked = risky (e.g. "delete permanently"): drawn in the danger color
     std::function<void(Dialog&)> onCheck;
     std::function<void(int button, bool checked)> onClose;
 };

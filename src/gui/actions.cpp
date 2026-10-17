@@ -906,9 +906,20 @@ void App::StartCleanup() {
     d.buttons = {L"Cancel", L"Clean up"};
     d.primary = 1;
     d.danger = 1;
-    d.onClose = [this, chosen](int b, bool) {
+    // System-level categories (Windows temp, updates) can come with a restore point first.
+    bool system = false;
+    for (size_t i : chosen) system = system || cleanup_[i].needsAdmin;
+    if (system && elevated_) {
+        d.hasCheck = true;
+        d.checked = true;
+        d.checkText = L"Create a System Restore point first";
+        d.checkDanger = false;
+    }
+    d.onClose = [this, chosen, offered = d.hasCheck](int b, bool restorePoint) {
         if (b != 1) return;
         struct State {
+            bool restorePoint = false;
+            std::wstring restoreErr;  // set if the restore point failed: nothing is cleaned then
             std::vector<CleanCategory> cats;
             std::atomic<size_t> index{0};
             std::atomic<uint64_t> freed{0}, failed{0};
@@ -918,6 +929,7 @@ void App::StartCleanup() {
             std::wstring current;
         };
         auto st = std::make_shared<State>();
+        st->restorePoint = restorePoint && offered;
         for (size_t i : chosen) st->cats.push_back(cleanup_[i]);
         auto t = std::make_unique<Task>();
         t->title = L"Cleaning up";
@@ -930,6 +942,17 @@ void App::StartCleanup() {
         t->progress = [st] { return static_cast<double>(st->index) / st->cats.size(); };
         t->cancel = [st] { st->cancel = true; };
         t->onDone = [this, st] {
+            if (!st->restoreErr.empty()) {
+                Dialog e;
+                e.title = L"No restore point, so nothing was cleaned";
+                e.message = st->restoreErr + L"\n\nClean up again without the restore point option, or turn System Protection on first.";
+                e.icon = 0xE7BA;
+                e.tone = 2;
+                e.buttons = {L"OK"};
+                e.primary = 0;
+                ShowDialog(std::move(e));
+                return;
+            }
             Toast(L"Cleanup freed " + util::FormatSizeShort(st->freed) +
                       (st->failed ? L" · " + util::FormatCount(st->failed) + L" items in use were skipped" +
                                         (st->lockedBy.empty() ? L"" : L" (close " + AppNames(st->lockedBy) + L")")
@@ -946,6 +969,17 @@ void App::StartCleanup() {
             drives_ = ListDrives();
         };
         StartTask(std::move(t), [st] {
+            if (st->restorePoint) {
+                {
+                    std::lock_guard<std::mutex> lk(st->m);
+                    st->current = L"Creating a System Restore point…";
+                }
+                CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+                std::wstring err;
+                if (!CreateRestorePoint(L"WinNCDU cleanup", err)) st->restoreErr = err;
+                CoUninitialize();
+                if (!st->restoreErr.empty()) return;
+            }
             for (size_t i = 0; i < st->cats.size() && !st->cancel; ++i) {
                 st->index = i;
                 const CleanCategory& c = st->cats[i];

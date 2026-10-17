@@ -18,7 +18,9 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [x] **Who is locking this?** The Restart Manager (`RmGetList`) names the app holding files ("Close
       Google Chrome, then try again") for failed deletes and skipped Cleanup items (`AppsUsing` in
       `src/fsops.cpp`).
-- [ ] **Restore point** before system-level cleanups (`SRSetRestorePoint`), optional.
+- [x] **Restore point** before system-level cleanups (`SRSetRestorePoint`), optional: offered as
+      administrator when Windows temp / update categories are chosen; a failure cancels the cleanup.
+      (Not yet exercised on a real elevated run.)
 - [x] **Handle-based deletion**: permanent deletes open everything relative to the parent's handle
       (`NtCreateFile` with `FILE_OPEN_REPARSE_POINT`) and delete via `FileDispositionInfoEx`; as
       administrator, a target whose path now leads elsewhere is refused. (Recycle Bin moves still go
