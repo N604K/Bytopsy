@@ -15,6 +15,7 @@
 #include "console.h"
 #include "export.h"
 #include "fsops.h"
+#include "journal.h"
 #include "protect.h"
 #include "util.h"
 #include "version.h"
@@ -496,6 +497,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     struct State {
         std::vector<std::wstring> paths;
         std::vector<std::wstring> errors;
+        std::vector<int64_t> times;  // when each item was done (for the journal)
         std::atomic<size_t> index{0};
         std::atomic<size_t> attempted{0};
         std::atomic<uint64_t> removed{0};
@@ -504,6 +506,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     auto st = std::make_shared<State>();
     for (Node* n : targets) st->paths.push_back(NodePath(n));
     st->errors.resize(targets.size());
+    st->times.resize(targets.size());
     auto t = std::make_unique<Task>();
     t->title = permanent ? L"Deleting permanently" : L"Moving to Recycle Bin";
     t->lines = [st, permanent] {
@@ -516,7 +519,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     };
     t->progress = [st] { return st->paths.empty() ? 0.0 : static_cast<double>(st->index) / st->paths.size(); };
     t->cancel = [st] { st->cancel = true; };
-    t->onDone = [this, st, targets] {
+    t->onDone = [this, st, targets, permanent] {
         std::vector<Node*> partial;
         std::vector<std::wstring> errLines;
         uint64_t freed = 0;
@@ -525,11 +528,22 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
             Node* n = targets[i];
             marks_.erase(n);
             if (!IsAlive(n)) continue;
+            JournalEntry je;
+            je.time = st->times[i];
+            je.action = permanent ? JournalAction::Delete : JournalAction::Recycle;
+            je.bytes = n->size;
+            je.items = n->items + 1;
+            je.path = st->paths[i];
             if (!PathExists(st->paths[i])) {
+                JournalAppend(je);
                 freed += Val(n);
                 ++deleted;
                 graveyard_.push_back(DetachNode(n));
             } else if (i < st->attempted.load()) {
+                if (permanent) {  // some of it is gone for good: that belongs in the journal too
+                    je.note = L"partly deleted: " + st->errors[i];
+                    JournalAppend(je);
+                }
                 partial.push_back(n);
             }
             if (!st->errors[i].empty() && errLines.size() < 12) errLines.push_back(st->errors[i]);
@@ -555,6 +569,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
             bool ok = permanent ? DeletePermanently(st->paths[i], st->cancel, st->removed, err)
                                 : DeleteToRecycleBin(st->paths[i], err);
             if (!ok) st->errors[i] = err.empty() ? st->paths[i] + L": failed" : err;
+            st->times[i] = util::NowFileTime();
         }
         if (!permanent) CoUninitialize();
     });

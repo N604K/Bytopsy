@@ -643,6 +643,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     if (targets.empty()) return Toast(L"Protected locations are never deleted", 1);
     struct State {
         std::vector<std::wstring> paths, errors;
+        std::vector<int64_t> times;  // when each item was done (for the journal)
         std::atomic<size_t> index{0}, attempted{0};
         std::atomic<uint64_t> removed{0};
         std::atomic<bool> cancel{false};
@@ -650,6 +651,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     auto st = std::make_shared<State>();
     for (Node* n : targets) st->paths.push_back(NodePath(n));
     st->errors.resize(targets.size());
+    st->times.resize(targets.size());
     auto t = std::make_unique<Task>();
     t->title = permanent ? L"Deleting" : L"Moving to the Recycle Bin";
     t->lines = [st, permanent] {
@@ -671,11 +673,22 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
             Node* n = targets[i];
             sel_.erase(n);
             if (!IsAlive(n)) continue;
+            JournalEntry je;
+            je.time = st->times[i];
+            je.action = permanent ? JournalAction::Delete : JournalAction::Recycle;
+            je.bytes = n->size;
+            je.items = n->items + 1;
+            je.path = st->paths[i];
             if (!PathExists(st->paths[i])) {
+                JournalAppend(je);
                 freed += Val(n);
                 ++deleted;
                 graveyard_.push_back(DetachNode(n));
             } else if (i < st->attempted.load()) {
+                if (permanent) {  // some of it is gone for good: that belongs in the journal too
+                    je.note = L"partly deleted: " + st->errors[i];
+                    JournalAppend(je);
+                }
                 partial.push_back(n);
             }
             if (!st->errors[i].empty() && errs.size() < 8) errs.push_back(st->errors[i]);
@@ -709,6 +722,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
             bool ok = permanent ? DeletePermanently(st->paths[i], st->cancel, st->removed, err)
                                 : DeleteToRecycleBin(st->paths[i], err);
             if (!ok) st->errors[i] = err.empty() ? st->paths[i] + L": failed" : err;
+            st->times[i] = util::NowFileTime();
         }
         if (!permanent) CoUninitialize();
     });
@@ -893,11 +907,23 @@ void App::StartCleanup() {
             for (size_t i = 0; i < st->cats.size() && !st->cancel; ++i) {
                 st->index = i;
                 uint64_t failed = 0;
-                st->freed += CleanCategoryNow(st->cats[i], st->cancel, failed, [&](const std::wstring& p) {
+                CleanCategory& c = st->cats[i];
+                uint64_t filesBefore = c.files;
+                uint64_t freed = CleanCategoryNow(c, st->cancel, failed, [&](const std::wstring& p) {
                     std::lock_guard<std::mutex> lk(st->m);
                     st->current = p;
                 });
+                st->freed += freed;
                 st->failed += failed;
+                if (!c.external) {
+                    JournalEntry je;
+                    je.action = JournalAction::Clean;
+                    je.bytes = freed;
+                    je.items = filesBefore > c.files ? filesBefore - c.files : 0;
+                    je.path = c.name;
+                    if (failed) je.note = util::FormatCount(failed) + L" items in use were skipped";
+                    JournalAppend(je);
+                }
             }
         });
     };
@@ -935,7 +961,8 @@ void App::NavigateTo(Node* dir, bool remember) {
 }
 
 void App::ShowView(View v) {
-    if (v != View::Home && v != View::Cleanup && v != View::History && !root_) return Toast(L"Scan a drive or folder first", 2);
+    if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && !root_)
+        return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
     switch (v) {
@@ -953,6 +980,7 @@ void App::ShowView(View v) {
             if (cleanup_.empty()) MeasureCleanup();
             break;
         case View::History: LoadHistory(); break;
+        case View::Deleted: LoadDeleted(); break;
         default: break;
     }
     rowsDirty_ = true;
@@ -1015,6 +1043,61 @@ void App::CompareSnapshot(size_t index) {
     diffInfo_ = info;
     lists_[static_cast<int>(View::Compare)] = ListState{};
     ShowView(View::Compare);
+}
+
+void App::LoadDeleted() {
+    bin_ = ListRecycleBin();
+    deleted_.clear();
+    std::vector<char> claimed(bin_.size());
+    for (auto& e : JournalRead(500)) {  // newest first, so a path deleted twice matches its latest bin item
+        if (e.action == JournalAction::Restore) continue;
+        DeletedRow r;
+        r.e = e;
+        if (e.action == JournalAction::Recycle) {
+            const RecycledItem* it = FindRecycled(bin_, e);
+            size_t bi = it ? static_cast<size_t>(it - bin_.data()) : 0;
+            if (it && !claimed[bi]) {
+                claimed[bi] = 1;
+                r.bin = static_cast<int>(bi);
+            } else {
+                r.back = PathExists(e.path);
+            }
+        }
+        deleted_.push_back(std::move(r));
+    }
+}
+
+void App::RestoreDeleted(int index) {
+    if (index < 0 || index >= static_cast<int>(deleted_.size()) || deleted_[index].bin < 0) return;
+    RecycledItem it = bin_[deleted_[index].bin];
+    std::wstring err;
+    if (!RestoreRecycled(it, err)) {
+        Dialog d;
+        d.title = L"Can't restore this item";
+        d.message = err;
+        d.icon = 0xE7BA;
+        d.tone = 2;
+        d.buttons = {L"OK"};
+        d.primary = 0;
+        ShowDialog(std::move(d));
+        LoadDeleted();
+        return;
+    }
+    size_t slash = it.original.find_last_of(L'\\');
+    Toast(L"Restored " + (slash == std::wstring::npos ? it.original : it.original.substr(slash + 1)), 0);
+    LoadDeleted();
+    // Show it in the current scan too: rescan the closest folder of the scan that holds it.
+    if (root_ && !readOnly_ && !task_) {
+        std::wstring p = it.original;
+        Node* n = nullptr;
+        while (!n && (slash = p.find_last_of(L'\\')) != std::wstring::npos && slash >= 2) {
+            p = p.substr(0, slash);
+            if (p.size() == 2) p += L'\\';
+            n = FindNodeByPath(p);
+            if (p.size() <= 3) break;
+        }
+        if (n && n->IsDir()) StartRescan({n});
+    }
 }
 
 void App::LoadHistory() {
@@ -1329,6 +1412,10 @@ void App::OnCommand(int cmd) {
         case CMD_EXPORT_CSV: StartExport(true); break;
         case CMD_ABOUT: ShowAbout(); break;
         case CMD_PROTECTED: ShowProtectedLocations(); break;
+        case CMD_OPEN_JOURNAL:
+            if (!PathExists(JournalFile())) return Toast(L"Nothing has been deleted yet", 2);
+            OpenWithDefault(JournalFile());
+            break;
     }
     if (cmd >= CMD_SET_THEME_SYS) SaveSettings(settings_);
     Invalidate();

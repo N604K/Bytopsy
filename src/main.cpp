@@ -8,6 +8,7 @@
 
 #include "export.h"
 #include "fsops.h"
+#include "journal.h"
 #include "protect.h"
 #include "scanner.h"
 #include "ui.h"
@@ -39,6 +40,8 @@ void PrintUsage() {
         "  --no-mouse            Disable mouse support\n"
         "  --no-delete           Disable deleting files (safe browsing mode)\n"
         "  --protected           List the protected locations found on this PC and exit\n"
+        "  --journal             List what WinNCDU deleted recently (and what is still in the\n"
+        "                        Recycle Bin) and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -72,6 +75,30 @@ int ListProtected() {
     }
     out += L"\nAlso anywhere: Git/SVN/Mercurial repositories, KeePass databases, wallet.dat, .pst, private keys.\n";
     out += L"Your own rules: " + ProtectRulesFile() + L"\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
+int ListJournal() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    auto entries = JournalRead(50);
+    auto bin = ListRecycleBin();
+    std::wstring out = L"Recently deleted by WinNCDU (newest first). Journal: " + JournalFile() + L"\n\n";
+    if (entries.empty()) out += L"  Nothing yet.\n";
+    for (auto& e : entries) {
+        const wchar_t* state = L"";
+        if (e.action == JournalAction::Recycle)
+            state = FindRecycled(bin, e) ? L"in Recycle Bin" : (PathExists(e.path) ? L"restored" : L"bin emptied");
+        wchar_t head[96];
+        swprintf(head, 96, L"  %ls  %-8ls %10ls  %-15ls ", util::FormatTime(e.time).c_str(), JournalActionName(e.action),
+                 util::FormatSizeShort(e.bytes).c_str(), state);
+        out += head + e.path + (e.note.empty() ? L"" : L"  (" + e.note + L")") + L"\n";
+    }
+    out += L"\nRestore items that are still in the Recycle Bin in the windowed app: Recently deleted.\n";
     std::string u = util::WideToUtf8(out);
     fwrite(u.data(), 1, u.size(), stdout);
     fflush(stdout);
@@ -190,6 +217,8 @@ int wmain(int argc, wchar_t** argv) {
             cfg.noDelete = true;
         } else if (a == L"--protected") {
             return ListProtected();
+        } else if (a == L"--journal") {
+            return ListJournal();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {

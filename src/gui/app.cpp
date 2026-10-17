@@ -303,7 +303,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
                 bool link = hover_.kind == HK_BUTTON || hover_.kind == HK_NAV || hover_.kind == HK_DRIVE ||
                             hover_.kind == HK_CARD || hover_.kind == HK_RECENT || hover_.kind == HK_CHIP ||
                             hover_.kind == HK_CRUMB || hover_.kind == HK_CHECK || hover_.kind == HK_SNAPSHOT ||
-                            hover_.kind == HK_DIALOG;
+                            hover_.kind == HK_DIALOG || hover_.kind == HK_RESTORE;
                 SetCursor(LoadCursorW(nullptr, link ? IDC_HAND : IDC_ARROW));
                 return TRUE;
             }
@@ -483,6 +483,7 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
         case HK_CHECK:
             if (hit.a >= 0 && hit.a < static_cast<int>(cleanup_.size())) cleanup_[hit.a].selected = !cleanup_[hit.a].selected;
             break;
+        case HK_RESTORE: RestoreDeleted(hit.a); break;
         case HK_SNAPSHOT:
             if (hit.b == 0)
                 CompareSnapshot(hit.a);

@@ -10,9 +10,9 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       folders and Git repositories need an extra confirmation (`src/protect.cpp`).
 - [x] **Shield badges**: protected rows and treemap tiles are marked after a scan, so people see the
       warning before they select anything (`ProtectBadges` in `src/protect.cpp`).
-- [ ] **Deletion journal**: append every delete and cleanup to `%LOCALAPPDATA%\WinNCDU\journal.log`
-      (time, path, size, Recycle Bin or permanent). Add a "Recently deleted" view with *Restore*
-      for items still in the Recycle Bin.
+- [x] **Deletion journal**: every delete and cleanup goes to `%LOCALAPPDATA%\WinNCDU\journal.log`
+      (time, path, size, Recycle Bin or permanent); "Recently deleted" view with *Restore* for items
+      still in the Recycle Bin, and `winncdu-cli --journal` (`src/journal.cpp`).
 - [ ] **Dry run / preview**: for Cleanup, list the exact files per category before deleting, with
       per-file opt-out.
 - [ ] **Who is locking this?** Use the Restart Manager API (`RmGetList`) to name the app holding files

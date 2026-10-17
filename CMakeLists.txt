@@ -19,10 +19,11 @@ add_library(winncdu_core STATIC
   src/export.cpp
   src/util.cpp
   src/protect.cpp
+  src/journal.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32)
 
 # Windowed app (Direct2D): build\winncdu.exe
 add_executable(winncdu WIN32
@@ -68,5 +69,13 @@ if(MSVC)
 endif()
 enable_testing()
 add_test(NAME protect COMMAND winncdu-protect-test)
+
+# Deletion journal and Recycle Bin restore: build\winncdu-journal-test.exe (also run by `ctest`).
+add_executable(winncdu-journal-test tests/journal_test.cpp)
+target_link_libraries(winncdu-journal-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-journal-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME journal COMMAND winncdu-journal-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

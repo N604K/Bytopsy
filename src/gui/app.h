@@ -12,6 +12,7 @@
 
 #include "../analysis.h"
 #include "../fsops.h"
+#include "../journal.h"
 #include "../protect.h"
 #include "../scanner.h"
 #include "../tree.h"
@@ -22,7 +23,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, Search, Cleanup, History, Compare, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, Search, Cleanup, History, Compare, Deleted, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -70,6 +71,7 @@ enum Cmd : int {
     CMD_EXPORT_CSV,
     CMD_ABOUT,
     CMD_PROTECTED,
+    CMD_OPEN_JOURNAL,
 };
 
 enum HitKind {
@@ -92,6 +94,7 @@ enum HitKind {
     HK_DIALOG,    // a = button index (-1 = checkbox)
     HK_MODAL_BG,
     HK_BADGE,     // shield badge (tooltip): a = row, -1 = the open folder
+    HK_RESTORE,   // a = index into deleted_
 };
 
 struct Hit {
@@ -151,6 +154,13 @@ struct Dialog {
     std::wstring checkText;
     std::function<void(Dialog&)> onCheck;
     std::function<void(int button, bool checked)> onClose;
+};
+
+// One line of the "Recently deleted" view.
+struct DeletedRow {
+    JournalEntry e;
+    int bin = -1;         // index into App::bin_ while it is still in the Recycle Bin
+    bool back = false;    // Recycle entries not in the bin: the path exists again (restored)
 };
 
 struct ToastInfo {
@@ -233,6 +243,8 @@ private:
     void ShowMoreMenu();
     void CompareSnapshot(size_t index);
     void LoadHistory();
+    void LoadDeleted();
+    void RestoreDeleted(int index);
     void Toast(const std::wstring& text, int tone = 0);
     void ShowDialog(Dialog d);
     void ShowAbout();
@@ -253,6 +265,7 @@ private:
     void DrawCleanup(const RectF& area);
     void DrawHistory(const RectF& area);
     void DrawCompare(const RectF& area);
+    void DrawDeleted(const RectF& area);
     void DrawTable(const RectF& area, std::vector<Column>& cols, int sortKey, bool sortDesc,
                    const std::function<void(int row, const Column& col, int ci, const RectF& cell, bool sel)>& cell,
                    const std::function<void(int row, const RectF& r)>& fullRow = nullptr);
@@ -321,6 +334,8 @@ private:
     std::vector<SnapshotInfo> snapshots_;
     std::vector<DiffEntry> diff_;
     SnapshotInfo diffInfo_;
+    std::vector<DeletedRow> deleted_;
+    std::vector<RecycledItem> bin_;
 
     // Treemap cache
     std::vector<TmRect> tm_;

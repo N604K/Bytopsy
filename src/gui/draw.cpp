@@ -22,7 +22,8 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_TYPES = 0xE8FD, IC_COPY = 0xE8C8, IC_CLOCK = 0xE823, IC_EMPTY = 0xE8F4, IC_CLEAN = 0xE74D,
                   IC_HISTORY = 0xE81C, IC_BACK = 0xE72B, IC_FWD = 0xE72A, IC_UP = 0xE74A, IC_CHEV_R = 0xE76C,
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
-                  IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2;
+                  IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
+                  IC_UNDO = 0xE7A7;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -45,6 +46,7 @@ std::wstring RelativeTime(int64_t ft) {
     if (diff < 60) return L"just now";
     if (diff < 3600) return std::to_wstring(diff / 60) + L" min ago";
     if (diff < 86400) return std::to_wstring(diff / 3600) + L" h ago";
+    if (diff < 86400 * 2) return L"yesterday";
     if (diff < 86400 * 30) return std::to_wstring(diff / 86400) + L" days ago";
     return util::FormatTime(ft).substr(0, 10);
 }
@@ -231,6 +233,7 @@ void App::Paint() {
         case View::Cleanup: DrawCleanup(contentArea_); break;
         case View::History: DrawHistory(contentArea_); break;
         case View::Compare: DrawCompare(contentArea_); break;
+        case View::Deleted: DrawDeleted(contentArea_); break;
         default: break;
     }
     DrawSidebar();
@@ -368,6 +371,7 @@ void App::DrawSidebar() {
     y += 24;
     drawItem({View::Cleanup, IC_CLEAN, L"Cleanup", false, reclaim ? util::FormatSizeShort(reclaim) : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
+    drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 
     // Drives
     y += 10;
@@ -1295,6 +1299,79 @@ void App::DrawHistory(const RectF& area) {
         gfx_.Text(util::FormatSizeShort(s.disk) + L" on disk", R(x - 200, card.top + 31, x, card.top + 52), P_.textDim,
                   Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
         y += 70;
+    }
+    gfx_.PopClip();
+}
+
+void App::DrawDeleted(const RectF& area) {
+    float top = area.top + 18;
+    DrawViewHeader(R(area.left + 24, top, area.right - 200, top + 46), L"Recently deleted",
+                   L"Everything WinNCDU deleted or cleaned up, newest first  ·  restore what is still in the Recycle Bin", IC_UNDO);
+    Button(RWH(area.right - 24 - 150, top + 6, 150, 34), IC_OPEN, L"Open journal", CMD_OPEN_JOURNAL, 0);
+    float y = top + 64;
+    RectF body = R(area.left, y, area.right, area.bottom);
+    if (deleted_.empty()) {
+        DrawEmptyState(body, IC_UNDO, L"Nothing deleted yet",
+                       L"Everything you delete or clean up with WinNCDU is listed here. Items still in the Recycle Bin can be restored with one click.");
+        return;
+    }
+    ListState& ls = lists_[static_cast<int>(View::Deleted)];
+    float contentH = deleted_.size() * 70.0f;
+    ls.scroll = std::clamp(ls.scroll, 0.0f, std::max(0.0f, contentH - H(body)));
+    gfx_.PushClip(body);
+    y -= ls.scroll;
+    for (size_t i = 0; i < deleted_.size(); ++i, y += 70) {
+        if (y + 60 < body.top) continue;
+        if (y > body.bottom) break;
+        const DeletedRow& d = deleted_[i];
+        const JournalEntry& e = d.e;
+        RectF card = R(area.left + 24, y, area.right - 24, y + 60);
+        gfx_.FillRound(card, 12, P_.surface);
+        gfx_.StrokeRound(card, 12, P_.border);
+        bool clean = e.action == JournalAction::Clean, perm = e.action == JournalAction::Delete;
+        D2D1_COLOR_F tone = clean ? P_.success : (perm ? P_.danger : P_.accent);
+        gfx_.FillRound(RWH(card.left + 14, card.top + 12, 36, 36), 9, WithAlpha(tone, 0.14f));
+        gfx_.Icon(clean ? IC_CLEAN : IC_DELETE, RWH(card.left + 14, card.top + 12, 36, 36), tone, 15);
+
+        // Right side: what can be done now, in a fixed-width column so the sizes line up.
+        float x = card.right - 14;
+        const float statusW = 210;
+        std::wstring status;
+        D2D1_COLOR_F statusCol = P_.textFaint;
+        if (d.bin >= 0) {
+            RectF btn = RWH(x - 100, card.top + 13, 100, 34);
+            bool hv = Hovered(HK_RESTORE, static_cast<int>(i));
+            gfx_.FillRound(btn, 8, hv ? P_.accent : WithAlpha(P_.accent, 0.16f));
+            gfx_.Text(L"Restore", btn, hv ? P_.accentText : P_.accent, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+            AddHit(btn, HK_RESTORE, static_cast<int>(i));
+        } else if (e.action == JournalAction::Recycle) {
+            status = d.back ? L"Restored" : L"No longer in the Recycle Bin";
+            if (d.back) statusCol = P_.success;
+        } else {
+            status = clean ? L"Cleaned up" : L"Deleted permanently";
+        }
+        if (!status.empty())
+            gfx_.Text(status, R(x - statusW, card.top, x, card.bottom), statusCol, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+        x -= statusW + 16;
+        std::wstring size = util::FormatSizeShort(e.bytes);
+        float szw = gfx_.Measure(size, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 4;
+        gfx_.Text(size, R(x - szw, card.top + 10, x, card.top + 32), P_.text, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+        gfx_.Text(RelativeTime(e.time), R(x - 160, card.top + 31, x, card.top + 52), P_.textFaint,
+                  Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+        x -= std::max(szw, 110.0f) + 16;
+
+        // Left: what it was.
+        size_t slash = e.path.find_last_of(L'\\');
+        std::wstring name = clean || slash == std::wstring::npos || slash + 1 >= e.path.size() ? e.path : e.path.substr(slash + 1);
+        std::wstring where = clean ? L"Cleanup" : (slash == std::wstring::npos ? L"" : e.path.substr(0, slash));
+        if (where.size() == 2 && where[1] == L':') where += L'\\';
+        std::wstring detail = where;
+        if (e.items > 1) detail += L"   ·   " + util::FormatCount(e.items) + (clean ? L" files" : L" items");
+        if (!e.note.empty()) detail += L"   ·   " + e.note;
+        float textW = std::max(40.0f, x - (card.left + 64));
+        gfx_.Text(name, R(card.left + 64, card.top + 10, card.left + 64 + textW, card.top + 32), P_.text, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(FitPath(detail, textW, 12.5f), R(card.left + 64, card.top + 31, card.left + 64 + textW, card.top + 52), P_.textDim,
+                  Small(12.5f));
     }
     gfx_.PopClip();
 }

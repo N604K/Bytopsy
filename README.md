@@ -32,6 +32,10 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Each category is measured first, and only the safe ones are preselected.
 - **Protected locations**: WinNCDU knows which folders must not be deleted and which hold data you
   can't get back, and checks every delete (and every Cleanup item) against them. See below.
+- **Recently deleted**: every delete and cleanup is written to a journal
+  (`%LOCALAPPDATA%\WinNCDU\journal.log`: time, path, size, Recycle Bin or permanent). The
+  *Recently deleted* view lists it, and anything still in the Recycle Bin comes back with *Restore*
+  (it is never restored over something new at the same path).
 - **History & compare**: every completed scan stores its folder sizes in
   `%LOCALAPPDATA%\WinNCDU\history`. Scan the same drive later and compare to see which folders grew
   or shrank.
@@ -118,7 +122,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs winncdu-protect-test.exe
+ctest --test-dir build    :: runs winncdu-protect-test.exe and winncdu-journal-test.exe
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -146,6 +150,8 @@ winncdu-cli [options] [path]
   --no-mouse            Disable mouse input
   --no-delete           Safe mode: deleting is disabled
   --protected           List the protected locations found on this PC and exit
+  --journal             List what WinNCDU deleted recently (and what is still in the
+                        Recycle Bin) and exit
 ```
 
 Examples:
@@ -204,6 +210,7 @@ src/                  core engine + terminal app
   analysis.cpp        search, largest files, file types, duplicates
   export.cpp          ncdu JSON export/import, CSV export
   protect.cpp         protected locations (system, AI assistants, keys, ...) and user rules
+  journal.cpp         deletion journal, Recycle Bin lookup and restore
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
   app.cpp             window, input, layout
@@ -216,5 +223,6 @@ src/gui/              windowed app
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
 tests/protect_test.cpp  self-check of the protection rules (ctest)
+tests/journal_test.cpp  journal format and a real recycle + restore round trip (ctest)
 res/winncdu.ico       app icon
 ```
