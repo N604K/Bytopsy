@@ -95,9 +95,11 @@ int main() {
         Check(errs.empty(), L"res/cleaners.ini has no errors" + (errs.empty() ? L"" : L": " + errs[0]));
         std::wstring ids;
         for (auto& k : cats) ids += k.id + L" ";
-        Check(ids == L"recycle temp wintemp browser thumbs crash wu do shader dev winold ", L"all categories, in order: " + ids);
-        if (cats.size() == 11) {
-            Check(cats[0].recycleBin && cats[10].external && cats[10].needsAdmin, L"kinds and admin flags");
+        Check(ids == L"recycle temp wintemp browser thumbs crash wu do shader dev jvm conda conan winold ", L"all categories, in order: " + ids);
+        if (cats.size() == 14) {
+            Check(cats[0].recycleBin && cats[13].external && cats[13].needsAdmin, L"kinds and admin flags");
+            Check(cats[12].command == L"conan remove \"*\" -c" && cats[11].targets[0].filePattern == L"*.conda;*.tar.bz2",
+                  L"conan runs its own command; conda takes only archives");
             Check(cats[1].targets.size() == 1 && cats[1].targets[0].path == L"%TEMP%" && cats[1].targets[0].minAgeHours == 24,
                   L"temp: path and age");
             Check(cats[4].targets[0].filePattern == L"thumbcache_*.db", L"thumbs: file pattern");
@@ -118,6 +120,51 @@ int main() {
         Check(cats.size() == 2 && cats[0].id == L"c" && cats[0].targets[0].minAgeHours == 48 && !cats[0].safe,
               L"valid category kept, not preselected by default");
         Check(cats.size() == 2 && cats[1].id == L"dev" && !cats[1].enabled, L"\"enabled = false\" stub kept");
+    }
+
+    // ---- Several file patterns, and "kind = command"
+    {
+        std::wstring p = dir + L"\\pkgs";
+        CreateDirectoryW(p.c_str(), nullptr);
+        CreateDirectoryW((p + L"\\numpy-1.0").c_str(), nullptr);
+        Put(p + L"\\numpy-1.0\\lib.pyd", "extracted");
+        Put(p + L"\\a.conda", "aa");
+        Put(p + L"\\b.tar.bz2", "bb");
+        Put(p + L"\\urls.txt", "u");
+        CleanCategory pc;
+        pc.targets = {{p, L"*.conda;*.tar.bz2", 0}};
+        MeasureCategory(pc, cancel);
+        Check(pc.entries.size() == 2 && Find(pc, p + L"\\a.conda") && Find(pc, p + L"\\b.tar.bz2"),
+              L"files=*.conda;*.tar.bz2 lists only the archives (" + std::to_wstring(pc.entries.size()) + L")");
+
+        std::vector<std::wstring> errs;
+        auto bad = ParseCleaners(L"[a]\nname = A\nkind = command\npath = %TEMP%\\a\n[b]\nname = B\ncommand = x\npath = %TEMP%\\b\n", errs);
+        Check(bad.empty() && errs.size() == 2, L"kind = command without a command, and a command without the kind, are refused");
+
+        std::wstring cache = dir + L"\\toolcache";
+        CreateDirectoryW(cache.c_str(), nullptr);
+        Put(cache + L"\\one.bin", "1234");
+        Put(cache + L"\\two.bin", "5678");
+        std::string script = "@del /q \"" + util::WideToUtf8(cache) + "\\*.bin\"\r\n";
+        Put(dir + L"\\clean tool.cmd", script.c_str());
+        auto cats = ParseCleaners(L"[t]\nname = Tool cache\nkind = command\ncommand = \"" + dir + L"\\clean tool.cmd\" --all\npath = " + cache + L"\n", errs);
+        if (cats.size() == 1) {
+            CleanCategory& t = cats[0];
+            MeasureCategory(t, cancel);
+            Check(!t.toolMissing && t.bytes == 8, L"command category: tool found, cache measured");
+            CleanResult tr = CleanCategoryNow(t, cancel, [](const std::wstring&) {});
+            Check(tr.error.empty() && tr.freed == 8 && tr.files == 2 && !PathExists(cache + L"\\one.bin"),
+                  L"command ran (a .cmd with spaces in its path) and what it freed was measured: " + tr.error);
+        } else {
+            Check(false, L"command category parsed");
+        }
+        CleanCategory missing;
+        missing.command = L"winncdu-no-such-tool --clean";
+        missing.targets = {{cache, L"", 0}};
+        MeasureCategory(missing, cancel);
+        CleanResult mr = CleanCategoryNow(missing, cancel, [](const std::wstring&) {});
+        Check(missing.toolMissing && mr.error.find(L"was not found") != std::wstring::npos, L"a missing tool is reported: " + mr.error);
+        Check(!FindTool(L"cmd /c exit").empty() && FindTool(L"winncdu-no-such-tool").empty(), L"tools are found on PATH");
     }
 
     // ---- Protected items are never listed, whatever a rule says

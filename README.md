@@ -41,7 +41,12 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
   Properties and Rescan.
 - **Cleanup** (works without a scan): Recycle Bin, temporary files, browser caches, thumbnail cache,
-  crash dumps, Windows Update downloads, Delivery Optimization, shader caches and developer caches.
+  crash dumps, Windows Update downloads, Delivery Optimization, shader caches and package caches:
+  npm, Yarn, pnpm, Bun, Deno, pip, uv, Poetry, NuGet, Go, Cargo, Composer and vcpkg; Maven and
+  Gradle; conda archives; Conan. Where a tool keeps more than downloads in its cache folder, only the
+  downloads are taken (Poetry's virtualenvs, Deno's localStorage data and conda's hard-linked
+  packages stay), and a cache with a database (Conan) is cleaned by the tool's own command
+  (`conan remove "*" -c`), with the space it freed measured before and after.
   Each category is measured first, and only the safe ones are preselected. *Review* lists exactly
   what a category would delete (files, folders or Recycle Bin items) so you can uncheck anything to
   keep; cleaning deletes only that list, and skips entries that changed since they were measured.
@@ -50,7 +55,8 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Categories are rules in [res/cleaners.ini](res/cleaners.ini) (built into the exe), so adding an
   app needs no code. Your own rules go in `%LOCALAPPDATA%\WinNCDU\cleaners.ini` (menu → *Cleanup
   rules…* creates it with examples): a section with a built-in's id replaces it, `enabled = false`
-  turns it off. User rules are never preselected, can't name a whole drive, and anything the
+  turns it off, and `kind = command` with `command = ...` runs a tool's clean command instead of
+  deleting files (the tool must be on PATH; the current folder is never searched). User rules are never preselected, can't name a whole drive, and anything the
   protection rules mark Important or Blocked is left out of every category, as is any folder with
   a repository, key, password database or virtual disk somewhere inside.
 - **winapp2.ini import** (menu → *Import winapp2.ini…*): the community database of thousands of app

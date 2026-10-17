@@ -41,6 +41,9 @@ struct CleanCategory {
     bool needsAdmin = false;
     bool recycleBin = false;
     bool external = false;  // handled by an external tool (Windows Disk Cleanup)
+    // kind = command: measured from its paths, cleaned by running this (the tool's own clean
+    // command, e.g. `conan remove "*" -c`), because deleting the files would corrupt its state.
+    std::wstring command;
     bool safe = true;       // preselected
     bool enabled = true;    // "enabled = false" in cleaners.ini turns a built-in category off
     bool user = false;      // from the user's cleaners.ini
@@ -58,6 +61,7 @@ struct CleanCategory {
     uint64_t guarded = 0;  // items left out because the protection rules cover them
     bool measured = false, denied = false, selected = false;
     bool present = true;  // detection found the app
+    bool toolMissing = false;  // kind = command: the program isn't on PATH
     std::vector<CleanEntry> entries;  // largest first
 
     uint64_t KeptBytes() const;
@@ -68,7 +72,15 @@ struct CleanCategory {
 struct CleanResult {
     uint64_t freed = 0, files = 0, failed = 0;
     std::vector<std::wstring> lockedBy;  // apps that held skipped items open
+    std::wstring error;                  // kind = command: why it didn't run or failed
 };
+
+// The full path of a command's program (first word, quotes allowed) found on PATH (.exe, .cmd,
+// .bat, .com; the current folder is never searched), or empty.
+std::wstring FindTool(const std::wstring& command);
+// Runs a command without a window and waits (cancel stops it). Returns the exit code, or -1 with
+// `err` set when it couldn't be started.
+int RunCommand(const std::wstring& command, std::atomic<bool>& cancel, std::wstring& err);
 
 // Categories come from res/cleaners.ini (built into the exe) merged with the user's
 // %LOCALAPPDATA%\WinNCDU\cleaners.ini, then the imported winapp2.ini; problems go to `errors`.

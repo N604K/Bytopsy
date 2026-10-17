@@ -930,7 +930,7 @@ void App::OnCleanupMeasured(std::vector<CleanCategory>* result) {
             if (e.keep) kept.insert(util::ToLower(e.binData.empty() ? e.path : e.binData));
         cleanup_[i] = (*owned)[i];
         for (auto& e : cleanup_[i].entries) e.keep = kept.count(util::ToLower(e.binData.empty() ? e.path : e.binData)) > 0;
-        cleanup_[i].selected = sel && (cleanup_[i].bytes > 0 || cleanup_[i].recycleBin);
+        cleanup_[i].selected = sel && (cleanup_[i].bytes > 0 || cleanup_[i].recycleBin) && !cleanup_[i].toolMissing;
     }
     rowsDirty_ = true;
     Invalidate();
@@ -952,7 +952,7 @@ void App::StartCleanup() {
     std::vector<size_t> chosen;
     uint64_t total = 0;
     for (size_t i = 0; i < cleanup_.size(); ++i)
-        if (cleanup_[i].selected && cleanup_[i].ToClean() > 0) {
+        if (cleanup_[i].selected && cleanup_[i].ToClean() > 0 && !cleanup_[i].toolMissing) {
             chosen.push_back(i);
             total += cleanup_[i].ToClean();
         }
@@ -961,11 +961,15 @@ void App::StartCleanup() {
     d.title = L"Clean up " + util::FormatSizeShort(total) + L"?";
     d.message = L"Exactly the files listed under Review are deleted, permanently. Files that are in use, or "
                 L"that changed since they were measured, are skipped.";
+    bool commands = false;
     for (size_t i : chosen) {
         size_t kept = cleanup_[i].KeptCount();
+        const std::wstring& cmd = cleanup_[i].command;
+        commands = commands || !cmd.empty();
         d.lines.push_back(util::FormatSizeShort(cleanup_[i].ToClean()) + L"\t" + cleanup_[i].name +
-                          (kept ? L"  (" + util::FormatCount(kept) + L" kept)" : L""));
+                          (!cmd.empty() ? L"  (runs " + cmd + L")" : kept ? L"  (" + util::FormatCount(kept) + L" kept)" : L""));
     }
+    if (commands) d.message += L" Categories marked “runs” are cleaned by that tool's own command instead.";
     d.icon = 0xE74D;
     d.tone = 1;
     d.buttons = {L"Cancel", L"Clean up"};
@@ -989,6 +993,7 @@ void App::StartCleanup() {
             std::atomic<size_t> index{0};
             std::atomic<uint64_t> freed{0}, failed{0};
             std::vector<std::wstring> lockedBy;  // written by the worker, read after it finished
+            std::vector<std::wstring> errors;    // the same: commands that didn't run or failed
             std::atomic<bool> cancel{false};
             std::mutex m;
             std::wstring current;
@@ -1018,11 +1023,14 @@ void App::StartCleanup() {
                 ShowDialog(std::move(e));
                 return;
             }
-            Toast(L"Cleanup freed " + util::FormatSizeShort(st->freed) +
-                      (st->failed ? L" · " + util::FormatCount(st->failed) + L" items in use were skipped" +
-                                        (st->lockedBy.empty() ? L"" : L" (close " + AppNames(st->lockedBy) + L")")
-                                  : L""),
-                  0);
+            if (!st->errors.empty())
+                Toast(L"Cleanup freed " + util::FormatSizeShort(st->freed) + L" · " + st->errors[0], 1);
+            else
+                Toast(L"Cleanup freed " + util::FormatSizeShort(st->freed) +
+                          (st->failed ? L" · " + util::FormatCount(st->failed) + L" items in use were skipped" +
+                                            (st->lockedBy.empty() ? L"" : L" (close " + AppNames(st->lockedBy) + L")")
+                                      : L""),
+                      0);
             // Refresh the affected folders of the current scan.
             std::vector<Node*> touched;
             for (auto& c : st->cats)
@@ -1055,6 +1063,7 @@ void App::StartCleanup() {
                 st->freed += r.freed;
                 st->failed += r.failed;
                 st->lockedBy.insert(st->lockedBy.end(), r.lockedBy.begin(), r.lockedBy.end());
+                if (!r.error.empty()) st->errors.push_back(c.name + L": " + r.error);
                 if (!c.external) {
                     JournalEntry je;
                     je.action = JournalAction::Clean;
@@ -1065,6 +1074,7 @@ void App::StartCleanup() {
                     if (r.failed) note = util::FormatCount(r.failed) + L" items in use were skipped";
                     if (!r.lockedBy.empty()) note += L" (by " + AppNames(r.lockedBy) + L")";
                     if (size_t kept = c.KeptCount()) note += (note.empty() ? L"" : L"; ") + util::FormatCount(kept) + L" kept";
+                    if (!c.command.empty()) note += (note.empty() ? L"ran " : L"; ran ") + c.command + (r.error.empty() ? L"" : L": " + r.error);
                     je.note = note;
                     JournalAppend(je);
                 }

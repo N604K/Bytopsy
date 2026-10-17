@@ -1360,6 +1360,8 @@ void App::DrawCleanup(const RectF& area) {
         if (c.denied && !locked) badge(L"Partly inaccessible", P_.textFaint);
         if (c.user) badge(L"Your rule", P_.accent);
         if (c.guarded) badge(L"Protected items left out", P_.success);
+        std::wstring tool = c.command.substr(0, c.command.find(L' '));
+        if (c.toolMissing && c.bytes) badge((tool + L" not found on PATH").c_str(), P_.warning);
         gfx_.Text(c.desc, R(x, card.top + 37, textRight, card.top + 58), P_.textDim, Small(12.5f));
         RectF sr = R(card.right - 190, card.top, card.right - 20, card.bottom);
         RectF review{};
@@ -1380,7 +1382,9 @@ void App::DrawCleanup(const RectF& area) {
                       TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
             std::wstring count = util::FormatCount(c.files) + (c.recycleBin ? (c.files == 1 ? L" item" : L" items") : (c.files == 1 ? L" file" : L" files"));
             if (size_t kept = c.KeptCount()) count += L" · " + util::FormatCount(kept) + L" kept";
-            if (!c.entries.empty()) {
+            // A tool cleans its own cache: there is no file list to pick from, so say what runs.
+            if (!c.command.empty()) count = L"runs " + c.command;
+            if (!c.entries.empty() && c.command.empty()) {
                 // "Review" opens the exact list of what would be deleted (a dry run with opt-outs).
                 std::wstring link = L"Review " + count + L"  ›";
                 float lw = gfx_.Measure(link, Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 12;
@@ -1395,7 +1399,7 @@ void App::DrawCleanup(const RectF& area) {
                           Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
             }
         }
-        if (!c.external) AddHit(card, HK_CHECK, static_cast<int>(i));
+        if (!c.external && !c.toolMissing) AddHit(card, HK_CHECK, static_cast<int>(i));
         if (W(review) > 0) AddHit(review, HK_REVIEW, static_cast<int>(i));
         y += 82;
     }

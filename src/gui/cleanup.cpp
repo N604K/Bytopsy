@@ -381,7 +381,7 @@ const char kUserTemplate[] =
     "# path = %LOCALAPPDATA%\\MyApp\\Logs | files=*.log | age=7d\r\n"
     "#\r\n"
     "# Turn a built-in category off (ids: recycle, temp, wintemp, browser, thumbs, crash, wu, do,\r\n"
-    "# shader, dev, winold):\r\n"
+    "# shader, dev, jvm, conda, conan, winold):\r\n"
     "# [dev]\r\n"
     "# enabled = false\r\n"
     "#\r\n"
@@ -392,6 +392,7 @@ const char kUserTemplate[] =
 std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<std::wstring>& errors) {
     std::vector<CleanCategory> out;
     CleanCategory* cur = nullptr;
+    std::unordered_set<std::wstring> commandKind;  // ids with "kind = command"
     auto error = [&](size_t line, const std::wstring& msg) { errors.push_back(L"line " + std::to_wstring(line) + L": " + msg); };
     size_t pos = 0, lineNo = 0;
     while (pos <= text.size()) {
@@ -436,7 +437,10 @@ std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<s
             std::wstring k = util::ToLower(val);
             cur->recycleBin = k == L"recyclebin";
             cur->external = k == L"external";
-            ok = cur->recycleBin || cur->external || k == L"files";
+            if (k == L"command") commandKind.insert(cur->id);
+            ok = cur->recycleBin || cur->external || k == L"files" || k == L"command";
+        } else if (key == L"command") {
+            cur->command = val;
         } else if (key == L"path") {
             CleanTarget t;
             size_t bar = val.find(L'|');
@@ -472,6 +476,9 @@ std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<s
             out.erase(out.begin() + i);
         } else if (!stub && !c.recycleBin && c.targets.empty()) {
             errors.push_back(L"[" + c.id + L"]: no path");
+            out.erase(out.begin() + i);
+        } else if (!stub && commandKind.count(c.id) != !c.command.empty()) {
+            errors.push_back(L"[" + c.id + (c.command.empty() ? L"]: kind = command needs a command" : L"]: command needs kind = command"));
             out.erase(out.begin() + i);
         } else {
             if (!c.icon) c.icon = 0xE74D;
@@ -550,6 +557,112 @@ std::vector<std::wstring> ExpandedPaths(const CleanCategory& c) {
     return out;
 }
 
+namespace {
+
+// The program of a command line: its first word, quotes allowed. `end`: where the arguments start
+// in the trimmed command.
+std::wstring FirstWord(const std::wstring& command, size_t* end = nullptr) {
+    std::wstring s = Trim(command);
+    size_t stop;
+    std::wstring w;
+    if (!s.empty() && s[0] == L'"') {
+        stop = s.find(L'"', 1);
+        w = s.substr(1, stop == std::wstring::npos ? std::wstring::npos : stop - 1);
+        stop = stop == std::wstring::npos ? s.size() : stop + 1;
+    } else {
+        stop = s.find_first_of(L" \t");
+        if (stop == std::wstring::npos) stop = s.size();
+        w = s.substr(0, stop);
+    }
+    if (end) *end = stop;
+    return w;
+}
+
+bool IsFile(const std::wstring& p) {
+    DWORD a = GetFileAttributesW(p.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+}  // namespace
+
+std::wstring FindTool(const std::wstring& command) {
+    std::wstring prog = Env(FirstWord(command));
+    if (prog.empty()) return L"";
+    size_t slash = prog.find_last_of(L"\\/");
+    bool hasExt = prog.find(L'.', slash == std::wstring::npos ? 0 : slash) != std::wstring::npos;
+    const wchar_t* exts[] = {L"", L".exe", L".cmd", L".bat", L".com"};
+    auto tryAt = [&](const std::wstring& base) -> std::wstring {
+        for (const wchar_t* e : exts) {
+            if (hasExt && *e) break;
+            if (IsFile(base + e)) return base + e;
+        }
+        return L"";
+    };
+    if (slash != std::wstring::npos) return tryAt(prog);  // a path: used as it is, never searched
+    DWORD n = GetEnvironmentVariableW(L"PATH", nullptr, 0);
+    std::wstring path(n, L'\0');
+    path.resize(GetEnvironmentVariableW(L"PATH", path.data(), n));
+    for (size_t i = 0; i <= path.size();) {
+        size_t j = path.find(L';', i);
+        if (j == std::wstring::npos) j = path.size();
+        std::wstring dir = Trim(path.substr(i, j - i));
+        i = j + 1;
+        if (dir.size() > 1 && dir.front() == L'"' && dir.back() == L'"') dir = dir.substr(1, dir.size() - 2);
+        // Only absolute folders: a relative PATH entry would resolve against the current folder.
+        if (dir.size() < 3 || !(dir[1] == L':' || dir.rfind(L"\\\\", 0) == 0)) continue;
+        if (dir.back() != L'\\') dir += L'\\';
+        std::wstring hit = tryAt(dir + prog);
+        if (!hit.empty()) return hit;
+    }
+    return L"";
+}
+
+int RunCommand(const std::wstring& command, std::atomic<bool>& cancel, std::wstring& err) {
+    std::wstring tool = FindTool(command);
+    if (tool.empty()) {
+        err = FirstWord(command) + L" was not found. Is it installed and on PATH?";
+        return -1;
+    }
+    std::wstring trimmed = Trim(command);
+    size_t argsAt = 0;
+    FirstWord(trimmed, &argsAt);
+    std::wstring args = argsAt < trimmed.size() ? trimmed.substr(argsAt) : L"";
+    std::wstring ext = util::ToLower(tool.substr(tool.size() >= 4 ? tool.size() - 4 : 0));
+    std::wstring app, line;
+    if (ext == L".cmd" || ext == L".bat") {
+        wchar_t sys[MAX_PATH];
+        GetSystemDirectoryW(sys, MAX_PATH);
+        app = std::wstring(sys) + L"\\cmd.exe";
+        line = L"\"" + app + L"\" /d /s /c \"\"" + tool + L"\"" + args + L"\"";
+    } else {
+        app = tool;
+        line = L"\"" + tool + L"\"" + args;
+    }
+    STARTUPINFOW si{sizeof(si)};
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
+    std::vector<wchar_t> buf(line.begin(), line.end());
+    buf.push_back(0);
+    wchar_t tmp[MAX_PATH];
+    std::wstring cwd(tmp, GetTempPathW(MAX_PATH, tmp));  // not the exe's folder
+    if (!CreateProcessW(app.c_str(), buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, cwd.c_str(), &si, &pi)) {
+        err = L"Couldn't run " + tool + L": " + util::Win32ErrorMessage(GetLastError());
+        return -1;
+    }
+    while (WaitForSingleObject(pi.hProcess, 200) == WAIT_TIMEOUT)
+        if (cancel) {
+            TerminateProcess(pi.hProcess, 1);
+            err = L"Cancelled";
+            break;
+        }
+    DWORD code = 1;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return static_cast<int>(code);
+}
+
 bool DetectPresent(const std::wstring& what) {
     static const std::pair<const wchar_t*, HKEY> kRoots[] = {
         {L"HKCU", HKEY_CURRENT_USER}, {L"HKEY_CURRENT_USER", HKEY_CURRENT_USER}, {L"HKLM", HKEY_LOCAL_MACHINE},
@@ -617,6 +730,7 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
             c.entries.push_back(std::move(e));
         }
     } else {
+        c.toolMissing = !c.command.empty() && FindTool(c.command).empty();
         if (!c.detect.empty()) {
             c.present = std::any_of(c.detect.begin(), c.detect.end(), [](const std::wstring& d) { return DetectPresent(d); });
             if (!c.present) {
@@ -717,6 +831,18 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
     CleanResult r;
     if (c.external) {
         ShellExecuteW(nullptr, L"open", L"cleanmgr.exe", nullptr, nullptr, SW_SHOWNORMAL);
+        return r;
+    }
+    if (!c.command.empty()) {
+        // The tool cleans its own cache; what it freed is measured before and after.
+        onItem(L"Running " + c.command);
+        int code = RunCommand(c.command, cancel, r.error);
+        if (code != 0 && r.error.empty()) r.error = c.command + L" failed (exit code " + std::to_wstring(code) + L")";
+        CleanCategory after = c;
+        std::atomic<bool> measureAll{false};
+        MeasureCategory(after, measureAll);
+        r.freed = c.bytes > after.bytes ? c.bytes - after.bytes : 0;
+        r.files = c.files > after.files ? c.files - after.files : 0;
         return r;
     }
     if (c.recycleBin && c.KeptCount() == 0) {

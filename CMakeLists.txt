@@ -42,6 +42,9 @@ add_executable(winncdu WIN32
   src/gui/winncdu-gui.rc
 )
 target_link_libraries(winncdu PRIVATE winncdu_core d2d1 dwrite windowscodecs dwmapi comctl32 uxtheme gdi32 advapi32)
+# The resource script embeds these files; without this, editing them doesn't rebuild the exe.
+set_source_files_properties(src/gui/winncdu-gui.rc PROPERTIES
+  OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/cleaners.ini;${CMAKE_SOURCE_DIR}/res/winncdu.ico")
 
 # Terminal app (ncdu-style TUI): build\winncdu-cli.exe
 add_executable(winncdu-cli
