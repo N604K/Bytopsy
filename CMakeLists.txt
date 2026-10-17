@@ -78,4 +78,12 @@ if(MSVC)
 endif()
 add_test(NAME journal COMMAND winncdu-journal-test)
 
+# Cleanup preview semantics (kept entries survive, changed entries are skipped): build\winncdu-cleanup-test.exe
+add_executable(winncdu-cleanup-test tests/cleanup_test.cpp src/gui/cleanup.cpp)
+target_link_libraries(winncdu-cleanup-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-cleanup-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME cleanup COMMAND winncdu-cleanup-test)
+
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

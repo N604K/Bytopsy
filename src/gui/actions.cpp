@@ -135,6 +135,10 @@ void App::BuildRows() {
         case View::Compare:
             for (size_t i = 0; i < diff_.size(); ++i) rows_.push_back({diff_[i].node, 0, RK_DIFF, static_cast<int>(i)});
             break;
+        case View::CleanReview:
+            if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
+                for (size_t i = 0; i < cleanup_[reviewCat_].entries.size(); ++i) rows_.push_back({nullptr, 0, RK_CLEAN, static_cast<int>(i)});
+            break;
         default: break;
     }
     if (keepFocus) {
@@ -843,25 +847,48 @@ void App::OnCleanupMeasured(std::vector<CleanCategory>* result) {
     if (owned->size() != cleanup_.size()) return;
     for (size_t i = 0; i < cleanup_.size(); ++i) {
         bool sel = cleanup_[i].selected;
+        // What was unchecked in the preview stays unchecked after measuring again.
+        std::unordered_set<std::wstring> kept;
+        for (auto& e : cleanup_[i].entries)
+            if (e.keep) kept.insert(util::ToLower(e.binData.empty() ? e.path : e.binData));
         cleanup_[i] = (*owned)[i];
+        for (auto& e : cleanup_[i].entries) e.keep = kept.count(util::ToLower(e.binData.empty() ? e.path : e.binData)) > 0;
         cleanup_[i].selected = sel && (cleanup_[i].bytes > 0 || cleanup_[i].recycleBin);
     }
+    rowsDirty_ = true;
     Invalidate();
+}
+
+CleanEntry* App::ReviewEntry(int row) {
+    if (view_ != View::CleanReview || reviewCat_ < 0 || reviewCat_ >= static_cast<int>(cleanup_.size())) return nullptr;
+    if (row < 0 || row >= static_cast<int>(rows_.size())) return nullptr;
+    auto& v = cleanup_[reviewCat_].entries;
+    return rows_[row].idx < static_cast<int>(v.size()) ? &v[rows_[row].idx] : nullptr;
+}
+
+void App::ToggleKeep(int row) {
+    if (CleanEntry* e = ReviewEntry(row)) e->keep = !e->keep;
+    lists_[static_cast<int>(view_)].focus = row;
 }
 
 void App::StartCleanup() {
     std::vector<size_t> chosen;
     uint64_t total = 0;
     for (size_t i = 0; i < cleanup_.size(); ++i)
-        if (cleanup_[i].selected && cleanup_[i].bytes > 0) {
+        if (cleanup_[i].selected && cleanup_[i].ToClean() > 0) {
             chosen.push_back(i);
-            total += cleanup_[i].bytes;
+            total += cleanup_[i].ToClean();
         }
     if (chosen.empty()) return Toast(L"Select at least one category with something to clean", 2);
     Dialog d;
     d.title = L"Clean up " + util::FormatSizeShort(total) + L"?";
-    d.message = L"These files are deleted permanently. Files that are in use are skipped.";
-    for (size_t i : chosen) d.lines.push_back(util::FormatSizeShort(cleanup_[i].bytes) + L"\t" + cleanup_[i].name);
+    d.message = L"Exactly the files listed under Review are deleted, permanently. Files that are in use, or "
+                L"that changed since they were measured, are skipped.";
+    for (size_t i : chosen) {
+        size_t kept = cleanup_[i].KeptCount();
+        d.lines.push_back(util::FormatSizeShort(cleanup_[i].ToClean()) + L"\t" + cleanup_[i].name +
+                          (kept ? L"  (" + util::FormatCount(kept) + L" kept)" : L""));
+    }
     d.icon = 0xE74D;
     d.tone = 1;
     d.buttons = {L"Cancel", L"Clean up"};
@@ -906,22 +933,23 @@ void App::StartCleanup() {
         StartTask(std::move(t), [st] {
             for (size_t i = 0; i < st->cats.size() && !st->cancel; ++i) {
                 st->index = i;
-                uint64_t failed = 0;
-                CleanCategory& c = st->cats[i];
-                uint64_t filesBefore = c.files;
-                uint64_t freed = CleanCategoryNow(c, st->cancel, failed, [&](const std::wstring& p) {
+                const CleanCategory& c = st->cats[i];
+                CleanResult r = CleanCategoryNow(c, st->cancel, [&](const std::wstring& p) {
                     std::lock_guard<std::mutex> lk(st->m);
                     st->current = p;
                 });
-                st->freed += freed;
-                st->failed += failed;
+                st->freed += r.freed;
+                st->failed += r.failed;
                 if (!c.external) {
                     JournalEntry je;
                     je.action = JournalAction::Clean;
-                    je.bytes = freed;
-                    je.items = filesBefore > c.files ? filesBefore - c.files : 0;
+                    je.bytes = r.freed;
+                    je.items = r.files;
                     je.path = c.name;
-                    if (failed) je.note = util::FormatCount(failed) + L" items in use were skipped";
+                    std::wstring note;
+                    if (r.failed) note = util::FormatCount(r.failed) + L" items in use were skipped";
+                    if (size_t kept = c.KeptCount()) note += (note.empty() ? L"" : L"; ") + util::FormatCount(kept) + L" kept";
+                    je.note = note;
                     JournalAppend(je);
                 }
             }
@@ -961,7 +989,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 }
 
 void App::ShowView(View v) {
-    if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && !root_)
+    if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::CleanReview && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -1016,6 +1044,10 @@ void App::OpenRow(int row) {
     }
     if (r.kind == RK_DIFF) {
         if (r.node) RevealInBrowse(r.node);
+        return;
+    }
+    if (r.kind == RK_CLEAN) {
+        if (CleanEntry* e = ReviewEntry(row)) RevealInExplorer(e->binData.empty() ? e->path : e->binData);
         return;
     }
     if (r.node) OpenNode(r.node);
@@ -1412,6 +1444,11 @@ void App::OnCommand(int cmd) {
         case CMD_EXPORT_CSV: StartExport(true); break;
         case CMD_ABOUT: ShowAbout(); break;
         case CMD_PROTECTED: ShowProtectedLocations(); break;
+        case CMD_REVIEW_ALL:
+        case CMD_REVIEW_NONE:
+            if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
+                for (auto& e : cleanup_[reviewCat_].entries) e.keep = cmd == CMD_REVIEW_NONE;
+            break;
         case CMD_OPEN_JOURNAL:
             if (!PathExists(JournalFile())) return Toast(L"Nothing has been deleted yet", 2);
             OpenWithDefault(JournalFile());

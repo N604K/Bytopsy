@@ -3,7 +3,10 @@
 #include <windows.h>
 #include <shellapi.h>
 
+#include <algorithm>
+
 #include "../fsops.h"
+#include "../journal.h"
 #include "../protect.h"
 #include "../tree.h"
 #include "../util.h"
@@ -196,73 +199,142 @@ std::vector<std::wstring> ExpandedPaths(const CleanCategory& c) {
     return out;
 }
 
+uint64_t CleanCategory::KeptBytes() const {
+    uint64_t n = 0;
+    for (auto& e : entries)
+        if (e.keep) n += e.bytes;
+    return n;
+}
+
+size_t CleanCategory::KeptCount() const {
+    size_t n = 0;
+    for (auto& e : entries) n += e.keep ? 1 : 0;
+    return n;
+}
+
+uint64_t CleanCategory::ToClean() const {
+    uint64_t kept = KeptBytes();
+    return bytes > kept ? bytes - kept : 0;
+}
+
 void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
     c.bytes = c.files = 0;
     c.denied = false;
+    c.entries.clear();
     if (c.recycleBin) {
         SHQUERYRBINFO qi{sizeof(qi)};
         if (SUCCEEDED(SHQueryRecycleBinW(nullptr, &qi))) {
             c.bytes = static_cast<uint64_t>(qi.i64Size);
             c.files = static_cast<uint64_t>(qi.i64NumItems);
         }
-        c.measured = true;
-        return;
-    }
-    for (auto& t : c.targets) {
-        std::vector<std::wstring> dirs;
-        Expand(Env(t.path), dirs);
-        for (auto& d : dirs) {
-            if (cancel) return;
-            if (c.external) {
-                WIN32_FIND_DATAW top{};
-                top.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
-                SizeOf(d, top, c.bytes, c.files, c.denied, cancel);
-                continue;
-            }
-            bool any = false;
-            ForEachEntry(t, d, [&](const std::wstring& p, const WIN32_FIND_DATAW& fd) {
-                any = true;
-                SizeOf(p, fd, c.bytes, c.files, c.denied, cancel);
-            });
-            if (!any && GetLastError() == ERROR_ACCESS_DENIED) c.denied = true;
+        for (auto& it : ListRecycleBin()) {
+            CleanEntry e;
+            e.path = it.original;
+            e.binData = it.dataFile;
+            e.binInfo = it.infoFile;
+            e.bytes = it.size;
+            e.files = 1;
+            e.mtime = it.deleted;
+            DWORD a = GetFileAttributesW(ToLongPath(it.dataFile).c_str());
+            e.dir = a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
+            c.entries.push_back(std::move(e));
         }
-    }
-    c.measured = true;
-}
-
-uint64_t CleanCategoryNow(CleanCategory& c, std::atomic<bool>& cancel, uint64_t& failed,
-                          const std::function<void(const std::wstring&)>& onItem) {
-    MeasureCategory(c, cancel);
-    uint64_t before = c.bytes;
-    if (c.external) {
-        ShellExecuteW(nullptr, L"open", L"cleanmgr.exe", nullptr, nullptr, SW_SHOWNORMAL);
-        return 0;
-    }
-    if (c.recycleBin) {
-        onItem(L"Emptying the Recycle Bin");
-        SHEmptyRecycleBinW(nullptr, nullptr, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
     } else {
-        std::atomic<uint64_t> removed{0};
-        for (auto& t : c.targets) {
+        for (size_t ti = 0; ti < c.targets.size(); ++ti) {
+            const CleanTarget& t = c.targets[ti];
             std::vector<std::wstring> dirs;
             Expand(Env(t.path), dirs);
             for (auto& d : dirs) {
-                std::vector<std::wstring> entries;
-                ForEachEntry(t, d, [&](const std::wstring& p, const WIN32_FIND_DATAW&) { entries.push_back(p); });
-                for (auto& p : entries) {
-                    if (cancel) break;
-                    // Safety net: categories are curated, but never let one reach a blocked location.
-                    if (CheckProtection(p).level == Protect::Blocked) {
-                        ++failed;
-                        continue;
-                    }
-                    onItem(p);
-                    std::wstring err;
-                    if (!DeletePermanently(p, cancel, removed, err)) ++failed;
+                if (cancel) return;
+                if (c.external) {
+                    WIN32_FIND_DATAW top{};
+                    top.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
+                    SizeOf(d, top, c.bytes, c.files, c.denied, cancel);
+                    continue;
                 }
+                bool any = false;
+                ForEachEntry(t, d, [&](const std::wstring& p, const WIN32_FIND_DATAW& fd) {
+                    any = true;
+                    CleanEntry e;
+                    e.path = p;
+                    e.dir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                    e.mtime = FtToI(fd.ftLastWriteTime);
+                    e.target = static_cast<int>(ti);
+                    SizeOf(p, fd, e.bytes, e.files, c.denied, cancel);
+                    c.bytes += e.bytes;
+                    c.files += e.files;
+                    c.entries.push_back(std::move(e));
+                });
+                if (!any && GetLastError() == ERROR_ACCESS_DENIED) c.denied = true;
             }
         }
     }
-    MeasureCategory(c, cancel);
-    return before > c.bytes ? before - c.bytes : 0;
+    std::stable_sort(c.entries.begin(), c.entries.end(), [](const CleanEntry& a, const CleanEntry& b) { return a.bytes > b.bytes; });
+    c.measured = true;
+}
+
+CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
+                             const std::function<void(const std::wstring&)>& onItem) {
+    CleanResult r;
+    if (c.external) {
+        ShellExecuteW(nullptr, L"open", L"cleanmgr.exe", nullptr, nullptr, SW_SHOWNORMAL);
+        return r;
+    }
+    if (c.recycleBin && c.KeptCount() == 0) {
+        onItem(L"Emptying the Recycle Bin");
+        SHEmptyRecycleBinW(nullptr, nullptr, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
+        SHQUERYRBINFO qi{sizeof(qi)};
+        uint64_t left = SUCCEEDED(SHQueryRecycleBinW(nullptr, &qi)) ? static_cast<uint64_t>(qi.i64Size) : 0;
+        r.freed = c.bytes > left ? c.bytes - left : 0;
+        r.files = c.files;
+        return r;
+    }
+    int64_t now = util::NowFileTime();
+    std::atomic<uint64_t> removed{0};
+    for (auto& e : c.entries) {
+        if (cancel) break;
+        if (e.keep) continue;
+        onItem(e.path);
+        std::wstring err;
+        if (c.recycleBin) {
+            // Some items are kept, so the bin is emptied item by item: the $R file (or folder) is
+            // the item itself, the $I file its record.
+            if (DeletePermanently(e.binData, cancel, removed, err)) {
+                DeleteFileW(ToLongPath(e.binInfo).c_str());
+                r.freed += e.bytes;
+                r.files += e.files;
+            } else {
+                ++r.failed;
+            }
+            continue;
+        }
+        // Safety net: categories are curated, but never let one reach a blocked location.
+        if (CheckProtection(e.path).level == Protect::Blocked) {
+            ++r.failed;
+            continue;
+        }
+        WIN32_FILE_ATTRIBUTE_DATA fa;
+        if (!GetFileAttributesExW(ToLongPath(e.path).c_str(), GetFileExInfoStandard, &fa)) continue;  // already gone
+        // Changed since it was measured (e.g. a temp file in use again): it no longer qualifies.
+        int minAge = e.target >= 0 && e.target < static_cast<int>(c.targets.size()) ? c.targets[e.target].minAgeHours : 0;
+        if (minAge && FtToI(fa.ftLastWriteTime) > now - static_cast<int64_t>(minAge) * 36000000000LL) continue;
+        if (DeletePermanently(e.path, cancel, removed, err)) {
+            r.freed += e.bytes;
+            r.files += e.files;
+            continue;
+        }
+        ++r.failed;
+        // Partly deleted: count what is gone.
+        uint64_t leftBytes = 0, leftFiles = 0;
+        bool denied = false;
+        WIN32_FIND_DATAW top{};
+        top.dwFileAttributes = fa.dwFileAttributes;
+        top.nFileSizeHigh = fa.nFileSizeHigh;
+        top.nFileSizeLow = fa.nFileSizeLow;
+        if (GetFileAttributesW(ToLongPath(e.path).c_str()) != INVALID_FILE_ATTRIBUTES)
+            SizeOf(e.path, top, leftBytes, leftFiles, denied, cancel);
+        r.freed += e.bytes > leftBytes ? e.bytes - leftBytes : 0;
+        r.files += e.files > leftFiles ? e.files - leftFiles : 0;
+    }
+    return r;
 }

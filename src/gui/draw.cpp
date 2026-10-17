@@ -234,6 +234,7 @@ void App::Paint() {
         case View::History: DrawHistory(contentArea_); break;
         case View::Compare: DrawCompare(contentArea_); break;
         case View::Deleted: DrawDeleted(contentArea_); break;
+        case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
     DrawSidebar();
@@ -347,7 +348,7 @@ void App::DrawSidebar() {
     auto drawItem = [&](const NavItem& it) {
         RectF r = R(10, y, kSidebarW - 10, y + 36);
         bool active = view_ == it.v || (it.v == View::Types && view_ == View::TypeFiles) ||
-                      (it.v == View::History && view_ == View::Compare);
+                      (it.v == View::History && view_ == View::Compare) || (it.v == View::Cleanup && view_ == View::CleanReview);
         bool enabled = !it.needsScan || root_;
         bool hover = enabled && Hovered(HK_NAV, static_cast<int>(it.v));
         if (active) {
@@ -1152,7 +1153,7 @@ void App::DrawCleanup(const RectF& area) {
     for (auto& c : cleanup_) {
         if (c.external) continue;
         all += c.bytes;
-        if (c.selected) selTotal += c.bytes;
+        if (c.selected) selTotal += c.ToClean();
     }
     DrawViewHeader(R(area.left + 24, top, area.right - 360, top + 46), L"Cleanup",
                    cleanupMeasuring_ ? L"Measuring caches and leftovers…"
@@ -1214,6 +1215,7 @@ void App::DrawCleanup(const RectF& area) {
         if (c.denied && !locked) badge(L"Partly inaccessible", P_.textFaint);
         gfx_.Text(c.desc, R(x, card.top + 37, textRight, card.top + 58), P_.textDim, Small(12.5f));
         RectF sr = R(card.right - 190, card.top, card.right - 20, card.bottom);
+        RectF review{};
         if (c.external) {
             if (c.bytes) {
                 gfx_.Text(util::FormatSizeShort(c.bytes), R(sr.left, card.top + 8, sr.right, card.top + 36), P_.text,
@@ -1227,15 +1229,99 @@ void App::DrawCleanup(const RectF& area) {
             float a = (GetTickCount64() % 1200) / 1200.0f * 360.0f;
             gfx_.Arc(sr.right - 10, (card.top + card.bottom) / 2, 8, a, 270, P_.accent, 2.2f);
         } else {
-            gfx_.Text(util::FormatSizeShort(c.bytes), R(sr.left, card.top + 8, sr.right, card.top + 36), c.bytes ? P_.text : P_.textFaint,
+            gfx_.Text(util::FormatSizeShort(c.ToClean()), R(sr.left, card.top + 8, sr.right, card.top + 36), c.bytes ? P_.text : P_.textFaint,
                       TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
-            gfx_.Text(c.recycleBin ? util::FormatCount(c.files) + L" items" : util::FormatCount(c.files) + L" files",
-                      R(sr.left, card.top + 36, sr.right, card.top + 58), P_.textFaint, Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+            std::wstring count = util::FormatCount(c.files) + (c.recycleBin ? L" items" : L" files");
+            if (size_t kept = c.KeptCount()) count += L" · " + util::FormatCount(kept) + L" kept";
+            if (!c.entries.empty()) {
+                // "Review" opens the exact list of what would be deleted (a dry run with opt-outs).
+                std::wstring link = L"Review " + count + L"  ›";
+                float lw = gfx_.Measure(link, Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 12;
+                RectF lr = R(sr.right - lw + 6, card.top + 37, sr.right + 6, card.top + 57);
+                bool hv = Hovered(HK_REVIEW, static_cast<int>(i));
+                if (hv) gfx_.FillRound(lr, 6, P_.hover);
+                gfx_.Text(link, R(lr.left, lr.top, lr.right - 6, lr.bottom), hv ? P_.text : P_.accent,
+                          Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+                review = lr;
+            } else {
+                gfx_.Text(count, R(sr.left, card.top + 36, sr.right, card.top + 58), P_.textFaint,
+                          Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+            }
         }
         if (!c.external) AddHit(card, HK_CHECK, static_cast<int>(i));
+        if (W(review) > 0) AddHit(review, HK_REVIEW, static_cast<int>(i));
         y += 82;
     }
     gfx_.PopClip();
+}
+
+void App::DrawCleanReview(const RectF& area) {
+    if (reviewCat_ < 0 || reviewCat_ >= static_cast<int>(cleanup_.size())) return;
+    CleanCategory& c = cleanup_[reviewCat_];
+    float top = area.top + 18;
+    IconButton(area.left + 24, top + 4, IC_BACK, CMD_NONE, L"");
+    hits_.back().kind = HK_NAV;
+    hits_.back().a = static_cast<int>(View::Cleanup);
+    size_t kept = c.KeptCount();
+    std::wstring sub = util::FormatCount(c.entries.size() - kept) + L" of " + util::FormatCount(c.entries.size()) +
+                       L" selected  ·  " + util::FormatSizeShort(c.ToClean()) +
+                       L" would be deleted permanently  ·  uncheck what you want to keep";
+    DrawViewHeader(R(area.left + 70, top, area.right - 290, top + 46), L"Review: " + c.name, sub, c.icon);
+    float bx = area.right - 24 - 130;
+    Button(RWH(bx, top + 6, 130, 34), IC_CHECK, L"Select all", CMD_REVIEW_ALL, 0, kept > 0);
+    bx -= 8 + 130;
+    Button(RWH(bx, top + 6, 130, 34), 0, L"Keep all", CMD_REVIEW_NONE, 0, kept < c.entries.size());
+    float y = top + 62;
+    if (cleanupMeasuring_) {
+        gfx_.Text(L"Measuring again…", R(area.left + 24, y, area.right - 24, y + 22), P_.textDim, Small(12.5f));
+        y += 26;
+    }
+    RectF body = R(area.left, y, area.right, area.bottom);
+    if (c.entries.empty()) {
+        DrawEmptyState(body, c.icon, L"Nothing to clean here", L"This category is empty right now.");
+        return;
+    }
+    std::vector<Column> cols = {{L"Item", -1.0f, Align::Left, -1},
+                                {L"Size", 100, Align::Right, -1},
+                                {c.recycleBin ? L"Deleted" : L"Modified", 140, Align::Left, -1}};
+    DrawTable(body, cols, -1, true, [&](int i, const Column&, int ci, const RectF& cr, bool) {
+        const CleanEntry& e = c.entries[rows_[i].idx];
+        D2D1_COLOR_F textCol = e.keep ? P_.textFaint : P_.text;
+        switch (ci) {
+            case 0: {
+                float cy = (cr.top + cr.bottom) / 2;
+                Checkbox(RWH(cr.left, cy - 9, 18, 18), !e.keep, Hovered(HK_ROW, i));
+                size_t slash = e.path.find_last_of(L'\\');
+                std::wstring name = slash == std::wstring::npos ? e.path : e.path.substr(slash + 1);
+                std::wstring folder = slash == std::wstring::npos ? L"" : e.path.substr(0, slash);
+                std::wstring ext;
+                size_t dot = name.find_last_of(L'.');
+                if (!e.dir && dot != std::wstring::npos) ext = util::ToLower(name.substr(dot + 1));
+                gfx_.Bitmap(e.dir ? icons_.Folder(gfx_) : icons_.ForExt(gfx_, ext), RWH(cr.left + 30, cy - 9, 18, 18), e.keep ? 0.5f : 1.0f);
+                float x = cr.left + 56;
+                TextStyle ts = TS(13, e.dir ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL);
+                float nw = std::min(gfx_.Measure(name, ts) + 4, std::max(0.0f, cr.right - x));
+                gfx_.Text(name, R(x, cr.top, x + nw, cr.bottom), textCol, ts);
+                x += nw + 10;
+                if (e.keep) {
+                    float kw = gfx_.Measure(L"Kept", Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+                    if (x + kw < cr.right) {
+                        RectF br = R(x, cy - 9, x + kw, cy + 9);
+                        gfx_.FillRound(br, 9, WithAlpha(P_.success, 0.16f));
+                        gfx_.Text(L"Kept", br, P_.success, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                        x += kw + 10;
+                    }
+                }
+                if (x + 40 < cr.right)
+                    gfx_.Text(FitPath(folder, cr.right - x, 12), R(x, cr.top, cr.right, cr.bottom), P_.textFaint, Small(12));
+                break;
+            }
+            case 1:
+                gfx_.Text(util::FormatSizeShort(e.bytes), cr, textCol, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+                break;
+            default: gfx_.Text(e.mtime ? util::FormatTime(e.mtime) : L"", cr, P_.textDim, Small(12.5f)); break;
+        }
+    });
 }
 
 // =============================================================================================

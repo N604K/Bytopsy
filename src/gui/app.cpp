@@ -303,7 +303,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
                 bool link = hover_.kind == HK_BUTTON || hover_.kind == HK_NAV || hover_.kind == HK_DRIVE ||
                             hover_.kind == HK_CARD || hover_.kind == HK_RECENT || hover_.kind == HK_CHIP ||
                             hover_.kind == HK_CRUMB || hover_.kind == HK_CHECK || hover_.kind == HK_SNAPSHOT ||
-                            hover_.kind == HK_DIALOG || hover_.kind == HK_RESTORE;
+                            hover_.kind == HK_DIALOG || hover_.kind == HK_RESTORE || hover_.kind == HK_REVIEW;
                 SetCursor(LoadCursorW(nullptr, link ? IDC_HAND : IDC_ARROW));
                 return TRUE;
             }
@@ -406,6 +406,12 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
             break;
         case HK_CRUMB: NavigateTo(reinterpret_cast<Node*>(hit.b)); break;
         case HK_ROW:
+            if (view_ == View::CleanReview) {
+                // A click toggles the check; a double-click shows the item (and undoes its first click).
+                ToggleKeep(hit.a);
+                if (dbl) OpenRow(hit.a);
+                break;
+            }
             if (dbl)
                 OpenRow(hit.a);
             else
@@ -484,6 +490,11 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
             if (hit.a >= 0 && hit.a < static_cast<int>(cleanup_.size())) cleanup_[hit.a].selected = !cleanup_[hit.a].selected;
             break;
         case HK_RESTORE: RestoreDeleted(hit.a); break;
+        case HK_REVIEW:
+            reviewCat_ = hit.a;
+            lists_[static_cast<int>(View::CleanReview)] = ListState{};
+            ShowView(View::CleanReview);
+            break;
         case HK_SNAPSHOT:
             if (hit.b == 0)
                 CompareSnapshot(hit.a);
@@ -519,6 +530,7 @@ void App::OnRButtonUp(float x, float y) {
     if (!h) return;
     Hit hit = *h;
     if (hit.kind == HK_BADGE && hit.a >= 0) hit.kind = HK_ROW;
+    if (view_ == View::CleanReview) return;
     if (hit.kind == HK_ROW) {
         if (hit.a < static_cast<int>(rows_.size())) {
             Node* n = rows_[hit.a].node;
@@ -641,11 +653,16 @@ void App::OnKeyDown(WPARAM vk) {
             if (ls.focus >= 0) OpenRow(ls.focus);
             break;
         case VK_SPACE:
-            if (ls.focus >= 0) SelectRow(ls.focus, true, false);
+            if (view_ == View::CleanReview)
+                ToggleKeep(ls.focus);
+            else if (ls.focus >= 0)
+                SelectRow(ls.focus, true, false);
             break;
         case VK_DELETE: RequestDelete(shift); break;
         case VK_BACK:
-            if (view_ == View::Browse)
+            if (view_ == View::CleanReview)
+                ShowView(View::Cleanup);
+            else if (view_ == View::Browse)
                 OnCommand(CMD_UP);
             else if (view_ == View::TypeFiles)
                 ShowView(View::Types);
@@ -654,7 +671,9 @@ void App::OnKeyDown(WPARAM vk) {
             break;
         case VK_F5: OnCommand(CMD_RESCAN); break;
         case VK_ESCAPE:
-            if (!sel_.empty())
+            if (view_ == View::CleanReview)
+                ShowView(View::Cleanup);
+            else if (!sel_.empty())
                 sel_.clear();
             else if (view_ != View::Browse && root_)
                 ShowView(View::Browse);

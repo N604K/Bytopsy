@@ -29,7 +29,9 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Properties and Rescan.
 - **Cleanup** (works without a scan): Recycle Bin, temporary files, browser caches, thumbnail cache,
   crash dumps, Windows Update downloads, Delivery Optimization, shader caches and developer caches.
-  Each category is measured first, and only the safe ones are preselected.
+  Each category is measured first, and only the safe ones are preselected. *Review* lists exactly
+  what a category would delete (files, folders or Recycle Bin items) so you can uncheck anything to
+  keep; cleaning deletes only that list, and skips entries that changed since they were measured.
 - **Protected locations**: WinNCDU knows which folders must not be deleted and which hold data you
   can't get back, and checks every delete (and every Cleanup item) against them. See below.
 - **Recently deleted**: every delete and cleanup is written to a journal
@@ -122,7 +124,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs winncdu-protect-test.exe and winncdu-journal-test.exe
+ctest --test-dir build    :: runs the protect, journal and cleanup self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -224,5 +226,6 @@ src/gui/              windowed app
   icons.cpp           shell icon cache
 tests/protect_test.cpp  self-check of the protection rules (ctest)
 tests/journal_test.cpp  journal format and a real recycle + restore round trip (ctest)
+tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list (ctest)
 res/winncdu.ico       app icon
 ```

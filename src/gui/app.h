@@ -23,7 +23,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, Search, Cleanup, History, Compare, Deleted, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, Search, Cleanup, History, Compare, Deleted, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -72,6 +72,8 @@ enum Cmd : int {
     CMD_ABOUT,
     CMD_PROTECTED,
     CMD_OPEN_JOURNAL,
+    CMD_REVIEW_ALL,
+    CMD_REVIEW_NONE,
 };
 
 enum HitKind {
@@ -95,6 +97,7 @@ enum HitKind {
     HK_MODAL_BG,
     HK_BADGE,     // shield badge (tooltip): a = row, -1 = the open folder
     HK_RESTORE,   // a = index into deleted_
+    HK_REVIEW,    // a = cleanup category: open its file list
 };
 
 struct Hit {
@@ -104,7 +107,7 @@ struct Hit {
     intptr_t b = 0;
 };
 
-enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF };
+enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN };
 
 struct Row {
     Node* node = nullptr;
@@ -230,6 +233,8 @@ private:
     void StartCleanup();
     void MeasureCleanup();
     void OnCleanupMeasured(std::vector<CleanCategory>* result);
+    CleanEntry* ReviewEntry(int row);
+    void ToggleKeep(int row);
     void NavigateTo(Node* dir, bool remember = true);
     void ShowView(View v);
     void RunSearchQuery(const std::wstring& q);
@@ -263,6 +268,7 @@ private:
     void DrawTypes(const RectF& area);
     void DrawDuplicates(const RectF& area);
     void DrawCleanup(const RectF& area);
+    void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
     void DrawCompare(const RectF& area);
     void DrawDeleted(const RectF& area);
@@ -331,6 +337,7 @@ private:
     uint64_t oldMinSize_ = 0;
     std::vector<CleanCategory> cleanup_;
     bool cleanupMeasuring_ = false;
+    int reviewCat_ = -1;  // category shown in View::CleanReview
     std::vector<SnapshotInfo> snapshots_;
     std::vector<DiffEntry> diff_;
     SnapshotInfo diffInfo_;

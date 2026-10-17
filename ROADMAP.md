@@ -13,8 +13,8 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [x] **Deletion journal**: every delete and cleanup goes to `%LOCALAPPDATA%\WinNCDU\journal.log`
       (time, path, size, Recycle Bin or permanent); "Recently deleted" view with *Restore* for items
       still in the Recycle Bin, and `winncdu-cli --journal` (`src/journal.cpp`).
-- [ ] **Dry run / preview**: for Cleanup, list the exact files per category before deleting, with
-      per-file opt-out.
+- [x] **Dry run / preview**: Cleanup's *Review* lists exactly what each category deletes, with
+      per-item opt-out; cleaning deletes only that list.
 - [ ] **Who is locking this?** Use the Restart Manager API (`RmGetList`) to name the app holding files
       ("close Chrome to clean its cache") instead of silently skipping them.
 - [ ] **Restore point** before system-level cleanups (`SRSetRestorePoint`), optional.
