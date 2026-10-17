@@ -415,6 +415,11 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 if (dbl) OpenRow(hit.a);
                 break;
             }
+            if (view_ == View::Wsl) {
+                ToggleWslRow(hit.a);
+                if (dbl) OpenRow(hit.a);
+                break;
+            }
             if (view_ == View::AiModels) {
                 // As in Review: a click toggles, a double-click shows the files (undoing its first click).
                 ToggleAiRow(hit.a);
@@ -678,6 +683,8 @@ void App::OnKeyDown(WPARAM vk) {
                 ToggleKeep(ls.focus);
             else if (view_ == View::AiModels)
                 ToggleAiRow(ls.focus);
+            else if (view_ == View::Wsl)
+                ToggleWslRow(ls.focus);
             else if (ls.focus >= 0)
                 SelectRow(ls.focus, true, false);
             break;

@@ -22,6 +22,7 @@ add_library(winncdu_core STATIC
   src/journal.cpp
   src/devjunk.cpp
   src/aimodels.cpp
+  src/vdisks.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
@@ -116,5 +117,13 @@ if(MSVC)
   target_compile_options(winncdu-aimodels-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME aimodels COMMAND winncdu-aimodels-test)
+
+# WSL and Docker virtual disks (VHDX/ext4 reading, tool output parsing): build\winncdu-vdisks-test.exe
+add_executable(winncdu-vdisks-test tests/vdisks_test.cpp)
+target_link_libraries(winncdu-vdisks-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-vdisks-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME vdisks COMMAND winncdu-vdisks-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

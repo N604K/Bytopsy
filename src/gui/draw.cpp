@@ -23,7 +23,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_HISTORY = 0xE81C, IC_BACK = 0xE72B, IC_FWD = 0xE72A, IC_UP = 0xE74A, IC_CHEV_R = 0xE76C,
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
-                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A;
+                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -247,6 +247,7 @@ void App::Paint() {
         case View::Compare: DrawCompare(contentArea_); break;
         case View::Deleted: DrawDeleted(contentArea_); break;
         case View::AiModels: DrawAiModels(contentArea_); break;
+        case View::Wsl: DrawWsl(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -390,6 +391,9 @@ void App::DrawSidebar() {
     uint64_t aiTotal = 0;
     for (auto& st : ai_) aiTotal += st.bytes;
     drawItem({View::AiModels, IC_AI, L"AI models", false, aiTotal ? util::FormatSizeShort(aiTotal) : L""});
+    uint64_t wslTotal = 0;
+    for (auto& d : vdisks_) wslTotal += d.Reclaimable();
+    drawItem({View::Wsl, IC_TERMINAL, L"WSL & Docker", false, wslTotal ? util::FormatSizeShort(wslTotal) : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
     drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 
@@ -1366,6 +1370,120 @@ void App::DrawAiModels(const RectF& area) {
 
 // =============================================================================================
 // Cleanup
+
+void App::DrawWsl(const RectF& area) {
+    float top = area.top + 18;
+    uint64_t total = 0, selTotal = 0;
+    for (auto& d : vdisks_) total += d.Reclaimable();
+    for (int id : wslSel_) selTotal += WslRowBytes(id);
+    std::wstring sub = vdisks_.empty() ? L"Virtual disks of WSL distros and Docker Desktop"
+                                       : L"Linux disks grow but never shrink by themselves  ·  " + util::FormatSizeShort(total) +
+                                             L" could go back to Windows";
+    float bx = area.right - 24;
+    if (!wslSel_.empty()) {
+        std::wstring t = L"Free up " + util::FormatSizeShort(selTotal);
+        float w = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 54;
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_CLEAN, t, CMD_WSL_FREE, 1);
+        bx -= 8;
+    }
+    bx -= 108;
+    Button(RWH(bx, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_WSL_REFRESH, 0);
+    bx -= 16;
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"WSL & Docker", sub, IC_TERMINAL);
+    float y = top + 58;
+    if (!wslLoaded_) return;
+    if (vdisks_.empty() && !docker_.cli) {
+        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_TERMINAL, L"No WSL or Docker disks found",
+                       L"WSL 2 distros and Docker Desktop keep Linux files in .vhdx virtual disks. None are registered for this user.");
+        return;
+    }
+    gfx_.Text(L"Click to select  ·  double-click a disk to show its file  ·  running distros report their own usage, stopped "
+              L"ones are read from the disk file without starting them",
+              R(area.left + 24, y, area.right - 24, y + 24), P_.textFaint, Small(12));
+    y += 30;
+    std::vector<Column> cols = {{L"Disk", -1.1f, Align::Left, -1},
+                                {L"Details", -1.3f, Align::Left, -1},
+                                {L"Size", 92, Align::Right, -1},
+                                {L"Used inside", 92, Align::Right, -1},
+                                {L"Could free", 92, Align::Right, -1}};
+    static const wchar_t* kDockerName[] = {L"Build cache", L"Unused images", L"Stopped containers", L"Unused volumes"};
+    static const wchar_t* kDockerType[] = {L"Build Cache", L"Images", L"Containers", L"Local Volumes"};
+    static const wchar_t* kDockerHow[] = {L"rebuilt by the next build  ·  docker builder prune -a",
+                                          L"pulled again when needed  ·  docker image prune -a",
+                                          L"can hold data: remove them in Docker Desktop if you're sure",
+                                          L"can hold data: remove them in Docker Desktop if you're sure"};
+    DrawTable(
+        R(area.left, y, area.right, area.bottom), cols, -1, true,
+        [&](int i, const Column&, int ci, const RectF& cr, bool) {
+            int id = rows_[i].idx;
+            bool disk = id < kWslDocker;
+            if (disk && id >= static_cast<int>(vdisks_.size())) return;
+            int k = id - kWslDocker;
+            const DockerRow* dr = disk ? nullptr : docker_.Find(kDockerType[k]);
+            bool selectable = disk ? vdisks_[id].usedKnown : k < 2;
+            float cy = (cr.top + cr.bottom) / 2;
+            switch (ci) {
+                case 0: {
+                    float x = cr.left;
+                    if (selectable)
+                        Checkbox(RWH(x, cy - 9, 18, 18), wslSel_.count(id) > 0, Hovered(HK_ROW, i));
+                    else
+                        gfx_.Icon(IC_INFO, RWH(x, cr.top, 18, H(cr)), P_.textFaint, 12);
+                    x += 30;
+                    std::wstring name = disk ? vdisks_[id].name : kDockerName[k];
+                    TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+                    float nw = std::min(gfx_.Measure(name, ts) + 4, std::max(0.0f, cr.right - x));
+                    gfx_.Text(name, R(x, cr.top, x + nw, cr.bottom), selectable ? P_.text : P_.textDim, ts);
+                    x += nw + 8;
+                    if (disk && vdisks_[id].running) {
+                        float rw = gfx_.Measure(L"Running", Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+                        if (x + rw < cr.right) {
+                            RectF br = R(x, cy - 9, x + rw, cy + 9);
+                            gfx_.FillRound(br, 9, WithAlpha(P_.success, 0.16f));
+                            gfx_.Text(L"Running", br, P_.success, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                        }
+                    }
+                    break;
+                }
+                case 1:
+                    if (disk)
+                        gfx_.Text(FitPath(vdisks_[id].path, W(cr), 12), cr, P_.textFaint, Small(12));
+                    else
+                        gfx_.Text(kDockerHow[k], cr, P_.textDim, Small(12.5f));
+                    break;
+                case 2: {
+                    uint64_t v = disk ? vdisks_[id].fileBytes : (dr ? dr->size : 0);
+                    gfx_.Text(util::FormatSizeShort(v), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+                    break;
+                }
+                case 3:
+                    if (disk)
+                        gfx_.Text(vdisks_[id].usedKnown ? (vdisks_[id].usedFrom == L"superblock" ? L"≈ " : L"") + util::FormatSizeShort(vdisks_[id].used)
+                                                        : L"unknown",
+                                  cr, P_.textDim, Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+                    break;
+                default: {
+                    uint64_t v = WslRowBytes(id);
+                    gfx_.Text(disk && !vdisks_[id].usedKnown ? L"" : util::FormatSizeShort(v), cr, selectable ? P_.accent : P_.textDim,
+                              TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+                }
+            }
+        },
+        [&](int i, const RectF& r) {
+            bool dockerGroup = rows_[i].idx == 1;
+            gfx_.Icon(dockerGroup ? IC_DRIVE : IC_TERMINAL, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
+            std::wstring title = dockerGroup ? L"Docker" : L"Virtual disks";
+            std::wstring note = !dockerGroup ? L"space each takes on the drive, and what Linux uses inside"
+                                : docker_.running ? L"data inside Docker's disk: compact the disk afterwards to give the space to Windows"
+                                                  : L"isn't running: start Docker Desktop to see what it could remove" +
+                                                        (docker_.error.empty() ? L"" : L" (" + docker_.error + L")");
+            TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            float tw = gfx_.Measure(title, ts) + 4;
+            gfx_.Text(title, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
+            gfx_.Text(note, R(r.left + 48 + tw, r.top, r.right - 12, r.bottom), P_.textFaint, Small(12));
+        });
+}
 
 void App::DrawCleanup(const RectF& area) {
     float top = area.top + 18;

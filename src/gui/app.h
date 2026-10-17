@@ -18,6 +18,7 @@
 #include "../journal.h"
 #include "../protect.h"
 #include "../scanner.h"
+#include "../vdisks.h"
 #include "../tree.h"
 #include "cleanup.h"
 #include "gfx.h"
@@ -26,7 +27,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -82,6 +83,8 @@ enum Cmd : int {
     CMD_AI_REFRESH,
     CMD_AI_UNUSED,
     CMD_AI_DELETE,
+    CMD_WSL_REFRESH,
+    CMD_WSL_FREE,
     CMD_WINAPP2,
     CMD_WINAPP2_REMOVE,
 };
@@ -117,7 +120,7 @@ struct Hit {
     intptr_t b = 0;
 };
 
-enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI };
+enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL };
 
 struct Row {
     Node* node = nullptr;
@@ -238,6 +241,10 @@ private:
     void ToggleAiRow(int row);
     void StartAiDelete();
     uint64_t AiSelectedBytes() const;
+    void LoadWsl();
+    void ToggleWslRow(int row);
+    void StartWslFree();
+    uint64_t WslRowBytes(int id) const;
     void RebuildOld();
 
     // ---- actions (actions.cpp)
@@ -288,6 +295,7 @@ private:
     void DrawDuplicates(const RectF& area);
     void DrawDevJunk(const RectF& area);
     void DrawAiModels(const RectF& area);
+    void DrawWsl(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -362,6 +370,13 @@ private:
     std::set<std::pair<size_t, size_t>> aiSel_;  // (store, item)
     // RK_AI rows: idx = store << 20 | item.
     static int AiRowIdx(size_t store, size_t item) { return static_cast<int>(store << 20 | item); }
+    std::vector<VDisk> vdisks_;
+    DockerInfo docker_;
+    bool wslLoaded_ = false;
+    // RK_WSL rows: idx = a disk index, or kWslDocker + 0 build cache, 1 unused images, 2 stopped
+    // containers, 3 unused volumes (the last two are shown, never offered).
+    static constexpr int kWslDocker = 1000;
+    std::set<int> wslSel_;
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

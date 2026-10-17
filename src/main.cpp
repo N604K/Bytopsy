@@ -14,6 +14,7 @@
 #include "scanner.h"
 #include "ui.h"
 #include "util.h"
+#include "vdisks.h"
 #include "version.h"
 
 namespace {
@@ -45,6 +46,8 @@ void PrintUsage() {
         "                        Recycle Bin) and exit\n"
         "  --ai-models           List local AI models (Hugging Face, Ollama, LM Studio) with\n"
         "                        what each frees, and exit\n"
+        "  --wsl                 List WSL and Docker virtual disks (size on the drive vs. used\n"
+        "                        inside) and what Docker could prune, and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -126,6 +129,42 @@ int ListAiModels() {
         }
     }
     out += L"\nDelete single models in the windowed app: AI models.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
+int ListVDisks() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    auto disks = FindVDisks();
+    std::wstring out = L"WSL and Docker virtual disks. They grow but never shrink by themselves: compacting gives the\n"
+                       L"space that is free inside back to Windows.\n\n";
+    if (disks.empty())
+        out += L"  None found.\n";
+    else
+        out += L"     On drive  Used inside   Could free  Disk\n";
+    for (auto& d : disks) {
+        wchar_t head[96];
+        swprintf(head, 96, L"  %11ls  %11ls  %11ls  ", util::FormatSizeShort(d.fileBytes).c_str(),
+                 d.usedKnown ? util::FormatSizeShort(d.used).c_str() : L"?",
+                 d.usedKnown ? util::FormatSizeShort(d.Reclaimable()).c_str() : L"?");
+        out += head + d.name + (d.running ? L"  (running)" : L"") + L"  " + d.path + L"\n";
+    }
+    DockerInfo dk = QueryDocker();
+    if (dk.cli) {
+        out += L"\nDocker (inside its virtual disk):\n";
+        if (!dk.running) out += L"  Not running" + (dk.error.empty() ? L"" : L": " + dk.error) + L"\n";
+        for (auto& r : dk.rows) {
+            wchar_t head[96];
+            swprintf(head, 96, L"  %11ls  %11ls reclaimable  ", util::FormatSizeShort(r.size).c_str(),
+                     util::FormatSizeShort(r.reclaimable).c_str());
+            out += head + r.type + L"\n";
+        }
+    }
+    out += L"\nCompact disks and prune Docker in the windowed app: WSL & Docker.\n";
     std::string u = util::WideToUtf8(out);
     fwrite(u.data(), 1, u.size(), stdout);
     fflush(stdout);
@@ -248,6 +287,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListJournal();
         } else if (a == L"--ai-models") {
             return ListAiModels();
+        } else if (a == L"--wsl") {
+            return ListVDisks();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {

@@ -157,6 +157,15 @@ void App::BuildRows() {
                     rows_.push_back({nullptr, ai_[s].items[i].parent >= 0 ? 1 : 0, RK_AI, AiRowIdx(s, i)});
             }
             break;
+        case View::Wsl:
+            if (!vdisks_.empty()) rows_.push_back({nullptr, 0, RK_GROUP, 0});
+            for (size_t i = 0; i < vdisks_.size(); ++i) rows_.push_back({nullptr, 0, RK_WSL, static_cast<int>(i)});
+            if (docker_.cli) {
+                rows_.push_back({nullptr, 0, RK_GROUP, 1});
+                if (docker_.running)
+                    for (int k = 0; k < 4; ++k) rows_.push_back({nullptr, 0, RK_WSL, kWslDocker + k});
+            }
+            break;
         case View::CleanReview:
             if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
                 for (size_t i = 0; i < cleanup_[reviewCat_].entries.size(); ++i) rows_.push_back({nullptr, 0, RK_CLEAN, static_cast<int>(i)});
@@ -500,6 +509,145 @@ void App::StartAiDelete() {
                     if (std::find(st->total.lockedBy.begin(), st->total.lockedBy.end(), a) == st->total.lockedBy.end())
                         st->total.lockedBy.push_back(a);
             }
+        });
+    };
+    ShowDialog(std::move(d));
+}
+
+// =============================================================================================
+// WSL and Docker: works without a scan.
+
+void App::LoadWsl() {
+    if (task_) return;
+    struct State {
+        std::vector<VDisk> disks;
+        DockerInfo docker;
+    };
+    auto st = std::make_shared<State>();
+    auto t = std::make_unique<Task>();
+    t->title = L"Looking at WSL and Docker";
+    t->lines = [] {
+        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Asking running distros and Docker how much they use"}};
+    };
+    t->onDone = [this, st] {
+        vdisks_ = std::move(st->disks);
+        docker_ = std::move(st->docker);
+        wslLoaded_ = true;
+        wslSel_.clear();
+        rowsDirty_ = true;
+        Invalidate();
+    };
+    StartTask(std::move(t), [st] {
+        st->disks = FindVDisks();
+        st->docker = QueryDocker();
+    });
+}
+
+uint64_t App::WslRowBytes(int id) const {
+    if (id >= 0 && id < static_cast<int>(vdisks_.size())) return vdisks_[id].Reclaimable();
+    static const wchar_t* kTypes[] = {L"Build Cache", L"Images", L"Containers", L"Local Volumes"};
+    int k = id - kWslDocker;
+    if (k < 0 || k > 3) return 0;
+    const DockerRow* r = docker_.Find(kTypes[k]);
+    return r ? r->reclaimable : 0;
+}
+
+void App::ToggleWslRow(int row) {
+    if (row < 0 || row >= static_cast<int>(rows_.size()) || rows_[row].kind != RK_WSL) return;
+    int id = rows_[row].idx;
+    lists_[static_cast<int>(view_)].focus = row;
+    if (id >= kWslDocker + 2) return;  // containers and volumes can hold data: shown, never offered
+    if (id < static_cast<int>(vdisks_.size()) && !vdisks_[id].usedKnown) return;
+    if (!wslSel_.erase(id)) wslSel_.insert(id);
+}
+
+void App::StartWslFree() {
+    if (wslSel_.empty()) return Toast(L"Select disks to compact or Docker data to remove first", 2);
+    std::vector<VDisk> disks;
+    bool build = wslSel_.count(kWslDocker) > 0, images = wslSel_.count(kWslDocker + 1) > 0;
+    uint64_t total = 0;
+    for (int id : wslSel_) {
+        total += WslRowBytes(id);
+        if (id < static_cast<int>(vdisks_.size())) disks.push_back(vdisks_[id]);
+    }
+    if ((build || images) && !docker_.running) return Toast(L"Docker isn't running: start Docker Desktop first", 2);
+    bool anyRunning = false;
+    for (auto& d : vdisks_) anyRunning = anyRunning || d.running;
+    Dialog d;
+    d.title = L"Free up to " + util::FormatSizeShort(total) + L"?";
+    if (build || images) {
+        d.message = L"Docker removes ";
+        d.message += build && images ? L"its build cache and the images no container uses: the next build or docker pull brings them back."
+                     : build         ? L"its build cache: the next build brings it back."
+                                     : L"the images no container uses: docker pull brings them back when needed.";
+        d.message += L" Containers and volumes are kept.";
+    }
+    if (!disks.empty()) {
+        if (!d.message.empty()) d.message += L"\n\n";
+        d.message += L"Compacting gives the free space inside each disk back to Windows. ";
+        d.message += anyRunning ? L"WSL is shut down first, so every running Linux distro stops: save your work there. " : L"";
+        d.message += docker_.desktopRunning ? L"Docker Desktop is stopped and started again. " : L"";
+        d.message += L"Windows asks for administrator permission to run diskpart, and large disks can take several minutes.";
+    }
+    for (int id : wslSel_) {
+        std::wstring name = id < static_cast<int>(vdisks_.size()) ? L"Compact " + vdisks_[id].name
+                            : id == kWslDocker                   ? L"Docker build cache"
+                                                                 : L"Docker images no container uses";
+        d.lines.push_back(util::FormatSizeShort(WslRowBytes(id)) + L"\t" + name);
+    }
+    d.icon = 0xE74D;
+    d.tone = 2;
+    d.buttons = {L"Cancel", L"Free up space"};
+    d.primary = 1;
+    d.onClose = [this, disks, build, images](int b, bool) {
+        if (b != 1) return;
+        struct State {
+            std::vector<VDisk> disks;
+            bool build = false, images = false;
+            DockerPruneResult prune;
+            CompactResult compact;
+            std::atomic<bool> cancel{false};
+            std::mutex m;
+            std::wstring status;
+        };
+        auto st = std::make_shared<State>();
+        st->disks = disks;
+        st->build = build;
+        st->images = images;
+        auto t = std::make_unique<Task>();
+        t->title = L"Freeing up space";
+        t->lines = [st] {
+            std::lock_guard<std::mutex> lk(st->m);
+            return std::vector<std::pair<std::wstring, std::wstring>>{{L"Now", st->status}};
+        };
+        t->cancel = [st] { st->cancel = true; };
+        t->onDone = [this, st] {
+            const CompactResult& c = st->compact;
+            std::vector<std::wstring> msgs;
+            if (st->build || st->images) msgs.push_back(L"Docker removed " + util::FormatSizeShort(st->prune.freed));
+            if (!st->disks.empty())
+                msgs.push_back(L"compacting gave " + util::FormatSizeShort(c.before > c.after ? c.before - c.after : 0) + L" back to Windows");
+            std::wstring msg;
+            for (auto& m : msgs) msg += (msg.empty() ? L"" : L", ") + m;
+            if (!msg.empty()) msg[0] = static_cast<wchar_t>(towupper(msg[0]));
+            std::vector<std::wstring> errors = st->prune.errors;
+            errors.insert(errors.end(), c.errors.begin(), c.errors.end());
+            if (!errors.empty()) msg += L" · " + errors[0];
+            Toast(msg, errors.empty() ? 0 : 1);
+            if (root_) haveVol_ = QueryFreeSpace(root_->name, volTotal_, volFree_);
+            drives_ = ListDrives();
+            LoadWsl();
+        };
+        StartTask(std::move(t), [st] {
+            auto status = [st](const std::wstring& s) {
+                std::lock_guard<std::mutex> lk(st->m);
+                st->status = s;
+            };
+            if (st->build || st->images) {
+                status(L"Docker is removing what comes back by itself");
+                st->prune = DockerPrune(st->build, st->images, st->cancel);
+            }
+            if (!st->disks.empty() && !st->cancel) st->compact = CompactVDisks(st->disks, st->cancel, status);
         });
     };
     ShowDialog(std::move(d));
@@ -1266,7 +1414,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
-        v != View::CleanReview && !root_)
+        v != View::Wsl && v != View::CleanReview && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -1291,6 +1439,9 @@ void App::ShowView(View v) {
         case View::Deleted: LoadDeleted(); break;
         case View::AiModels:
             if (!aiLoaded_) LoadAiModels();
+            break;
+        case View::Wsl:
+            if (!wslLoaded_) LoadWsl();
             break;
         default: break;
     }
@@ -1331,6 +1482,10 @@ void App::OpenRow(int row) {
     }
     if (r.kind == RK_CLEAN) {
         if (CleanEntry* e = ReviewEntry(row)) RevealInExplorer(e->binData.empty() ? e->path : e->binData);
+        return;
+    }
+    if (view_ == View::Wsl) {
+        if (r.kind == RK_WSL && r.idx < static_cast<int>(vdisks_.size())) RevealInExplorer(vdisks_[r.idx].path);
         return;
     }
     if (view_ == View::AiModels) {
@@ -1680,6 +1835,8 @@ void App::OnCommand(int cmd) {
             break;
         }
         case CMD_AI_DELETE: StartAiDelete(); break;
+        case CMD_WSL_REFRESH: LoadWsl(); break;
+        case CMD_WSL_FREE: StartWslFree(); break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE: MeasureCleanup(); break;
         case CMD_ADMIN: {

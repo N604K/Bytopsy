@@ -48,8 +48,11 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       list; delete single models, never the history.
       *Done: AI models view (no scan needed) and `winncdu-cli --ai-models`; deletes stay inside the
       model folders, and the journal keeps the download command.*
-- [ ] **WSL and Docker**: show `ext4.vhdx` / `docker_data.vhdx` sizes vs. used space and offer
+- [x] **WSL and Docker**: show `ext4.vhdx` / `docker_data.vhdx` sizes vs. used space and offer
       compaction (`wsl --shutdown` + `Optimize-VHD` / `diskpart compact vdisk`), `docker system prune`.
+      *Done: WSL & Docker view and `winncdu-cli --wsl`. Compaction uses diskpart (works on Home, no
+      Hyper-V module needed). Instead of `docker system prune`, only the build cache and unused images
+      are pruned: stopped containers and volumes can hold data, so they are shown, not offered.*
 - [ ] Windows: component store cleanup (`DISM /StartComponentCleanup`), old drivers in DriverStore
       (`pnputil`), shadow storage limit (`vssadmin`), hibernation toggle, Compact OS, delivery
       optimization via its API, event logs, `$Windows.~BT`.

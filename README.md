@@ -47,6 +47,16 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   history, settings, sign-in tokens or Ollama's key. The dialog shows how to get each model back
   (`huggingface-cli download ...`, `ollama pull ...`), and the journal keeps that command.
   `HF_HOME`, `HF_HUB_CACHE`, `OLLAMA_MODELS` and LM Studio's downloads folder are honored.
+- **WSL & Docker** (works without a scan): the virtual disks of WSL 2 distros (`ext4.vhdx`) and
+  Docker Desktop (`docker_data.vhdx`) grow as Linux writes files but never shrink by themselves.
+  The view shows each disk's size on the drive next to the space Linux uses inside: a running distro
+  is asked (`df`), a stopped one is never started, its usage is read from the ext4 superblock in
+  the .vhdx file. "Free up" compacts the chosen disks the way Microsoft documents it: free space is
+  trimmed inside the running distros, Docker Desktop is stopped (and started again afterwards), WSL
+  is shut down, then `diskpart` compacts each disk (Windows asks for administrator permission).
+  Docker's own data is listed too (`docker system df`): the build cache and images no container
+  uses can be removed with Docker's prune commands; stopped containers and unused volumes are only
+  shown, since they can hold data.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -180,7 +190,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk and aimodels self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels and vdisks self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -212,6 +222,8 @@ winncdu-cli [options] [path]
                         Recycle Bin) and exit
   --ai-models           List local AI models (Hugging Face, Ollama, LM Studio) with
                         what each frees, and exit
+  --wsl                 List WSL and Docker virtual disks (size on the drive vs. used
+                        inside) and what Docker could prune, and exit
 ```
 
 Examples:
@@ -273,6 +285,7 @@ src/                  core engine + terminal app
   journal.cpp         deletion journal, Recycle Bin lookup and restore
   devjunk.cpp         developer junk finder (build output and dependencies by project)
   aimodels.cpp        AI models: Hugging Face cache, Ollama, LM Studio (list and delete)
+  vdisks.cpp          WSL and Docker virtual disks: usage, compaction, Docker prune
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
   app.cpp             window, input, layout
@@ -291,6 +304,7 @@ tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list (ctest)
 tests/delete_test.cpp   permanent delete: links, read-only, locked files, long paths (ctest)
 tests/devjunk_test.cpp  developer junk: project markers, grouping, app folders left alone (ctest)
 tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the model folders (ctest)
+tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```
