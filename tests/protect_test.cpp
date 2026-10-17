@@ -29,6 +29,17 @@ static void Expect(const std::wstring& path, Protect want, const Node* node = nu
     fputs(u.c_str(), stdout);
 }
 
+static void ExpectBadge(ProtectBadges& b, const Node* n, Protect want, ProtectRel rel, uint64_t count = 1) {
+    const ProtectHit& h = b.For(n);
+    bool ok = h.level == want && (want == Protect::None || (h.rel == rel && h.count == count));
+    if (!ok) ++g_fail;
+    std::wstring line = std::wstring(ok ? L"ok   badge " : L"FAIL badge ") + NodePath(n) + L" -> " + ProtectLevelName(h.level);
+    if (h.level != Protect::None) line += L": " + DescribeHit(h);
+    if (line.size() > 160) line = line.substr(0, 150) + L"…";
+    std::string u = util::WideToUtf8(line + L"\n");
+    fputs(u.c_str(), stdout);
+}
+
 static bool Exists(const std::wstring& p) { return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES; }
 
 int main() {
@@ -85,8 +96,42 @@ int main() {
     add(app, L".git", true);
     add(app, L"main.cpp", false);
     Expect(L"D:\\Projects", Protect::Caution, root.get());
-    add(root.get(), L"vault.KDBX", false);
+    Node* vault = add(root.get(), L"vault.KDBX", false);
     Expect(L"D:\\Projects", Protect::Important, root.get());
+
+    // Shield badges: the same answers per item, summarized bottom-up.
+    {
+        Node* git = app->children[0].get();
+        Node* objects = add(git, L"objects", true);
+        Node* lib = add(root.get(), L"lib", true);
+        add(add(lib, L"one", true), L".git", true);
+        add(add(lib, L"two", true), L".git", true);
+        Node* deep = add(root.get(), L"deep", true);
+        Node* d = deep;
+        for (int i = 0; i < 5000; ++i) d = add(d, L"d", true);  // no recursion in the summary
+        add(d, L".git", true);
+        ProtectBadges b;
+        ExpectBadge(b, root.get(), Protect::Important, ProtectRel::Contains);  // the KeePass file wins
+        ExpectBadge(b, vault, Protect::Important, ProtectRel::Self);
+        ExpectBadge(b, app, Protect::Caution, ProtectRel::Contains);
+        ExpectBadge(b, git, Protect::Important, ProtectRel::Self);
+        ExpectBadge(b, objects, Protect::Important, ProtectRel::Inside);
+        ExpectBadge(b, lib, Protect::Caution, ProtectRel::Contains, 2);
+        ExpectBadge(b, deep, Protect::Caution, ProtectRel::Contains);
+        ExpectBadge(b, app->children[1].get(), Protect::None, ProtectRel::Self);  // main.cpp
+        // In a listing of .git, "objects" is unmarked and the folder's notice covers it.
+        auto check = [](bool ok, const char* what) {
+            if (!ok) ++g_fail;
+            printf("%s %s\n", ok ? "ok  " : "FAIL", what);
+        };
+        check(b.InList(objects) == nullptr, " .git\\objects unmarked inside a listing of .git");
+        check(b.InList(git) != nullptr, " .git marked in a listing of app");
+        check(b.ForContents(git) != nullptr, " notice above a listing of .git");
+        check(b.ForContents(root.get()) == nullptr, " no notice above D:\\Projects (it only contains protected items)");
+        // Reloaded rules make cached badges stale by themselves.
+        RefreshProtection();
+        ExpectBadge(b, lib, Protect::Caution, ProtectRel::Contains, 2);
+    }
 
     // User rules in protect.txt (the existing file is restored afterwards)
     {

@@ -254,6 +254,7 @@ private:
     Screen helpReturn_ = Screen::Browser;
 
     std::unique_ptr<Node> root_;
+    ProtectBadges badges_;  // shield tags in the lists
     std::vector<std::unique_ptr<Node>> graveyard_;
     bool readOnly_ = false;
     bool incomplete_ = false;
@@ -652,6 +653,8 @@ void App::SetRoot(std::unique_ptr<Node> r, bool readOnly) {
     view_.clear();
     graveyard_.clear();
     root_ = std::move(r);
+    RefreshProtection();  // picks up edits to protect.txt
+    badges_.Clear();
     cur_ = root_.get();
     readOnly_ = readOnly;
     filter_.clear();
@@ -678,6 +681,7 @@ void App::PostMutation() {
     if (pendingSel_ && !IsAlive(pendingSel_)) pendingSel_ = nullptr;
     viewDirty_ = true;
     EnsureView();
+    badges_.Clear();
     graveyard_.clear();
     UpdateFree();
 }
@@ -1939,6 +1943,20 @@ void App::DrawNodeRow(int y, Node* n, bool selected, bool zebra, uint64_t total,
     if (n->Has(NF_LINK)) attr |= A_ITALIC;
     int avail = W - nameX - 1;
     std::wstring suffix = n->IsDir() ? L"\\" : L"";
+    // Shield tag after the name, e.g. "[AI]" or "[Git inside]": protected data (protect.cpp).
+    // In a folder listing, items protected only because the folder is are left to the summary line.
+    const ProtectHit* shield = showPath ? &badges_.For(n) : badges_.InList(n);
+    std::wstring tag;
+    uint32_t tagColor = T.dim;
+    if (shield && shield->level != Protect::None) {
+        tag = L" [" + shield->group + (shield->rel == ProtectRel::Contains ? L" inside" : L"") + L"]";
+        tagColor = shield->level == Protect::Blocked ? T.red : (shield->level == Protect::Important ? T.orange : T.dim);
+        if (StrWidth(tag) + 8 > avail)
+            tag.clear();
+        else
+            avail -= StrWidth(tag);
+    }
+    int endX = nameX;
     if (showPath) {
         std::wstring full;
         if (relTo && IsAncestor(relTo, n)) {
@@ -1953,14 +1971,15 @@ void App::DrawNodeRow(int y, Node* n, bool selected, bool zebra, uint64_t total,
         size_t cut = fit.size() - suffix.size();
         size_t pos = fit.find_last_of(L"\\/", cut > 0 ? cut - 1 : 0);
         if (pos == std::wstring::npos || cut == 0) {
-            term_.Put(nameX, y, fit, St(nameColor, bg, attr));
+            endX += term_.Put(nameX, y, fit, St(nameColor, bg, attr));
         } else {
             int x = nameX + term_.Put(nameX, y, fit.substr(0, pos + 1), St(selected ? T.fg : T.dim, bg));
-            term_.Put(x, y, fit.substr(pos + 1), St(nameColor, bg, attr));
+            endX = x + term_.Put(x, y, fit.substr(pos + 1), St(nameColor, bg, attr));
         }
     } else {
-        term_.Put(nameX, y, FitMiddle(n->name + suffix, avail, cfg_.ascii), St(nameColor, bg, attr));
+        endX += term_.Put(nameX, y, FitMiddle(n->name + suffix, avail, cfg_.ascii), St(nameColor, bg, attr));
     }
+    if (!tag.empty()) term_.Put(endX, y, tag, St(tagColor, bg, A_BOLD));
 }
 
 void App::DrawSummary(int y, Node* scope) {
@@ -1989,6 +2008,9 @@ void App::DrawSummary(int y, Node* scope) {
         item(cfg_.ascii ? L"*" : L"\u25CF", util::FormatCount(marks_.size()) + L" marked \u00B7 " + util::FormatSizeShort(sum),
              T.yellow);
     }
+    if (const ProtectHit* h = scope ? badges_.ForContents(scope) : nullptr)
+        item(L"Protected", std::wstring(ProtectLevelName(h->level)) + L" · " + h->group + L" · " + h->name,
+             h->level == Protect::Blocked ? T.red : (h->level == Protect::Important ? T.orange : T.dim));
     if (incomplete_) item(L"!", L"incomplete scan", T.orange);
     if (scanErrors_) item(L"!", util::FormatCount(scanErrors_) + L" unreadable", T.red);
 
@@ -2058,6 +2080,11 @@ void App::DrawInfo(int y, int h, Node* n) {
     else if (n->Has(NF_EXCLUDED)) note = L"Excluded by pattern \u2014 not scanned.";
     else if (n->Has(NF_CLOUD)) note = L"Cloud placeholder \u2014 content may not be stored locally.";
     if (!note.empty()) row(L"Note", note, T.yellow);
+    const ProtectHit& prot = badges_.For(n);
+    if (prot.level != Protect::None)
+        row(L"Protected", std::wstring(ProtectLevelName(prot.level)) + L": " + DescribeHit(prot) +
+                              (prot.reason.empty() ? L"" : L" — " + prot.reason),
+            prot.level == Protect::Blocked ? T.red : (prot.level == Protect::Important ? T.orange : T.dim));
 }
 
 void App::DrawEmpty(int y, int h, const std::wstring& text) {
@@ -2353,6 +2380,7 @@ const std::vector<HelpLine>& HelpLines() {
         {L"~", L"Cloud placeholder (e.g. OneDrive online-only file)"},
         {L"<", L"Excluded by --exclude pattern"},
         {L"e", L"Empty folder"},
+        {L"[AI]", L"Protected data (red: never deleted, orange: asks twice); \"[Git inside]\": contains some"},
     };
     return lines;
 }

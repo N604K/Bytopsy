@@ -8,8 +8,8 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 
 - [x] Protected locations: system folders blocked; AI sessions, keys, wallets, mail, VMs, synced
       folders and Git repositories need an extra confirmation (`src/protect.cpp`).
-- [ ] **Shield badges**: mark protected rows in the folder list and treemap after a scan, so people
-      see the warning before they select anything.
+- [x] **Shield badges**: protected rows and treemap tiles are marked after a scan, so people see the
+      warning before they select anything (`ProtectBadges` in `src/protect.cpp`).
 - [ ] **Deletion journal**: append every delete and cleanup to `%LOCALAPPDATA%\WinNCDU\journal.log`
       (time, path, size, Recycle Bin or permanent). Add a "Recently deleted" view with *Restore*
       for items still in the Recycle Bin.

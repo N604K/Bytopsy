@@ -28,10 +28,13 @@ void App::SetRoot(std::unique_ptr<Node> r, bool readOnly) {
     types_.clear();
     diff_.clear();
     tm_.clear();
+    tmShields_.clear();
     tmRoot_ = nullptr;
     rows_.clear();
     graveyard_.clear();
     root_ = std::move(r);
+    RefreshProtection();  // picks up edits to protect.txt
+    badges_.Clear();
     readOnly_ = readOnly;
     browseDir_ = root_.get();
     for (auto& ls : lists_) ls = ListState{};
@@ -56,8 +59,10 @@ void App::PostMutation() {
     if (!types_.empty()) RebuildTypes();
     if (view_ == View::Empty) RebuildEmpty();
     tm_.clear();
+    tmShields_.clear();
     tmRoot_ = nullptr;
     tmHover_ = -1;
+    badges_.Clear();
     tmDirty_ = true;
     rowsDirty_ = true;
     graveyard_.clear();

@@ -91,6 +91,7 @@ enum HitKind {
     HK_SNAPSHOT,  // a = snapshot index, b = action (0 compare, 1 delete)
     HK_DIALOG,    // a = button index (-1 = checkbox)
     HK_MODAL_BG,
+    HK_BADGE,     // shield badge (tooltip): a = row, -1 = the open folder
 };
 
 struct Hit {
@@ -258,6 +259,8 @@ private:
     void DrawTreemap(const RectF& area);
     void DrawViewHeader(const RectF& r, const std::wstring& title, const std::wstring& subtitle, wchar_t icon);
     void DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, bool expanded, int row, bool sel);
+    const ProtectHit* Shield(Node* n);  // badge to show for a row, or null
+    D2D1_COLOR_F ShieldColor(Protect p) const;
     void DrawUsageBar(const RectF& r, double frac, bool pct, double pctValue);
     void DrawDialog();
     void DrawBusy();
@@ -288,6 +291,7 @@ private:
     double scanSeconds_ = 0;
     uint64_t volTotal_ = 0, volFree_ = 0;
     bool haveVol_ = false;
+    ProtectBadges badges_;
 
     View view_ = View::Home;
     Node* browseDir_ = nullptr;
@@ -326,6 +330,7 @@ private:
     ID2D1Bitmap* tmBitmap_ = nullptr;
     unsigned tmGen_ = 0;
     int tmHover_ = -1;
+    std::vector<int> tmShields_;  // treemap rectangles that get a shield badge
     float mouseX_ = -1, mouseY_ = -1;
 
     // Layout + interaction

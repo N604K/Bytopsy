@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct Node;
@@ -48,6 +49,39 @@ void RefreshProtection();
 // Checks one delete target. With `node` (an item of a scan tree), the scanned subtree is
 // also searched for protected files and folders (Git repositories, password databases, ...).
 ProtectReport CheckProtection(const std::wstring& path, const Node* node = nullptr);
+
+// Shield badges: what the folder list and treemap show for an item of a scan tree, before anything
+// is selected. CheckProtection(path, node) walks the whole subtree, too slow for every visible row;
+// this cache checks each item once and summarizes each folder's name-rule matches (Git
+// repositories, password databases, ...) bottom-up, so a subtree is walked at most once.
+class ProtectBadges {
+public:
+    // The most severe protection of `n` (level None: nothing to show). Valid until Clear().
+    const ProtectHit& For(const Node* n);
+    // For a list of a folder's contents: null when `n` is only protected because the folder it is
+    // listed in is (ForContents says that once, above the list), else the same as For().
+    const ProtectHit* InList(const Node* n);
+    // The folder's own protection when it covers the items listed in it, else null.
+    const ProtectHit* ForContents(const Node* dir);
+    // Call when the scan tree changed (new scan, delete, rescan). Reloaded rules clear it by themselves.
+    void Clear();
+
+private:
+    struct Below {
+        Protect level = Protect::None;
+        size_t rule = 0;     // first name rule matched at `level`
+        bool mixed = false;  // other rules matched at the same level too
+        uint64_t count = 0;  // matches at `level`
+        const Node* first = nullptr;
+    };
+    const Below& Summarize(const Node* dir);
+    int MatchName(const Node* n) const;
+
+    std::unordered_map<const Node*, ProtectHit> hits_;
+    std::unordered_map<const Node*, Below> below_;  // folders only
+    std::vector<size_t> nameRules_;
+    unsigned gen_ = 0;
+};
 
 // Every built-in or user protected location that exists on this PC (for listings).
 std::vector<ProtectHit> ProtectedLocationsOnThisPC();

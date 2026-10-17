@@ -488,7 +488,7 @@ void App::DrawTable(const RectF& area, std::vector<Column>& cols, int sortKey, b
         RectF rr = R(area.left + 8, y + 1, area.right - 12, y + kRowH - 1);
         const Row& row = rows_[i];
         bool sel = row.node && sel_.count(row.node);
-        bool hover = Hovered(HK_ROW, i);
+        bool hover = Hovered(HK_ROW, i) || Hovered(HK_BADGE, i);
         AddHit(rr, HK_ROW, i);
         if (sel)
             gfx_.FillRound(rr, 7, i == ls.focus ? P_.selectedFocus : P_.selected);
@@ -536,12 +536,18 @@ void App::DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, boo
     bool hidden = (n->attrs & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) != 0;
     D2D1_COLOR_F col = n->Has(NF_LINK | NF_EXCLUDED | NF_HARDLINK) ? P_.textFaint : (hidden ? P_.textDim : P_.text);
     TextStyle ts = TS(13, n->IsDir() ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL);
-    // Status badges after the name.
+    // Status badges after the name; the shield (protected data) comes first.
     struct Badge {
-        const wchar_t* text;
+        std::wstring text;
         D2D1_COLOR_F color;
+        wchar_t icon = 0;
+        bool outline = false;  // the item contains protected data rather than being protected
     };
     std::vector<Badge> badges;
+    const ProtectHit* shield = Shield(n);
+    if (shield)
+        badges.push_back({shield->rel == ProtectRel::Contains ? shield->group + L" inside" : shield->group,
+                          ShieldColor(shield->level), IC_SHIELD, shield->rel == ProtectRel::Contains});
     if (n->Has(NF_ERROR)) badges.push_back({L"No access", P_.danger});
     else if (n->Has(NF_SUBERR)) badges.push_back({L"Partial", P_.warning});
     if (n->Has(NF_LINK)) badges.push_back({L"Link", P_.accent2});
@@ -549,18 +555,46 @@ void App::DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, boo
     if (n->Has(NF_CLOUD)) badges.push_back({L"Cloud", P_.accent});
     if (n->Has(NF_EXCLUDED)) badges.push_back({L"Excluded", P_.textFaint});
     float bw = 0;
-    for (auto& b : badges) bw += gfx_.Measure(b.text, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 18;
+    for (auto& b : badges) bw += gfx_.Measure(b.text, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + (b.icon ? 32 : 18);
     float nameW = std::min(gfx_.Measure(n->name, ts) + 2, cell.right - x - bw);
     gfx_.Text(n->name, R(x, cell.top, x + std::max(0.0f, nameW), cell.bottom), sel ? P_.text : col, ts);
     x += std::max(0.0f, nameW) + 8;
     for (auto& b : badges) {
-        float w = gfx_.Measure(b.text, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 12;
+        float iw = b.icon ? 14.0f : 0.0f;
+        float w = gfx_.Measure(b.text, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 12 + iw;
         if (x + w > cell.right) break;
         RectF br = R(x, cy - 9, x + w, cy + 9);
-        gfx_.FillRound(br, 9, WithAlpha(b.color, 0.16f));
-        gfx_.Text(b.text, br, b.color, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+        if (b.outline)
+            gfx_.StrokeRound(Inset(br, 0.5f, 0.5f), 8.5f, WithAlpha(b.color, 0.7f));
+        else
+            gfx_.FillRound(br, 9, WithAlpha(b.color, 0.16f));
+        if (b.icon) gfx_.Icon(b.icon, RWH(br.left + 5, br.top, 12, H(br)), b.color, 10);
+        gfx_.Text(b.text, R(br.left + iw, br.top, br.right, br.bottom), b.color, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+        if (b.icon) {
+            AddHit(br, HK_BADGE, row);
+            if (Hovered(HK_BADGE, row)) {
+                tipText_ = std::wstring(ProtectLevelName(shield->level)) + L": " + DescribeHit(*shield);
+                tipAnchor_ = br;
+            }
+        }
         x += w + 6;
     }
+}
+
+D2D1_COLOR_F App::ShieldColor(Protect p) const {
+    switch (p) {
+        case Protect::Blocked: return P_.danger;
+        case Protect::Important: return P_.warning;
+        default: return P_.textDim;
+    }
+}
+
+// In the folder view, items covered by the same protected location as the folder they are listed
+// in stay unmarked: the open folder's notice (or the expanded parent row) already says it once.
+const ProtectHit* App::Shield(Node* n) {
+    if (view_ == View::Browse) return badges_.InList(n);
+    const ProtectHit& h = badges_.For(n);
+    return h.level == Protect::None ? nullptr : &h;
 }
 
 // =============================================================================================
@@ -650,7 +684,26 @@ void App::DrawBrowse(const RectF& area) {
                            util::FormatCount(files) + (files == 1 ? L" file here" : L" files here");
     if (browseDir_->parent && Val(browseDir_->parent))
         summary += L"   ·   " + Pct(100.0 * Val(browseDir_) / Val(browseDir_->parent)) + L" of parent";
-    gfx_.Text(summary, R(area.left + 24, sy, area.right - 20, sy + 22), P_.textDim, Small(12.5f));
+    // The open folder's protection, when it covers the items listed here (their rows stay unmarked).
+    float summaryRight = area.right - 20;
+    if (const ProtectHit* here = badges_.ForContents(browseDir_)) {
+        std::wstring t = std::wstring(ProtectLevelName(here->level)) + L": " +
+                         (here->group.empty() ? here->name : here->group + L" · " + here->name);
+        TextStyle ts = Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+        float w = std::min(gfx_.Measure(t, ts) + 34, std::max(120.0f, (area.right - area.left) * 0.5f));
+        RectF pr = R(summaryRight - w, sy, summaryRight, sy + 22);
+        D2D1_COLOR_F col = ShieldColor(here->level);
+        gfx_.FillRound(pr, 11, WithAlpha(col, 0.14f));
+        gfx_.Icon(IC_SHIELD, RWH(pr.left + 8, pr.top, 14, H(pr)), col, 11);
+        gfx_.Text(t, R(pr.left + 26, pr.top, pr.right - 8, pr.bottom), col, ts);
+        AddHit(pr, HK_BADGE, -1);
+        if (Hovered(HK_BADGE, -1)) {
+            tipText_ = here->reason.empty() ? DescribeHit(*here) : here->reason;
+            tipAnchor_ = pr;
+        }
+        summaryRight = pr.left - 12;
+    }
+    gfx_.Text(summary, R(area.left + 24, sy, summaryRight, sy + 22), P_.textDim, Small(12.5f));
 
     // List + treemap split
     RectF body = R(area.left, area.top + 84, area.right, area.bottom);
@@ -743,6 +796,18 @@ void App::DrawTreemap(const RectF& area) {
         tmGen_ = gfx_.Generation();
         tmIndex_.clear();
         for (size_t i = 0; i < tm_.size(); ++i) tmIndex_[tm_[i].node] = static_cast<int>(i);
+        // Shields on protected rectangles big enough to carry one. Items inside a protected folder
+        // aren't marked: the folder's own rectangle (or the open folder's notice) is.
+        tmShields_.clear();
+        std::vector<char> shielded(tm_.size());
+        for (size_t i = 0; i < tm_.size(); ++i) {
+            const TmRect& t = tm_[i];
+            if (t.depth < 1 || W(t.r) < 22 || H(t.r) < 18) continue;
+            const ProtectHit& h = badges_.For(t.node);
+            if (h.level == Protect::None || h.rel == ProtectRel::Inside) continue;
+            tmShields_.push_back(static_cast<int>(i));
+            shielded[i] = 1;
+        }
         SafeRelease(tmBitmap_);
         ID2D1BitmapRenderTarget* brt = nullptr;
         if (SUCCEEDED(gfx_.RT()->CreateCompatibleRenderTarget(D2D1::SizeF(W(map), H(map)), &brt))) {
@@ -785,10 +850,11 @@ void App::DrawTreemap(const RectF& area) {
                 IDWriteInlineObject* ell = nullptr;
                 dw->CreateEllipsisTrimmingSign(fmt, &ell);
                 fmt->SetTrimming(&trim, ell);
-                for (auto& t : tm_) {
+                for (size_t i = 0; i < tm_.size(); ++i) {
+                    const TmRect& t = tm_[i];
                     if (t.depth != 1 || W(t.r) < 70 || H(t.r) < 34) continue;
                     std::wstring label = t.node->name + L"  " + util::FormatSizeShort(Val(t.node));
-                    RectF lr = R(t.r.left + 6, t.r.top + 4, t.r.right - 4, t.r.top + 20);
+                    RectF lr = R(t.r.left + 6, t.r.top + 4, t.r.right - (shielded[i] ? 24 : 4), t.r.top + 20);
                     br->SetColor(D2D1::ColorF(0, 0, 0, 0.45f));
                     brt->DrawText(label.c_str(), static_cast<UINT32>(label.size()), fmt, R(lr.left + 1, lr.top + 1, lr.right + 1, lr.bottom + 1), br,
                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
@@ -812,6 +878,15 @@ void App::DrawTreemap(const RectF& area) {
         gfx_.PushClip(map);
         gfx_.Bitmap(tmBitmap_, RWH(tmArea_.left, tmArea_.top, W(tmArea_), H(tmArea_)));
         gfx_.PopClip();
+    }
+    for (int i : tmShields_) {
+        const TmRect& t = tm_[i];
+        const ProtectHit& h = badges_.For(t.node);
+        D2D1_COLOR_F col = ShieldColor(h.level);
+        if (h.rel == ProtectRel::Self) gfx_.Stroke(Inset(t.r, 0.75f, 0.75f), WithAlpha(col, 0.85f), 1.5f);
+        RectF chip = RWH(t.r.right - 20, t.r.top + 3, 17, 15);
+        gfx_.FillRound(chip, 4, P_.dark ? Hex(0x000000, 0.6f) : Hex(0xFFFFFF, 0.9f));
+        gfx_.Icon(IC_SHIELD, chip, col, 10);
     }
     // Selection and hover outlines.
     for (Node* s : sel_) {
@@ -1548,9 +1623,12 @@ void App::DrawTooltip() {
         std::wstring size = util::FormatSizeShort(Val(n));
         if (tmRoot_ && Val(tmRoot_)) size += L"  ·  " + Pct(100.0 * Val(n) / Val(tmRoot_)) + L" of this folder";
         std::wstring path = NodePath(n->parent ? n->parent : n);
-        float w = std::max({gfx_.Measure(title, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)), gfx_.Measure(size, Small(12)), 160.0f}) + 28;
+        const ProtectHit& prot = badges_.For(n);
+        std::wstring protText = prot.level == Protect::None ? L"" : std::wstring(ProtectLevelName(prot.level)) + L": " + DescribeHit(prot);
+        float w = std::max({gfx_.Measure(title, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)), gfx_.Measure(size, Small(12)),
+                            protText.empty() ? 0.0f : gfx_.Measure(protText, Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 18, 160.0f}) + 28;
         w = std::min(w, 420.0f);
-        float h = 76;
+        float h = protText.empty() ? 76.0f : 96.0f;
         float x = mouseX_ + 16, y = mouseY_ + 18;
         if (x + w > sz.width - 8) x = mouseX_ - w - 12;
         if (y + h > sz.height - 8) y = mouseY_ - h - 12;
@@ -1563,5 +1641,10 @@ void App::DrawTooltip() {
         gfx_.Text(title, R(r.left + 26, r.top + 8, r.right - 10, r.top + 30), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         gfx_.Text(size, R(r.left + 12, r.top + 30, r.right - 10, r.top + 50), P_.accent, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         gfx_.Text(FitPath(path, w - 24, 11.5f), R(r.left + 12, r.top + 50, r.right - 10, r.top + 68), P_.textFaint, Small(11.5f));
+        if (!protText.empty()) {
+            D2D1_COLOR_F col = ShieldColor(prot.level);
+            gfx_.Icon(IC_SHIELD, RWH(r.left + 10, r.top + 70, 14, 18), col, 11);
+            gfx_.Text(protText, R(r.left + 28, r.top + 70, r.right - 10, r.top + 88), col, Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        }
     }
 }

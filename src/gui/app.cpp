@@ -378,6 +378,10 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
     const Hit* h = HitAt(x, y);
     if (!h) return;
     Hit hit = *h;
+    if (hit.kind == HK_BADGE) {  // a row's shield badge clicks like the row
+        if (hit.a < 0) return;
+        hit.kind = HK_ROW;
+    }
     bool ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0;
     switch (hit.kind) {
         case HK_BUTTON: OnCommand(hit.a); break;
@@ -513,6 +517,7 @@ void App::OnRButtonUp(float x, float y) {
     const Hit* h = HitAt(x, y);
     if (!h) return;
     Hit hit = *h;
+    if (hit.kind == HK_BADGE && hit.a >= 0) hit.kind = HK_ROW;
     if (hit.kind == HK_ROW) {
         if (hit.a < static_cast<int>(rows_.size())) {
             Node* n = rows_[hit.a].node;

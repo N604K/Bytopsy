@@ -63,6 +63,13 @@ Before anything is deleted, each item is checked against built-in rules and your
 (`src/protect.cpp`). The check covers the item itself, the folder it is in, and everything inside it,
 so deleting `C:\Users\me` warns about `.claude` and `.ssh` too.
 
+You see this before selecting anything: after a scan, protected items carry a shield badge in the
+lists (red: Blocked, orange: Important, grey: Caution; hover it for the reason) and a shield on their
+treemap tile. An outlined badge such as *Git inside* marks a folder that only contains protected
+data. When the open folder is protected itself, a notice above the list says so once instead of
+badging every row. The terminal app shows the same as tags like `[AI]` after the name, and in the
+details panel (`i`).
+
 | Level | What happens | Examples |
 | --- | --- | --- |
 | **Blocked** | Never deleted. The rest of a selection still goes ahead. | Drive roots, `C:\Windows` (except Temp, update downloads and dumps), `WinSxS`, `Windows\Installer`, Program Files roots, `WindowsApps`, user profile and `AppData` roots, registry hives, `pagefile.sys`, `hiberfil.sys`, `System Volume Information`, `$Recycle.Bin`, DPAPI keys |

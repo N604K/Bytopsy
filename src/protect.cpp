@@ -42,6 +42,7 @@ struct Resolved {
 struct State {
     std::mutex m;
     bool built = false;
+    unsigned gen = 0;  // bumped on every rebuild, so caches of check results know they are stale
     std::vector<Rule> rules;
     std::vector<Resolved> resolved;
 };
@@ -674,6 +675,7 @@ void BuildLocked(State& s) {
                                  [](const Resolved& a, const Resolved& b) { return a.lower == b.lower; }),
                      s.resolved.end());
     s.built = true;
+    ++s.gen;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -743,7 +745,7 @@ void WalkNode(const State& s, const Node* root, Collector& c) {
     }
 }
 
-ProtectReport CheckLocked(const State& s, const std::wstring& path, const Node* node) {
+ProtectReport CheckLocked(const State& s, const std::wstring& path, const Node* node, bool walk = true) {
     Collector c;
     std::vector<std::wstring> raw = SplitRaw(path);
     std::vector<std::wstring> t = LowerSegs(raw);
@@ -829,12 +831,137 @@ ProtectReport CheckLocked(const State& s, const std::wstring& path, const Node* 
         c.Add(r, r.contains, ProtectRel::Contains, it->path);
     }
 
-    if (node && node->IsDir() && !node->Has(NF_LINK)) WalkNode(s, node, c);
+    if (walk && node && node->IsDir() && !node->Has(NF_LINK)) WalkNode(s, node, c);
     c.Finish();
     return c.rep;
 }
 
 }  // namespace
+
+// ---------------------------------------------------------------------------------------------
+// Shield badges
+
+void ProtectBadges::Clear() {
+    hits_.clear();
+    below_.clear();
+}
+
+// The most severe name rule that makes a folder containing `n` protected, or -1.
+int ProtectBadges::MatchName(const Node* n) const {
+    const State& s = S();
+    int best = -1;
+    for (size_t ri : nameRules_) {
+        const Rule& r = s.rules[ri];
+        if (r.fileOnly && n->IsDir()) continue;
+        if (NameMatch(n->name, r.pat) && (best < 0 || r.contains > s.rules[best].contains)) best = static_cast<int>(ri);
+    }
+    return best;
+}
+
+// Called with the state lock held. Same matches as WalkNode, but memoized per folder and
+// without recursion (scan trees can be thousands of levels deep).
+const ProtectBadges::Below& ProtectBadges::Summarize(const Node* dir) {
+    auto found = below_.find(dir);
+    if (found != below_.end()) return found->second;
+    const State& s = S();
+    auto descend = [&](const Node* c) { return c->IsDir() && !c->Has(NF_LINK) && MatchName(c) < 0 && !below_.count(c); };
+    std::vector<std::pair<const Node*, size_t>> stack{{dir, 0}};
+    while (!stack.empty()) {
+        const Node* d = stack.back().first;
+        size_t& next = stack.back().second;
+        if (next < d->children.size()) {
+            const Node* c = d->children[next++].get();
+            if (descend(c)) stack.push_back({c, 0});  // invalidates `next`; not used again this round
+            continue;
+        }
+        Below b;
+        auto add = [&b](Protect level, size_t rule, bool mixed, uint64_t count, const Node* first) {
+            if (level == Protect::None || level < b.level) return;
+            if (level > b.level) {
+                b = {level, rule, mixed, count, first};
+                return;
+            }
+            b.count += count;
+            b.mixed = b.mixed || mixed || rule != b.rule;
+        };
+        for (auto& ch : d->children) {
+            const Node* c = ch.get();
+            int m = MatchName(c);
+            if (m >= 0) {
+                add(s.rules[m].contains, static_cast<size_t>(m), false, 1, c);  // a match counts itself, not its contents
+            } else if (c->IsDir() && !c->Has(NF_LINK)) {
+                const Below& cb = below_[c];
+                add(cb.level, cb.rule, cb.mixed, cb.count, cb.first);
+            }
+        }
+        below_[d] = b;
+        stack.pop_back();
+    }
+    return below_[dir];
+}
+
+const ProtectHit& ProtectBadges::For(const Node* n) {
+    State& s = S();
+    std::lock_guard<std::mutex> lk(s.m);
+    if (!s.built) BuildLocked(s);
+    if (gen_ != s.gen) {
+        Clear();
+        nameRules_.clear();
+        for (size_t i = 0; i < s.rules.size(); ++i)
+            if (s.rules[i].nameRule && s.rules[i].contains != P::None) nameRules_.push_back(i);
+        gen_ = s.gen;
+    }
+    auto found = hits_.find(n);
+    if (found != hits_.end()) return found->second;
+
+    ProtectReport rep = CheckLocked(s, NodePath(n), n, false);
+    ProtectHit hit;
+    if (rep.Any()) hit = rep.hits.front();
+    if (n->IsDir() && !n->Has(NF_LINK)) {
+        const Below& b = Summarize(n);
+        if (b.level > hit.level) {
+            const Rule& r = s.rules[b.rule];
+            hit = ProtectHit{};
+            hit.level = b.level;
+            hit.rel = ProtectRel::Contains;
+            hit.group = r.group;
+            hit.name = b.mixed ? r.name + L" and other protected items" : r.name;
+            hit.reason = r.reason;
+            hit.path = NodePath(b.first);
+            hit.count = b.count;
+        }
+    }
+    return hits_.emplace(n, std::move(hit)).first->second;
+}
+
+namespace {
+bool SameSource(const ProtectHit& a, const ProtectHit& b) { return a.level == b.level && a.path == b.path && a.name == b.name; }
+}  // namespace
+
+const ProtectHit* ProtectBadges::InList(const Node* n) {
+    const ProtectHit& h = For(n);
+    if (h.level == P::None) return nullptr;
+    if (h.rel == ProtectRel::Inside && n->parent) {
+        const ProtectHit& p = For(n->parent);
+        if (p.rel != ProtectRel::Contains && SameSource(p, h)) return nullptr;
+    }
+    return &h;
+}
+
+const ProtectHit* ProtectBadges::ForContents(const Node* dir) {
+    const ProtectHit& d = For(dir);
+    if (d.level == P::None || d.rel == ProtectRel::Contains) return nullptr;
+    if (d.rel == ProtectRel::Inside) return &d;
+    // Protected itself: only worth a notice if the protection reaches the items inside (it doesn't
+    // for a drive root or a user profile, whose contents have rules of their own).
+    size_t checked = 0;
+    for (auto& c : dir->children) {
+        if (++checked > 8) break;
+        const ProtectHit& h = For(c.get());
+        if (h.rel == ProtectRel::Inside && SameSource(h, d)) return &d;
+    }
+    return nullptr;
+}
 
 std::wstring ProtectRulesFile() {
     PWSTR p = nullptr;
