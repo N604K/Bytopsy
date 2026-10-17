@@ -150,6 +150,13 @@ void App::BuildRows() {
                 for (auto& a : devJunk_[p].artifacts) rows_.push_back({a.node, 1, RK_NODE, static_cast<int>(p)});
             }
             break;
+        case View::AiModels:
+            for (size_t s = 0; s < ai_.size(); ++s) {
+                rows_.push_back({nullptr, 0, RK_GROUP, static_cast<int>(s)});
+                for (size_t i = 0; i < ai_[s].items.size(); ++i)
+                    rows_.push_back({nullptr, ai_[s].items[i].parent >= 0 ? 1 : 0, RK_AI, AiRowIdx(s, i)});
+            }
+            break;
         case View::CleanReview:
             if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
                 for (size_t i = 0; i < cleanup_[reviewCat_].entries.size(); ++i) rows_.push_back({nullptr, 0, RK_CLEAN, static_cast<int>(i)});
@@ -353,6 +360,149 @@ void App::ToggleDevProject(int project) {
             sel_.erase(a.node);
         else
             sel_.insert(a.node);
+}
+
+// =============================================================================================
+// AI models (Hugging Face, Ollama, LM Studio): works without a scan.
+
+void App::LoadAiModels() {
+    ai_ = FindAiModels();
+    aiAtime_ = LastAccessTracked();
+    aiLoaded_ = true;
+    aiSel_.clear();
+    rowsDirty_ = true;
+    Invalidate();
+}
+
+// A click on a repository selects it whole (its revisions show as checked); a click on a revision
+// toggles just that one, and choosing every revision of a repository is the same as choosing it.
+void App::ToggleAiRow(int row) {
+    if (row < 0 || row >= static_cast<int>(rows_.size()) || rows_[row].kind != RK_AI) return;
+    size_t s = static_cast<size_t>(rows_[row].idx) >> 20, i = static_cast<size_t>(rows_[row].idx) & 0xFFFFF;
+    if (s >= ai_.size() || i >= ai_[s].items.size()) return;
+    const auto& items = ai_[s].items;
+    lists_[static_cast<int>(view_)].focus = row;
+    int parent = items[i].parent;
+    if (parent < 0) {
+        bool on = !aiSel_.count({s, i});
+        for (size_t k = 0; k < items.size(); ++k)
+            if (items[k].parent == static_cast<int>(i)) aiSel_.erase({s, k});
+        if (on)
+            aiSel_.insert({s, i});
+        else
+            aiSel_.erase({s, i});
+        return;
+    }
+    size_t p = static_cast<size_t>(parent);
+    if (aiSel_.erase({s, p})) {
+        for (size_t k = 0; k < items.size(); ++k)
+            if (items[k].parent == parent && k != i) aiSel_.insert({s, k});
+        return;
+    }
+    if (!aiSel_.erase({s, i})) aiSel_.insert({s, i});
+    bool all = true;
+    for (size_t k = 0; k < items.size(); ++k)
+        if (items[k].parent == parent && !aiSel_.count({s, k})) all = false;
+    if (all) {
+        for (size_t k = 0; k < items.size(); ++k)
+            if (items[k].parent == parent) aiSel_.erase({s, k});
+        aiSel_.insert({s, p});
+    }
+}
+
+uint64_t App::AiSelectedBytes() const {
+    uint64_t b = 0;
+    for (auto& [s, i] : aiSel_)
+        if (s < ai_.size() && i < ai_[s].items.size()) b += ai_[s].items[i].bytes;
+    return b;
+}
+
+void App::StartAiDelete() {
+    if (aiSel_.empty()) return Toast(L"Select the models to delete first", 2);
+    Dialog d;
+    size_t n = aiSel_.size();
+    d.title = L"Delete " + util::FormatCount(n) + (n == 1 ? L" model (" : L" models (") + util::FormatSizeShort(AiSelectedBytes()) + L")?";
+    d.message = L"The model files are deleted permanently, not moved to the Recycle Bin. Chats, history, settings and sign-in "
+                L"tokens are not touched.";
+    std::vector<std::wstring> restore;
+    size_t shown = 0;
+    for (auto& [s, i] : aiSel_) {
+        const AiItem& it = ai_[s].items[i];
+        if (std::find(restore.begin(), restore.end(), it.restore) == restore.end()) restore.push_back(it.restore);
+        if (++shown > 8) continue;
+        std::wstring name = it.parent >= 0 ? ai_[s].items[static_cast<size_t>(it.parent)].name + L" " + it.name : it.name;
+        d.lines.push_back(util::FormatSizeShort(it.bytes) + L"\t" + name);
+    }
+    if (n > 8) d.lines.push_back(L"\t… and " + util::FormatCount(n - 8) + L" more");
+    if (restore.size() <= 3) {
+        d.message += L"\n\nTo get " + std::wstring(n == 1 ? L"it" : L"them") + L" back:";
+        for (auto& r : restore) d.message += L"\n" + r;
+    } else {
+        d.message += L" Recently deleted lists how to download each one again.";
+    }
+    d.icon = 0xE74D;
+    d.tone = 1;
+    d.buttons = {L"Cancel", L"Delete permanently"};
+    d.primary = 1;
+    d.danger = 1;
+    d.onClose = [this](int b, bool) {
+        if (b != 1) return;
+        struct State {
+            std::vector<AiStore> stores;
+            std::vector<std::vector<size_t>> chosen;
+            std::atomic<size_t> index{0};
+            std::atomic<bool> cancel{false};
+            AiDeleteResult total;  // written by the worker, read after it finished
+        };
+        auto st = std::make_shared<State>();
+        for (size_t s = 0; s < ai_.size(); ++s) {
+            std::vector<size_t> c;
+            for (auto& [ss, i] : aiSel_)
+                if (ss == s) c.push_back(i);
+            if (c.empty()) continue;
+            st->stores.push_back(ai_[s]);
+            st->chosen.push_back(std::move(c));
+        }
+        if (st->stores.empty()) return;
+        auto t = std::make_unique<Task>();
+        t->title = L"Deleting models";
+        t->lines = [st] {
+            size_t i = std::min(st->index.load(), st->stores.size() - 1);
+            return std::vector<std::pair<std::wstring, std::wstring>>{{L"From", st->stores[i].name}};
+        };
+        t->progress = [st] { return static_cast<double>(st->index) / st->stores.size(); };
+        t->cancel = [st] { st->cancel = true; };
+        t->onDone = [this, st] {
+            const AiDeleteResult& r = st->total;
+            std::wstring msg = L"Deleted " + util::FormatCount(r.deleted) + (r.deleted == 1 ? L" model" : L" models") + L", freed " +
+                               util::FormatSizeShort(r.freed);
+            if (!r.lockedBy.empty())
+                msg += L" · some files are in use (close " + AppNames(r.lockedBy) + L" and try again)";
+            else if (!r.errors.empty())
+                msg += L" · " + r.errors[0];
+            Toast(msg, r.errors.empty() ? 0 : 1);
+            std::vector<Node*> touched;
+            for (auto& s : st->stores)
+                if (Node* nd = FindNodeByPath(s.folder)) touched.push_back(nd);
+            LoadAiModels();
+            if (!touched.empty() && !readOnly_) StartRescan(NormalizeTargets(touched));
+            if (root_) haveVol_ = QueryFreeSpace(root_->name, volTotal_, volFree_);
+            drives_ = ListDrives();
+        };
+        StartTask(std::move(t), [st] {
+            for (size_t i = 0; i < st->stores.size() && !st->cancel; ++i) {
+                st->index = i;
+                AiDeleteResult r = DeleteAiItems(st->stores[i], st->chosen[i], st->cancel);
+                st->total.freed += r.freed;
+                st->total.deleted += r.deleted;
+                st->total.errors.insert(st->total.errors.end(), r.errors.begin(), r.errors.end());
+                for (auto& a : r.lockedBy)
+                    if (std::find(st->total.lockedBy.begin(), st->total.lockedBy.end(), a) == st->total.lockedBy.end())
+                        st->total.lockedBy.push_back(a);
+            }
+        });
+    };
+    ShowDialog(std::move(d));
 }
 
 void App::RebuildOld() {
@@ -1115,7 +1265,8 @@ void App::NavigateTo(Node* dir, bool remember) {
 }
 
 void App::ShowView(View v) {
-    if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::CleanReview && !root_)
+    if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
+        v != View::CleanReview && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -1138,6 +1289,9 @@ void App::ShowView(View v) {
             break;
         case View::History: LoadHistory(); break;
         case View::Deleted: LoadDeleted(); break;
+        case View::AiModels:
+            if (!aiLoaded_) LoadAiModels();
+            break;
         default: break;
     }
     rowsDirty_ = true;
@@ -1177,6 +1331,13 @@ void App::OpenRow(int row) {
     }
     if (r.kind == RK_CLEAN) {
         if (CleanEntry* e = ReviewEntry(row)) RevealInExplorer(e->binData.empty() ? e->path : e->binData);
+        return;
+    }
+    if (view_ == View::AiModels) {
+        size_t s = r.kind == RK_AI ? static_cast<size_t>(r.idx) >> 20 : static_cast<size_t>(r.idx);
+        if (s >= ai_.size()) return;
+        size_t i = static_cast<size_t>(r.idx) & 0xFFFFF;
+        RevealInExplorer(r.kind == RK_AI && i < ai_[s].items.size() ? ai_[s].items[i].location : ai_[s].folder);
         return;
     }
     if (r.node) OpenNode(r.node);
@@ -1503,6 +1664,22 @@ void App::OnCommand(int cmd) {
             if (sel_.empty()) Toast(L"Every project here was changed in the last three months", 0);
             break;
         }
+        case CMD_AI_REFRESH: LoadAiModels(); break;
+        case CMD_AI_UNUSED: {
+            // Hugging Face revisions no branch, tag or PR points to any more.
+            size_t n = 0;
+            for (size_t s = 0; s < ai_.size(); ++s)
+                for (size_t i = 0; i < ai_[s].items.size(); ++i) {
+                    const AiItem& it = ai_[s].items[i];
+                    if (it.unused && !aiSel_.count({s, static_cast<size_t>(it.parent)})) {
+                        aiSel_.insert({s, i});
+                        ++n;
+                    }
+                }
+            if (!n) Toast(L"Every revision here is still referenced by a branch, tag or PR", 0);
+            break;
+        }
+        case CMD_AI_DELETE: StartAiDelete(); break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE: MeasureCleanup(); break;
         case CMD_ADMIN: {

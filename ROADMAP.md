@@ -43,9 +43,11 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [x] More package caches: uv, Poetry, conda `pkgs`, Maven `.m2`, Bun, Deno, Composer, vcpkg, Conan.
       *Done: in `res/cleaners.ini` (dev, jvm, conda, conan); new `kind = command` runs a tool's own
       clean command (Conan), reusable for Docker and DISM.*
-- [ ] **AI cleanup that is actually safe**: Hugging Face cache by unused revision
+- [x] **AI cleanup that is actually safe**: Hugging Face cache by unused revision
       (`huggingface-cli scan-cache` logic), Ollama models with sizes and last use, LM Studio model
       list; delete single models, never the history.
+      *Done: AI models view (no scan needed) and `winncdu-cli --ai-models`; deletes stay inside the
+      model folders, and the journal keeps the download command.*
 - [ ] **WSL and Docker**: show `ext4.vhdx` / `docker_data.vhdx` sizes vs. used space and offer
       compaction (`wsl --shutdown` + `Optimize-VHD` / `diskpart compact vdisk`), `docker system prune`.
 - [ ] Windows: component store cleanup (`DISM /StartComponentCleanup`), old drivers in DriverStore

@@ -415,6 +415,12 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 if (dbl) OpenRow(hit.a);
                 break;
             }
+            if (view_ == View::AiModels) {
+                // As in Review: a click toggles, a double-click shows the files (undoing its first click).
+                ToggleAiRow(hit.a);
+                if (dbl) OpenRow(hit.a);
+                break;
+            }
             if (view_ == View::DevJunk && hit.a >= 0 && hit.a < static_cast<int>(rows_.size()) && rows_[hit.a].kind == RK_GROUP) {
                 if (dbl)
                     RevealInBrowse(devJunk_[rows_[hit.a].idx].dir);
@@ -670,10 +676,17 @@ void App::OnKeyDown(WPARAM vk) {
         case VK_SPACE:
             if (view_ == View::CleanReview)
                 ToggleKeep(ls.focus);
+            else if (view_ == View::AiModels)
+                ToggleAiRow(ls.focus);
             else if (ls.focus >= 0)
                 SelectRow(ls.focus, true, false);
             break;
-        case VK_DELETE: RequestDelete(shift); break;
+        case VK_DELETE:
+            if (view_ == View::AiModels)
+                StartAiDelete();
+            else
+                RequestDelete(shift);
+            break;
         case VK_BACK:
             if (view_ == View::CleanReview)
                 ShowView(View::Cleanup);

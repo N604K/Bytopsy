@@ -8,6 +8,7 @@
 
 #include "export.h"
 #include "fsops.h"
+#include "aimodels.h"
 #include "journal.h"
 #include "protect.h"
 #include "scanner.h"
@@ -42,6 +43,8 @@ void PrintUsage() {
         "  --protected           List the protected locations found on this PC and exit\n"
         "  --journal             List what WinNCDU deleted recently (and what is still in the\n"
         "                        Recycle Bin) and exit\n"
+        "  --ai-models           List local AI models (Hugging Face, Ollama, LM Studio) with\n"
+        "                        what each frees, and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -99,6 +102,30 @@ int ListJournal() {
         out += head + e.path + (e.note.empty() ? L"" : L"  (" + e.note + L")") + L"\n";
     }
     out += L"\nRestore items that are still in the Recycle Bin in the windowed app: Recently deleted.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
+int ListAiModels() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    auto stores = FindAiModels();
+    bool atime = LastAccessTracked();
+    std::wstring out = L"Local AI models (Hugging Face, Ollama, LM Studio). \"Frees\" is what deleting that model alone frees.\n";
+    if (stores.empty()) out += L"\n  None found.\n";
+    for (auto& s : stores) {
+        out += L"\n" + s.name + L"  " + s.folder + L"  (" + util::FormatSizeShort(s.bytes) + L")\n";
+        for (auto& it : s.items) {
+            wchar_t head[64];
+            swprintf(head, 64, L"  %10ls  %ls  ", util::FormatSizeShort(it.bytes).c_str(), util::FormatTime(it.added).substr(0, 10).c_str());
+            out += head + std::wstring(it.parent >= 0 ? L"  " : L"") + it.name + L"  (" + it.detail + L")" +
+                   (atime && it.used ? L"  last used " + util::FormatTime(it.used).substr(0, 10) : L"") + L"\n";
+        }
+    }
+    out += L"\nDelete single models in the windowed app: AI models.\n";
     std::string u = util::WideToUtf8(out);
     fwrite(u.data(), 1, u.size(), stdout);
     fflush(stdout);
@@ -219,6 +246,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListProtected();
         } else if (a == L"--journal") {
             return ListJournal();
+        } else if (a == L"--ai-models") {
+            return ListAiModels();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {

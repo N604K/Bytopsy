@@ -36,6 +36,17 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   installed programs and editor extensions don't show up. Click a project to select all its
   folders, sort by size or by least recently changed, or "Select inactive 3+ months"; deleting
   goes through the usual dialog, protection checks and journal.
+- **AI models** (works without a scan): every model in the Hugging Face cache, Ollama and LM
+  Studio, with what deleting that model *alone* frees, when it was downloaded and when it was last
+  used (if Windows records file access). Hugging Face repositories list their revisions with the
+  branch, tag or PR pointing to each; "Select unused revisions" picks the ones nothing points to
+  any more (like `huggingface-cli scan-cache`). Ollama models count only the layers no other model
+  shares. Deleting works like `huggingface-cli delete-cache` and `ollama rm`: the revision's
+  snapshot, refs and its own blobs; the Ollama manifest, then the layers no remaining model uses.
+  Only model folders are ever touched (paths are resolved and checked against them), never chats,
+  history, settings, sign-in tokens or Ollama's key. The dialog shows how to get each model back
+  (`huggingface-cli download ...`, `ollama pull ...`), and the journal keeps that command.
+  `HF_HOME`, `HF_HUB_CACHE`, `OLLAMA_MODELS` and LM Studio's downloads folder are honored.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -169,7 +180,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete and devjunk self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk and aimodels self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -199,6 +210,8 @@ winncdu-cli [options] [path]
   --protected           List the protected locations found on this PC and exit
   --journal             List what WinNCDU deleted recently (and what is still in the
                         Recycle Bin) and exit
+  --ai-models           List local AI models (Hugging Face, Ollama, LM Studio) with
+                        what each frees, and exit
 ```
 
 Examples:
@@ -259,6 +272,7 @@ src/                  core engine + terminal app
   protect.cpp         protected locations (system, AI assistants, keys, ...) and user rules
   journal.cpp         deletion journal, Recycle Bin lookup and restore
   devjunk.cpp         developer junk finder (build output and dependencies by project)
+  aimodels.cpp        AI models: Hugging Face cache, Ollama, LM Studio (list and delete)
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
   app.cpp             window, input, layout
@@ -276,6 +290,7 @@ tests/journal_test.cpp  journal format and a real recycle + restore round trip (
 tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list (ctest)
 tests/delete_test.cpp   permanent delete: links, read-only, locked files, long paths (ctest)
 tests/devjunk_test.cpp  developer junk: project markers, grouping, app folders left alone (ctest)
+tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the model folders (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

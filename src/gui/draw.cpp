@@ -23,7 +23,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_HISTORY = 0xE81C, IC_BACK = 0xE72B, IC_FWD = 0xE72A, IC_UP = 0xE74A, IC_CHEV_R = 0xE76C,
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
-                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943;
+                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -246,6 +246,7 @@ void App::Paint() {
         case View::History: DrawHistory(contentArea_); break;
         case View::Compare: DrawCompare(contentArea_); break;
         case View::Deleted: DrawDeleted(contentArea_); break;
+        case View::AiModels: DrawAiModels(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -386,6 +387,9 @@ void App::DrawSidebar() {
     gfx_.Text(L"MAINTENANCE", R(22, y, kSidebarW, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     y += 24;
     drawItem({View::Cleanup, IC_CLEAN, L"Cleanup", false, reclaim ? util::FormatSizeShort(reclaim) : L""});
+    uint64_t aiTotal = 0;
+    for (auto& st : ai_) aiTotal += st.bytes;
+    drawItem({View::AiModels, IC_AI, L"AI models", false, aiTotal ? util::FormatSizeShort(aiTotal) : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
     drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 
@@ -1256,6 +1260,107 @@ void App::DrawDevJunk(const RectF& area) {
             gfx_.Text(age, R(r.right - 12 - sw - aw, r.top, r.right - 12 - sw, r.bottom), days >= 90 ? P_.warning : P_.textDim,
                       Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
             gfx_.Text(size, R(r.right - 12 - sw, r.top, r.right - 12, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+        });
+}
+
+void App::DrawAiModels(const RectF& area) {
+    float top = area.top + 18;
+    uint64_t total = 0;
+    bool anyUnused = false;
+    for (auto& s : ai_) {
+        total += s.bytes;
+        for (auto& it : s.items) anyUnused = anyUnused || it.unused;
+    }
+    std::wstring sub = ai_.empty() ? L"Hugging Face, Ollama and LM Studio downloads, one model at a time"
+                                   : util::FormatSizeShort(total) + L" in " + util::FormatCount(ai_.size()) +
+                                         (ai_.size() == 1 ? L" model folder" : L" model folders") +
+                                         L"  ·  “Frees” is what deleting that model alone frees  ·  chats and settings are never touched";
+    float bx = area.right - 24;
+    if (!aiSel_.empty()) {
+        std::wstring t = L"Delete " + util::FormatSizeShort(AiSelectedBytes());
+        float w = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 54;
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_DELETE, t, CMD_AI_DELETE, 2);
+        bx -= 8;
+    }
+    if (anyUnused) {
+        bx -= 204;
+        Button(RWH(bx, top + 6, 204, 34), IC_CHECK, L"Select unused revisions", CMD_AI_UNUSED, 0);
+        bx -= 8;
+    }
+    bx -= 108;
+    Button(RWH(bx, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_AI_REFRESH, 0);
+    bx -= 16;
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"AI models", sub, IC_AI);
+    float y = top + 58;
+    if (!ai_.empty()) {
+        std::wstring hint = L"Click a model to select it  ·  double-click to show its files";
+        if (!aiAtime_) hint += L"  ·  “Last used” is unknown: Windows doesn't record file access on this PC";
+        gfx_.Text(hint, R(area.left + 24, y, area.right - 24, y + 24), P_.textFaint, Small(12));
+        y += 30;
+    }
+    RectF tr = R(area.left, y, area.right, area.bottom);
+    if (ai_.empty()) {
+        DrawEmptyState(tr, IC_AI, L"No local AI models found",
+                       L"Looked for the Hugging Face cache (HF_HOME, HF_HUB_CACHE, ~\\.cache\\huggingface), Ollama (OLLAMA_MODELS, "
+                       L"~\\.ollama\\models) and LM Studio (its models and downloads folders).");
+        return;
+    }
+    std::vector<Column> cols = {{L"Model", -1.3f, Align::Left, -1},
+                                {L"Details", -1.0f, Align::Left, -1},
+                                {L"Frees", 96, Align::Right, -1},
+                                {L"Downloaded", 100, Align::Left, -1}};
+    if (aiAtime_) cols.push_back({L"Last used", 100, Align::Left, -1});
+    auto item = [&](int row) -> std::pair<size_t, size_t> {
+        return {static_cast<size_t>(rows_[row].idx) >> 20, static_cast<size_t>(rows_[row].idx) & 0xFFFFF};
+    };
+    DrawTable(
+        tr, cols, -1, true,
+        [&](int i, const Column&, int ci, const RectF& cr, bool) {
+            auto [s, k] = item(i);
+            if (s >= ai_.size() || k >= ai_[s].items.size()) return;
+            const AiItem& it = ai_[s].items[k];
+            bool checked = aiSel_.count({s, k}) || (it.parent >= 0 && aiSel_.count({s, static_cast<size_t>(it.parent)}));
+            float cy = (cr.top + cr.bottom) / 2;
+            switch (ci) {
+                case 0: {
+                    float x = cr.left + rows_[i].depth * 24.0f;
+                    Checkbox(RWH(x, cy - 9, 18, 18), checked, Hovered(HK_ROW, i));
+                    x += 30;
+                    TextStyle ts = TS(13, it.parent >= 0 ? DWRITE_FONT_WEIGHT_NORMAL : DWRITE_FONT_WEIGHT_SEMI_BOLD);
+                    float nw = std::min(gfx_.Measure(it.name, ts) + 4, std::max(0.0f, cr.right - x));
+                    gfx_.Text(it.name, R(x, cr.top, x + nw, cr.bottom), P_.text, ts);
+                    x += nw + 8;
+                    if (it.unused) {
+                        float uw = gfx_.Measure(L"Unused", Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+                        if (x + uw < cr.right) {
+                            RectF br = R(x, cy - 9, x + uw, cy + 9);
+                            gfx_.FillRound(br, 9, WithAlpha(P_.warning, 0.16f));
+                            gfx_.Text(L"Unused", br, P_.warning, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                        }
+                    }
+                    break;
+                }
+                case 1: gfx_.Text(it.detail, cr, P_.textDim, Small(12.5f)); break;
+                case 2: gfx_.Text(util::FormatSizeShort(it.bytes), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
+                case 3: gfx_.Text(it.added ? util::FormatTime(it.added).substr(0, 10) : L"", cr, P_.textDim, Small(12.5f)); break;
+                default: gfx_.Text(it.used ? AgeText(it.used) : L"", cr, P_.textDim, Small(12.5f));
+            }
+        },
+        [&](int i, const RectF& r) {
+            size_t s = static_cast<size_t>(rows_[i].idx);
+            if (s >= ai_.size()) return;
+            const AiStore& st = ai_[s];
+            gfx_.Icon(IC_AI, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
+            TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            float tw = gfx_.Measure(st.name, ts) + 4;
+            gfx_.Text(st.name, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
+            std::wstring size = util::FormatSizeShort(st.bytes);
+            float sw = gfx_.Measure(size, ts) + 8;
+            float fx = r.left + 48 + tw;
+            gfx_.Text(FitPath(st.folder, std::max(0.0f, r.right - 24 - sw - fx), 12), R(fx, r.top, r.right - 24 - sw, r.bottom), P_.textFaint,
+                      Small(12));
+            gfx_.Text(size, R(r.right - 12 - sw, r.top, r.right - 12, r.bottom), P_.accent2, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
         });
 }
 

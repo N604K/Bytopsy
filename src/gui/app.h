@@ -5,11 +5,13 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "../aimodels.h"
 #include "../analysis.h"
 #include "../devjunk.h"
 #include "../fsops.h"
@@ -24,7 +26,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -77,6 +79,9 @@ enum Cmd : int {
     CMD_REVIEW_NONE,
     CMD_CLEANERS,
     CMD_DEV_MARK_OLD,
+    CMD_AI_REFRESH,
+    CMD_AI_UNUSED,
+    CMD_AI_DELETE,
     CMD_WINAPP2,
     CMD_WINAPP2_REMOVE,
 };
@@ -112,7 +117,7 @@ struct Hit {
     intptr_t b = 0;
 };
 
-enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN };
+enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI };
 
 struct Row {
     Node* node = nullptr;
@@ -229,6 +234,10 @@ private:
     void RebuildDevJunk();
     void SortDevJunk();
     void ToggleDevProject(int project);
+    void LoadAiModels();
+    void ToggleAiRow(int row);
+    void StartAiDelete();
+    uint64_t AiSelectedBytes() const;
     void RebuildOld();
 
     // ---- actions (actions.cpp)
@@ -278,6 +287,7 @@ private:
     void DrawTypes(const RectF& area);
     void DrawDuplicates(const RectF& area);
     void DrawDevJunk(const RectF& area);
+    void DrawAiModels(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -346,6 +356,12 @@ private:
     std::vector<DevProject> devJunk_;
     bool devJunkDone_ = false;
     bool devJunkByAge_ = false;  // sort projects by last change (oldest first) instead of size
+    std::vector<AiStore> ai_;
+    bool aiLoaded_ = false;
+    bool aiAtime_ = false;  // Windows records last-access times, so "Last used" means something
+    std::set<std::pair<size_t, size_t>> aiSel_;  // (store, item)
+    // RK_AI rows: idx = store << 20 | item.
+    static int AiRowIdx(size_t store, size_t item) { return static_cast<int>(store << 20 | item); }
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;
