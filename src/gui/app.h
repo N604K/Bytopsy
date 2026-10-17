@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "../analysis.h"
+#include "../devjunk.h"
 #include "../fsops.h"
 #include "../journal.h"
 #include "../protect.h"
@@ -23,7 +24,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, Search, Cleanup, History, Compare, Deleted, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -75,6 +76,7 @@ enum Cmd : int {
     CMD_REVIEW_ALL,
     CMD_REVIEW_NONE,
     CMD_CLEANERS,
+    CMD_DEV_MARK_OLD,
     CMD_WINAPP2,
     CMD_WINAPP2_REMOVE,
 };
@@ -178,7 +180,8 @@ struct ToastInfo {
 
 class App {
 public:
-    bool Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile);
+    // `show`: how the program was started (wWinMain's nCmdShow), e.g. minimized from a shortcut.
+    bool Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show = SW_SHOWDEFAULT);
     int Run();
 
 private:
@@ -223,6 +226,9 @@ private:
     void SortResults();
     void RebuildTypes();
     void RebuildEmpty();
+    void RebuildDevJunk();
+    void SortDevJunk();
+    void ToggleDevProject(int project);
     void RebuildOld();
 
     // ---- actions (actions.cpp)
@@ -271,6 +277,7 @@ private:
     void DrawResults(const RectF& area);
     void DrawTypes(const RectF& area);
     void DrawDuplicates(const RectF& area);
+    void DrawDevJunk(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -336,6 +343,9 @@ private:
     uint64_t catTotals_[CAT_COUNT] = {};
     std::vector<DupGroup> dups_;
     bool dupsDone_ = false;
+    std::vector<DevProject> devJunk_;
+    bool devJunkDone_ = false;
+    bool devJunkByAge_ = false;  // sort projects by last change (oldest first) instead of size
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

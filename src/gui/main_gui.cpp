@@ -6,7 +6,7 @@
 
 #include "app.h"
 
-int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
+int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE))) return 1;
 
@@ -36,7 +36,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int) {
     int rc = 1;
     {
         App app;
-        if (app.Create(inst, path, importFile)) rc = app.Run();
+        if (app.Create(inst, path, importFile, show)) rc = app.Run();
     }
     CoUninitialize();
     return rc;

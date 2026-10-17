@@ -23,7 +23,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_HISTORY = 0xE81C, IC_BACK = 0xE72B, IC_FWD = 0xE72A, IC_UP = 0xE74A, IC_CHEV_R = 0xE76C,
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
-                  IC_UNDO = 0xE7A7;
+                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -49,6 +49,17 @@ std::wstring RelativeTime(int64_t ft) {
     if (diff < 86400 * 2) return L"yesterday";
     if (diff < 86400 * 30) return std::to_wstring(diff / 86400) + L" days ago";
     return util::FormatTime(ft).substr(0, 10);
+}
+
+// "today", "3 days ago", "8 months ago", "2 years ago": how long a project has been left alone.
+std::wstring AgeText(int64_t ft) {
+    if (!ft) return L"never";
+    int64_t days = (util::NowFileTime() - ft) / 864000000000LL;
+    if (days < 1) return L"today";
+    if (days < 2) return L"yesterday";
+    if (days < 60) return std::to_wstring(days) + L" days ago";
+    if (days < 730) return std::to_wstring(days / 30) + L" months ago";
+    return std::to_wstring(days / 365) + L" years ago";
 }
 
 TextStyle Small(float size = 12.0f, DWRITE_FONT_WEIGHT w = DWRITE_FONT_WEIGHT_NORMAL, Align a = Align::Left) {
@@ -230,6 +241,7 @@ void App::Paint() {
         case View::TypeFiles: DrawResults(contentArea_); break;
         case View::Types: DrawTypes(contentArea_); break;
         case View::Duplicates: DrawDuplicates(contentArea_); break;
+        case View::DevJunk: DrawDevJunk(contentArea_); break;
         case View::Cleanup: DrawCleanup(contentArea_); break;
         case View::History: DrawHistory(contentArea_); break;
         case View::Compare: DrawCompare(contentArea_); break;
@@ -335,6 +347,8 @@ void App::DrawSidebar() {
         if (!c.external) reclaim += c.bytes;
     uint64_t dupWaste = 0;
     for (auto& g : dups_) dupWaste += g.size * (g.files.size() - 1);
+    uint64_t devJunkTotal = 0;
+    for (auto& p : devJunk_) devJunkTotal += DevProjectSize(p, !settings_.apparent);
     std::vector<NavItem> items = {
         {View::Home, IC_HOME, L"Home", false, L""},
         {View::Browse, IC_FOLDER, L"Folders", true, L""},
@@ -343,6 +357,7 @@ void App::DrawSidebar() {
         {View::Duplicates, IC_COPY, L"Duplicates", true, dupsDone_ && dupWaste ? util::FormatSizeShort(dupWaste) : L""},
         {View::Old, IC_CLOCK, L"Old files", true, L""},
         {View::Empty, IC_EMPTY, L"Empty folders", true, L""},
+        {View::DevJunk, IC_CODE, L"Developer junk", true, devJunkTotal ? util::FormatSizeShort(devJunkTotal) : L""},
     };
     if (!searchQuery_.empty()) items.push_back({View::Search, IC_SEARCH, L"Search results", true, util::FormatCount(searchRes_.size())});
     auto drawItem = [&](const NavItem& it) {
@@ -1141,6 +1156,106 @@ void App::DrawDuplicates(const RectF& area) {
             gfx_.Text(t, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
             gfx_.Text(util::FormatSizeShort(g.size * (g.files.size() - 1)) + L" reclaimable", R(r.left + 48 + tw, r.top, r.right, r.bottom),
                       P_.accent2, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        });
+}
+
+void App::DrawDevJunk(const RectF& area) {
+    float top = area.top + 18;
+    bool disk = !settings_.apparent;
+    uint64_t total = 0;
+    size_t folders = 0;
+    for (auto& p : devJunk_) {
+        total += DevProjectSize(p, disk);
+        folders += p.artifacts.size();
+    }
+    std::wstring sub = devJunk_.empty() ? L"Build output and dependencies your projects recreate on the next build or install"
+                                        : util::FormatCount(devJunk_.size()) + (devJunk_.size() == 1 ? L" project  ·  " : L" projects  ·  ") +
+                                              util::FormatCount(folders) + L" folders  ·  " + util::FormatSizeShort(total) +
+                                              L" comes back with the next build or install";
+    float bx = area.right - 24;
+    if (!devJunk_.empty()) {
+        if (!sel_.empty()) {
+            bx -= 150;
+            Button(RWH(bx, top + 6, 150, 34), IC_DELETE, L"Delete selected", CMD_DELETE, 2, !readOnly_);
+            bx -= 8;
+        }
+        bx -= 222;
+        Button(RWH(bx, top + 6, 222, 34), IC_CLOCK, L"Select inactive 3+ months", CMD_DEV_MARK_OLD, 0);
+        bx -= 16;
+    }
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Developer junk", sub, IC_CODE);
+    float y = top + 58;
+    if (!devJunk_.empty()) {
+        float x = area.left + 24;
+        gfx_.Text(L"Sort projects by", R(x, y, x + 120, y + 30), P_.textDim, Small(12.5f));
+        x += 112;
+        x += Chip(x, y, L"Size", !devJunkByAge_, 4, 0) + 6;
+        Chip(x, y, L"Least recently changed", devJunkByAge_, 4, 1);
+        gfx_.Text(L"Click a project to select all its folders", R(area.left + 24, y, area.right - 24, y + 30), P_.textFaint,
+                  Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+        y += 44;
+    }
+    RectF tr = R(area.left, y, area.right, area.bottom);
+    if (devJunk_.empty()) {
+        DrawEmptyState(tr, IC_CODE, L"No developer junk found",
+                       L"No node_modules, target, bin/obj, build, .gradle, Unity Library, __pycache__ or .venv folders next to their projects "
+                       L"in this scan. App folders (AppData, Program Files) are not searched.");
+        return;
+    }
+    std::vector<Column> cols = {{L"Folder", -1.0f, Align::Left, -1},
+                                {L"Comes back with", -1.0f, Align::Left, -1},
+                                {settings_.apparent ? L"Size" : L"Disk usage", 100, Align::Right, -1},
+                                {L"Modified", 128, Align::Left, -1}};
+    DrawTable(
+        tr, cols, -1, true,
+        [&](int i, const Column&, int ci, const RectF& cr, bool sel) {
+            Node* n = rows_[i].node;
+            if (!n) return;
+            const DevProject& p = devJunk_[rows_[i].idx];
+            const DevArtifact* a = nullptr;
+            for (auto& x : p.artifacts)
+                if (x.node == n) a = &x;
+            switch (ci) {
+                case 0: {
+                    RectF c2 = cr;
+                    c2.left += 18;
+                    DrawNameCell(c2, n, 0, false, false, i, sel);
+                    break;
+                }
+                case 1:
+                    if (a) gfx_.Text(std::wstring(a->kind) + L"  ·  " + a->how, cr, P_.textDim, Small(12.5f));
+                    break;
+                case 2: gfx_.Text(util::FormatSizeShort(Val(n)), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
+                default: gfx_.Text(util::FormatTime(n->mtime), cr, P_.textDim, Small(12.5f));
+            }
+        },
+        [&](int i, const RectF& r) {
+            const DevProject& p = devJunk_[rows_[i].idx];
+            bool all = std::all_of(p.artifacts.begin(), p.artifacts.end(), [&](const DevArtifact& a) { return sel_.count(a.node) > 0; });
+            bool some = !all && std::any_of(p.artifacts.begin(), p.artifacts.end(), [&](const DevArtifact& a) { return sel_.count(a.node) > 0; });
+            RectF cb = RWH(r.left + 10, (r.top + r.bottom) / 2 - 8, 16, 16);
+            Checkbox(cb, all, Hovered(HK_ROW, i));
+            if (some) gfx_.FillRound(Inset(cb, 4, 7), 1, P_.accent);
+            std::wstring size = util::FormatSizeShort(DevProjectSize(p, disk));
+            float sw = gfx_.Measure(size, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 8;
+            std::wstring age = L"changed " + AgeText(p.lastChange);
+            float aw = gfx_.Measure(age, Small(12.5f)) + 24;
+            int64_t days = p.lastChange ? (util::NowFileTime() - p.lastChange) / 864000000000LL : 0;
+            float x = r.left + 36;
+            float right = r.right - 12 - sw - aw;
+            std::wstring kinds = p.kinds;
+            float kw = std::min(gfx_.Measure(kinds, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 18, 220.0f);
+            std::wstring path = p.dir == root_.get() ? root_->name : RelFolder(p.dir) + L"\\" + p.dir->name;
+            if (p.dir->parent == root_.get()) path = p.dir->name;
+            float pw = std::max(40.0f, right - x - kw - 12);
+            gfx_.Text(FitPath(path, pw, 13, true), R(x, r.top, x + pw, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+            float px = x + std::min(pw, gfx_.Measure(FitPath(path, pw, 13, true), TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 10);
+            RectF kr = RWH(px, (r.top + r.bottom) / 2 - 9, kw, 18);
+            gfx_.FillRound(kr, 9, WithAlpha(P_.accent2, 0.16f));
+            gfx_.Text(kinds, kr, P_.accent2, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+            gfx_.Text(age, R(r.right - 12 - sw - aw, r.top, r.right - 12 - sw, r.bottom), days >= 90 ? P_.warning : P_.textDim,
+                      Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+            gfx_.Text(size, R(r.right - 12 - sw, r.top, r.right - 12, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
         });
 }
 

@@ -20,6 +20,7 @@ add_library(winncdu_core STATIC
   src/util.cpp
   src/protect.cpp
   src/journal.cpp
+  src/devjunk.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
@@ -95,5 +96,13 @@ if(MSVC)
   target_compile_options(winncdu-delete-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME delete COMMAND winncdu-delete-test)
+
+# Developer junk finder (project markers, grouping, app folders left alone): build\winncdu-devjunk-test.exe
+add_executable(winncdu-devjunk-test tests/devjunk_test.cpp)
+target_link_libraries(winncdu-devjunk-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-devjunk-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME devjunk COMMAND winncdu-devjunk-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

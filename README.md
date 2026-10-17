@@ -23,6 +23,19 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   files), **Old files** (filter by age and size) and **Empty folders**.
 - **Duplicates**: compares size, then a quick hash, then the full SHA-256. "Select all but oldest"
   selects every redundant copy in one click.
+- **Developer junk** (like npkill, for every ecosystem): build output and dependency folders your
+  projects recreate on the next build or install, grouped by project with the date the project
+  itself last changed (its own files, not the build output or `.git`). Covers `node_modules`,
+  `.next`/`.nuxt`/`.svelte-kit`/`.angular`/`.parcel-cache`/`.turbo`, Rust and Maven `target`,
+  .NET `bin`/`obj`, Gradle `.gradle`/`build`, CMake `build`/`out`/`cmake-build-*`, Flutter/Dart,
+  Unity `Library`/`Temp`/`obj`, Unreal `Intermediate`/`DerivedDataCache`, Python `__pycache__`,
+  `.venv`, `.tox`, `.pytest_cache`/`.mypy_cache`/`.ruff_cache`, Terraform, Zig, Elixir and Haskell.
+  Each folder must be confirmed by its project (`node_modules` next to a `package.json`, `target`
+  next to `Cargo.toml` or `pom.xml`, `build` with a `CMakeCache.txt` inside, ...), and AppData,
+  Program Files, Windows and dot-folders such as `.vscode` are never searched, so dependencies of
+  installed programs and editor extensions don't show up. Click a project to select all its
+  folders, sort by size or by least recently changed, or "Select inactive 3+ months"; deleting
+  goes through the usual dialog, protection checks and journal.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -69,6 +82,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   or system theme. Window size and preferences are remembered.
 
 Command line: `winncdu.exe [folder]` scans a folder, `winncdu.exe -f scan.json` opens a saved scan.
+The window opens as it was started (e.g. minimized from a shortcut set to "Run: Minimized").
 
 | Key | Action |
 | --- | --- |
@@ -149,7 +163,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup and delete self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete and devjunk self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -238,6 +252,7 @@ src/                  core engine + terminal app
   export.cpp          ncdu JSON export/import, CSV export
   protect.cpp         protected locations (system, AI assistants, keys, ...) and user rules
   journal.cpp         deletion journal, Recycle Bin lookup and restore
+  devjunk.cpp         developer junk finder (build output and dependencies by project)
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
   app.cpp             window, input, layout
@@ -254,6 +269,7 @@ tests/protect_test.cpp  self-check of the protection rules (ctest)
 tests/journal_test.cpp  journal format and a real recycle + restore round trip (ctest)
 tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list (ctest)
 tests/delete_test.cpp   permanent delete: links, read-only, locked files, long paths (ctest)
+tests/devjunk_test.cpp  developer junk: project markers, grouping, app folders left alone (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

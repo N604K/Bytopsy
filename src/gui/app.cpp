@@ -20,7 +20,7 @@ constexpr float kTopH = 56.0f;
 // =============================================================================================
 // Creation
 
-bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile) {
+bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show) {
     inst_ = inst;
     settings_ = LoadSettings();
     util::g_si = settings_.si;
@@ -68,7 +68,10 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
 
     drives_ = ListDrives();
     LoadHistory();
-    ShowWindow(hwnd_, settings_.maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
+    // As started (a shortcut set to "Minimized", a launcher that doesn't want focus taken), except
+    // that a plain start restores the last maximized state.
+    bool plain = show == SW_SHOWNORMAL || show == SW_SHOWDEFAULT;
+    ShowWindow(hwnd_, plain ? (settings_.maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL) : show);
     UpdateWindow(hwnd_);
 
     if (!importFile.empty())
@@ -412,6 +415,14 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 if (dbl) OpenRow(hit.a);
                 break;
             }
+            if (view_ == View::DevJunk && hit.a >= 0 && hit.a < static_cast<int>(rows_.size()) && rows_[hit.a].kind == RK_GROUP) {
+                if (dbl)
+                    RevealInBrowse(devJunk_[rows_[hit.a].idx].dir);
+                else
+                    ToggleDevProject(rows_[hit.a].idx);
+                lists_[static_cast<int>(view_)].focus = hit.a;
+                break;
+            }
             if (dbl)
                 OpenRow(hit.a);
             else
@@ -484,6 +495,10 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
             if (hit.a == 3) {
                 oldMinSize_ = static_cast<uint64_t>(hit.b);
                 RebuildOld();
+            }
+            if (hit.a == 4) {
+                devJunkByAge_ = hit.b != 0;
+                SortDevJunk();
             }
             break;
         case HK_CHECK:

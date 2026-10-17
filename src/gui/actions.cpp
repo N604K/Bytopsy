@@ -25,6 +25,8 @@ void App::SetRoot(std::unique_ptr<Node> r, bool readOnly) {
     typeFiles_.clear();
     dups_.clear();
     dupsDone_ = false;
+    devJunk_.clear();
+    devJunkDone_ = false;
     types_.clear();
     diff_.clear();
     tm_.clear();
@@ -58,6 +60,13 @@ void App::PostMutation() {
         if (d.node && !IsAlive(d.node)) d.node = nullptr;
     if (!types_.empty()) RebuildTypes();
     if (view_ == View::Empty) RebuildEmpty();
+    // Project groups hold nodes and last-change dates: find them again (now, or when shown next).
+    if (view_ == View::DevJunk) {
+        RebuildDevJunk();
+    } else {
+        devJunk_.clear();
+        devJunkDone_ = false;
+    }
     tm_.clear();
     tmShields_.clear();
     tmRoot_ = nullptr;
@@ -134,6 +143,12 @@ void App::BuildRows() {
             break;
         case View::Compare:
             for (size_t i = 0; i < diff_.size(); ++i) rows_.push_back({diff_[i].node, 0, RK_DIFF, static_cast<int>(i)});
+            break;
+        case View::DevJunk:
+            for (size_t p = 0; p < devJunk_.size(); ++p) {
+                rows_.push_back({nullptr, 0, RK_GROUP, static_cast<int>(p)});
+                for (auto& a : devJunk_[p].artifacts) rows_.push_back({a.node, 1, RK_NODE, static_cast<int>(p)});
+            }
             break;
         case View::CleanReview:
             if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
@@ -310,6 +325,34 @@ void App::RebuildEmpty() {
     }
     std::sort(emptyRes_.begin(), emptyRes_.end(), [](Node* a, Node* b) { return a->items > b->items; });
     rowsDirty_ = true;
+}
+
+void App::RebuildDevJunk() {
+    devJunk_ = root_ ? FindDevJunk(root_.get()) : std::vector<DevProject>();
+    devJunkDone_ = true;
+    SortDevJunk();
+}
+
+void App::SortDevJunk() {
+    bool disk = !settings_.apparent;
+    if (devJunkByAge_)
+        std::stable_sort(devJunk_.begin(), devJunk_.end(), [](const DevProject& a, const DevProject& b) { return a.lastChange < b.lastChange; });
+    else
+        std::stable_sort(devJunk_.begin(), devJunk_.end(),
+                         [disk](const DevProject& a, const DevProject& b) { return DevProjectSize(a, disk) > DevProjectSize(b, disk); });
+    rowsDirty_ = true;
+}
+
+// Clicking a project selects all of its artifact folders (or clears them if all are selected).
+void App::ToggleDevProject(int project) {
+    if (project < 0 || project >= static_cast<int>(devJunk_.size())) return;
+    auto& arts = devJunk_[project].artifacts;
+    bool all = std::all_of(arts.begin(), arts.end(), [&](const DevArtifact& a) { return sel_.count(a.node) > 0; });
+    for (auto& a : arts)
+        if (all)
+            sel_.erase(a.node);
+        else
+            sel_.insert(a.node);
 }
 
 void App::RebuildOld() {
@@ -1077,6 +1120,9 @@ void App::ShowView(View v) {
             if (oldRes_.empty()) RebuildOld();
             break;
         case View::Empty: RebuildEmpty(); break;
+        case View::DevJunk:
+            if (!devJunkDone_) RebuildDevJunk();
+            break;
         case View::Cleanup:
             if (cleanup_.empty()) MeasureCleanup();
             break;
@@ -1435,6 +1481,16 @@ void App::OnCommand(int cmd) {
             Toast(L"Selected " + util::FormatCount(sel_.size()) + L" extra copies (" + util::FormatSizeShort(bytes) +
                       L") — the oldest copy of each file is kept",
                   2);
+            break;
+        }
+        case CMD_DEV_MARK_OLD: {
+            // Projects nobody has touched for three months: their build output can go.
+            int64_t cutoff = util::NowFileTime() - 90LL * 864000000000LL;
+            sel_.clear();
+            for (auto& p : devJunk_)
+                if (p.lastChange && p.lastChange < cutoff)
+                    for (auto& a : p.artifacts) sel_.insert(a.node);
+            if (sel_.empty()) Toast(L"Every project here was changed in the last three months", 0);
             break;
         }
         case CMD_CLEAN_SELECTED: StartCleanup(); break;

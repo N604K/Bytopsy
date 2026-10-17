@@ -36,8 +36,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       (also used by BleachBit). Run every imported entry through the protection rules. *Done:
       menu → Import winapp2.ini; file rules only, privacy entries and over-broad rules skipped,
       stricter protection threshold, overlap with built-in categories removed.*
-- [ ] **Developer junk finder** (like npkill): `node_modules`, `target`, `bin/obj`, `.gradle`, Unity
+- [x] **Developer junk finder** (like npkill): `node_modules`, `target`, `bin/obj`, `.gradle`, Unity
       `Library`, `__pycache__`, `.venv`, grouped by project with the project's last change date.
+      *Done: "Developer junk" view (`src/devjunk.cpp`), ~20 ecosystems, every folder confirmed by
+      its project's marker file; app and system folders never searched.*
 - [ ] More package caches: uv, Poetry, conda `pkgs`, Maven `.m2`, Bun, Deno, Composer, vcpkg, Conan.
 - [ ] **AI cleanup that is actually safe**: Hugging Face cache by unused revision
       (`huggingface-cli scan-cache` logic), Ollama models with sizes and last use, LM Studio model
