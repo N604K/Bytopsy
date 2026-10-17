@@ -28,8 +28,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 
 ## 2. Cleaning coverage
 
-- [ ] **Data-driven cleaners**: move cleanup categories out of C++ into rule files (JSON/TOML) shipped
-      in the repo, so contributors add apps without touching code.
+- [x] **Data-driven cleaners**: move cleanup categories out of C++ into rule files (JSON/TOML) shipped
+      in the repo, so contributors add apps without touching code. *Done: `res/cleaners.ini` (INI,
+      embedded in the exe) plus a user `cleaners.ini` that adds, replaces or disables categories;
+      protected items are left out of every category.*
 - [ ] **winapp2.ini import**: the community-maintained database with thousands of app cleaners
       (also used by BleachBit). Run every imported entry through the protection rules.
 - [ ] **Developer junk finder** (like npkill): `node_modules`, `target`, `bin/obj`, `.gradle`, Unity

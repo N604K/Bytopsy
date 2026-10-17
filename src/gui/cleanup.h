@@ -32,9 +32,12 @@ struct CleanCategory {
     bool recycleBin = false;
     bool external = false;  // handled by an external tool (Windows Disk Cleanup)
     bool safe = true;       // preselected
+    bool enabled = true;    // "enabled = false" in cleaners.ini turns a built-in category off
+    bool user = false;      // from the user's cleaners.ini
 
     // Measurement results.
     uint64_t bytes = 0, files = 0;
+    uint64_t guarded = 0;  // items left out because the protection rules cover them
     bool measured = false, denied = false, selected = false;
     std::vector<CleanEntry> entries;  // largest first
 
@@ -48,7 +51,12 @@ struct CleanResult {
     std::vector<std::wstring> lockedBy;  // apps that held skipped items open
 };
 
-std::vector<CleanCategory> BuildCleanupCategories();
+// Categories come from res/cleaners.ini (built into the exe) merged with the user's
+// %LOCALAPPDATA%\WinNCDU\cleaners.ini; problems in either go to `errors`.
+std::vector<CleanCategory> BuildCleanupCategories(std::vector<std::wstring>* errors = nullptr);
+std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<std::wstring>& errors);
+// The user's cleaners.ini; `create` writes a commented template if it doesn't exist yet.
+std::wstring UserCleanersFile(bool create);
 void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel);
 // Deletes the measured entries that aren't kept, permanently. Entries that changed since they
 // were measured and no longer qualify (too new now) are left alone.

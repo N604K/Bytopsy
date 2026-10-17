@@ -34,6 +34,11 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   keep; cleaning deletes only that list, and skips entries that changed since they were measured.
   As administrator, system-level cleanups (Windows temp, update downloads) offer a System Restore
   point first; if it can't be made, nothing is cleaned.
+  Categories are rules in [res/cleaners.ini](res/cleaners.ini) (built into the exe), so adding an
+  app needs no code. Your own rules go in `%LOCALAPPDATA%\WinNCDU\cleaners.ini` (menu → *Cleanup
+  rules…* creates it with examples): a section with a built-in's id replaces it, `enabled = false`
+  turns it off. User rules are never preselected, can't name a whole drive, and anything the
+  protection rules mark Important or Blocked is left out of every category.
 - **Who is using this file?** When something can't be deleted because it is open, WinNCDU asks the
   Windows Restart Manager which app holds it and says so ("Close Google Chrome, then try again"),
   in the delete dialog, after Cleanup and in the journal.
@@ -230,7 +235,7 @@ src/gui/              windowed app
   draw.cpp            all drawing (Direct2D / DirectWrite)
   gfx.cpp             rendering helpers
   treemap.cpp         squarified treemap layout
-  cleanup.cpp         cleanup categories
+  cleanup.cpp         cleanup rules: parsing, measuring, cleaning
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
@@ -239,4 +244,5 @@ tests/journal_test.cpp  journal format and a real recycle + restore round trip (
 tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list (ctest)
 tests/delete_test.cpp   permanent delete: links, read-only, locked files, long paths (ctest)
 res/winncdu.ico       app icon
+res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

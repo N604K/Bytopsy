@@ -838,10 +838,32 @@ void App::StartDuplicates() {
 
 void App::MeasureCleanup() {
     if (cleanupMeasuring_) return;
-    if (cleanup_.empty()) {
-        cleanup_ = BuildCleanupCategories();
-        for (auto& c : cleanup_) c.selected = c.safe && !(c.needsAdmin && !elevated_) && !c.external;
+    // Rules are read again every time, so edits to cleaners.ini show up on "Measure". Choices made
+    // so far (selection, unchecked items) stay with their category.
+    std::vector<std::wstring> errs;
+    std::vector<CleanCategory> fresh = BuildCleanupCategories(&errs);
+    std::wstring reviewId = reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()) ? cleanup_[reviewCat_].id : L"";
+    reviewCat_ = -1;
+    for (size_t i = 0; i < fresh.size(); ++i) {
+        CleanCategory& c = fresh[i];
+        auto old = std::find_if(cleanup_.begin(), cleanup_.end(), [&](const CleanCategory& o) { return o.id == c.id; });
+        if (old != cleanup_.end()) {
+            c.selected = old->selected;
+            c.entries = old->entries;
+            c.bytes = old->bytes;
+            c.files = old->files;
+            c.guarded = old->guarded;
+            c.measured = old->measured;
+            c.denied = old->denied;
+        } else {
+            c.selected = c.safe && !(c.needsAdmin && !elevated_) && !c.external;
+        }
+        if (c.id == reviewId) reviewCat_ = static_cast<int>(i);
     }
+    cleanup_ = std::move(fresh);
+    rowsDirty_ = true;
+    if (!errs.empty())
+        Toast(errs[0] + (errs.size() > 1 ? L"  (+" + std::to_wstring(errs.size() - 1) + L" more)" : L""), 1);
     cleanupMeasuring_ = true;
     auto* copy = new std::vector<CleanCategory>(cleanup_);
     HWND hwnd = hwnd_;
@@ -1314,6 +1336,7 @@ void App::ShowMoreMenu() {
     AppendMenuW(m, MF_STRING | (IsShellIntegrated() ? MF_CHECKED : 0), CMD_SET_SHELL,
                 L"Add “Analyze with WinNCDU” to Explorer");
     AppendMenuW(m, MF_STRING, CMD_PROTECTED, L"Protected locations…");
+    AppendMenuW(m, MF_STRING, CMD_CLEANERS, L"Cleanup rules…");
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     if (!elevated_) AppendMenuW(m, MF_STRING, CMD_ADMIN, L"Restart as administrator");
     AppendMenuW(m, MF_STRING, CMD_ABOUT, L"About && shortcuts\tF1");
@@ -1500,6 +1523,12 @@ void App::OnCommand(int cmd) {
             if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
                 for (auto& e : cleanup_[reviewCat_].entries) e.keep = cmd == CMD_REVIEW_NONE;
             break;
+        case CMD_CLEANERS: {
+            std::wstring f = UserCleanersFile(true);
+            if (f.empty() || !OpenWithDefault(f)) return Toast(L"Can't open " + f, 1);
+            Toast(L"Add your own cleanup categories, then click Measure in Cleanup", 2);
+            break;
+        }
         case CMD_OPEN_JOURNAL:
             if (!PathExists(JournalFile())) return Toast(L"Nothing has been deleted yet", 2);
             OpenWithDefault(JournalFile());

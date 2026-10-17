@@ -74,6 +74,7 @@ enum Cmd : int {
     CMD_OPEN_JOURNAL,
     CMD_REVIEW_ALL,
     CMD_REVIEW_NONE,
+    CMD_CLEANERS,
 };
 
 enum HitKind {

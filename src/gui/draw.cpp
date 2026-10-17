@@ -1213,6 +1213,8 @@ void App::DrawCleanup(const RectF& area) {
         if (locked) badge(L"Needs admin", P_.warning);
         if (!c.safe && !c.external) badge(L"Review first", P_.accent2);
         if (c.denied && !locked) badge(L"Partly inaccessible", P_.textFaint);
+        if (c.user) badge(L"Your rule", P_.accent);
+        if (c.guarded) badge(L"Protected items left out", P_.success);
         gfx_.Text(c.desc, R(x, card.top + 37, textRight, card.top + 58), P_.textDim, Small(12.5f));
         RectF sr = R(card.right - 190, card.top, card.right - 20, card.bottom);
         RectF review{};
@@ -1231,7 +1233,7 @@ void App::DrawCleanup(const RectF& area) {
         } else {
             gfx_.Text(util::FormatSizeShort(c.ToClean()), R(sr.left, card.top + 8, sr.right, card.top + 36), c.bytes ? P_.text : P_.textFaint,
                       TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
-            std::wstring count = util::FormatCount(c.files) + (c.recycleBin ? L" items" : L" files");
+            std::wstring count = util::FormatCount(c.files) + (c.recycleBin ? (c.files == 1 ? L" item" : L" items") : (c.files == 1 ? L" file" : L" files"));
             if (size_t kept = c.KeptCount()) count += L" · " + util::FormatCount(kept) + L" kept";
             if (!c.entries.empty()) {
                 // "Review" opens the exact list of what would be deleted (a dry run with opt-outs).
@@ -1265,7 +1267,8 @@ void App::DrawCleanReview(const RectF& area) {
     size_t kept = c.KeptCount();
     std::wstring sub = util::FormatCount(c.entries.size() - kept) + L" of " + util::FormatCount(c.entries.size()) +
                        L" selected  ·  " + util::FormatSizeShort(c.ToClean()) +
-                       L" would be deleted permanently  ·  uncheck what you want to keep";
+                       L" would be deleted permanently  ·  uncheck what you want to keep" +
+                       (c.guarded ? L"  ·  " + util::FormatCount(c.guarded) + L" protected items left out" : L"");
     DrawViewHeader(R(area.left + 70, top, area.right - 290, top + 46), L"Review: " + c.name, sub, c.icon);
     float bx = area.right - 24 - 130;
     Button(RWH(bx, top + 6, 130, 34), IC_CHECK, L"Select all", CMD_REVIEW_ALL, 0, kept > 0);

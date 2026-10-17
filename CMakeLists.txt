@@ -81,6 +81,7 @@ add_test(NAME journal COMMAND winncdu-journal-test)
 # Cleanup preview semantics (kept entries survive, changed entries are skipped): build\winncdu-cleanup-test.exe
 add_executable(winncdu-cleanup-test tests/cleanup_test.cpp src/gui/cleanup.cpp)
 target_link_libraries(winncdu-cleanup-test PRIVATE winncdu_core)
+target_compile_definitions(winncdu-cleanup-test PRIVATE WINNCDU_SOURCE_DIR=L"${CMAKE_SOURCE_DIR}")
 if(MSVC)
   target_compile_options(winncdu-cleanup-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()

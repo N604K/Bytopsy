@@ -3,6 +3,7 @@
 
 1 24 "winncdu-gui.manifest"
 1 ICON "../../res/winncdu.ico"
+201 RCDATA "../../res/cleaners.ini"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,0

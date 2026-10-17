@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
 
 #include <algorithm>
 
@@ -19,8 +20,11 @@ std::wstring Env(const std::wstring& s) {
     return n ? std::wstring(buf) : s;
 }
 
-// Expands '*' path segments against the file system (directories only).
+// Expands '*' path segments against the file system (directories only). Relative paths and
+// undefined %VARIABLES% (left as they are by Env) match nothing.
 void Expand(const std::wstring& path, std::vector<std::wstring>& out) {
+    bool absolute = (path.size() >= 3 && path[1] == L':' && path[2] == L'\\') || path.rfind(L"\\\\", 0) == 0;
+    if (!absolute || path.find(L'%') != std::wstring::npos) return;
     size_t star = path.find(L'*');
     if (star == std::wstring::npos) {
         DWORD a = GetFileAttributesW(ToLongPath(path).c_str());
@@ -42,6 +46,13 @@ void Expand(const std::wstring& path, std::vector<std::wstring>& out) {
         Expand(base + L"\\" + fd.cFileName + rest, out);
     } while (FindNextFileW(h, &fd));
     FindClose(h);
+}
+
+// "C:", "C:\", "\" and the like (also after %ENV% expansion).
+bool IsDriveRoot(const std::wstring& p) {
+    std::wstring s = p;
+    while (!s.empty() && (s.back() == L'\\' || s.back() == L'/')) s.pop_back();
+    return s.empty() || (s.size() == 2 && s[1] == L':');
 }
 
 int64_t FtToI(const FILETIME& f) { return (static_cast<int64_t>(f.dwHighDateTime) << 32) | f.dwLowDateTime; }
@@ -98,19 +109,6 @@ void SizeOf(const std::wstring& path, const WIN32_FIND_DATAW& top, uint64_t& byt
     }
 }
 
-CleanCategory Cat(const wchar_t* id, const wchar_t* name, const wchar_t* desc, wchar_t icon, std::vector<CleanTarget> t,
-                  bool admin = false, bool safe = true) {
-    CleanCategory c;
-    c.id = id;
-    c.name = name;
-    c.desc = desc;
-    c.icon = icon;
-    c.targets = std::move(t);
-    c.needsAdmin = admin;
-    c.safe = safe;
-    return c;
-}
-
 }  // namespace
 
 bool IsElevated() {
@@ -165,73 +163,211 @@ bool CreateRestorePoint(const std::wstring& description, std::wstring& err) {
     return ok;
 }
 
-std::vector<CleanCategory> BuildCleanupCategories() {
-    std::vector<CleanCategory> v;
-    {
-        CleanCategory c = Cat(L"recycle", L"Recycle Bin", L"Files you deleted earlier still use space until the bin is emptied.",
-                              0xE74D, {});
-        c.recycleBin = true;
-        v.push_back(c);
+namespace {
+
+std::wstring Trim(const std::wstring& v) {
+    size_t a = v.find_first_not_of(L" \t\r\n");
+    if (a == std::wstring::npos) return L"";
+    size_t b = v.find_last_not_of(L" \t\r\n");
+    return v.substr(a, b - a + 1);
+}
+
+bool ParseBool(const std::wstring& v, bool& out) {
+    std::wstring l = util::ToLower(v);
+    if (l == L"true" || l == L"yes" || l == L"1") return out = true, true;
+    if (l == L"false" || l == L"no" || l == L"0") return out = false, true;
+    return false;
+}
+
+// "24h", "7d", "30" (hours)
+bool ParseAge(const std::wstring& v, int& hours) {
+    if (v.empty()) return false;
+    wchar_t* end = nullptr;
+    long n = wcstol(v.c_str(), &end, 10);
+    if (end == v.c_str() || n < 0) return false;
+    std::wstring unit = util::ToLower(Trim(end));
+    if (unit.empty() || unit == L"h") hours = static_cast<int>(n);
+    else if (unit == L"d") hours = static_cast<int>(n * 24);
+    else return false;
+    return true;
+}
+
+std::wstring Utf8File(const std::wstring& file, bool& found) {
+    found = false;
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, file.c_str(), L"rb") != 0 || !f) return L"";
+    found = true;
+    std::string data;
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) data.append(buf, n);
+    fclose(f);
+    if (data.size() >= 3 && static_cast<unsigned char>(data[0]) == 0xEF) data.erase(0, 3);
+    return util::Utf8ToWide(data);
+}
+
+// res/cleaners.ini, built into the windowed app as RCDATA 201.
+std::wstring BuiltinCleaners() {
+    HMODULE self = GetModuleHandleW(nullptr);
+    HRSRC r = FindResourceW(self, MAKEINTRESOURCEW(201), MAKEINTRESOURCEW(10));
+    HGLOBAL g = r ? LoadResource(self, r) : nullptr;
+    const char* p = g ? static_cast<const char*>(LockResource(g)) : nullptr;
+    if (!p) return L"";
+    std::string data(p, SizeofResource(self, r));
+    if (data.size() >= 3 && static_cast<unsigned char>(data[0]) == 0xEF) data.erase(0, 3);
+    return util::Utf8ToWide(data);
+}
+
+const char kUserTemplate[] =
+    "# Your own WinNCDU cleanup categories. Same format as the built-in list (res/cleaners.ini in the\r\n"
+    "# WinNCDU source). Click \"Measure\" in Cleanup after saving.\r\n"
+    "#\r\n"
+    "# Add a category:\r\n"
+    "# [myapp]\r\n"
+    "# name = MyApp cache\r\n"
+    "# desc = MyApp downloads this again when needed.\r\n"
+    "# path = %LOCALAPPDATA%\\MyApp\\Cache\r\n"
+    "# path = %LOCALAPPDATA%\\MyApp\\Logs | files=*.log | age=7d\r\n"
+    "#\r\n"
+    "# Turn a built-in category off (ids: recycle, temp, wintemp, browser, thumbs, crash, wu, do,\r\n"
+    "# shader, dev, winold):\r\n"
+    "# [dev]\r\n"
+    "# enabled = false\r\n"
+    "#\r\n"
+    "# Protected items (see Protected locations) are never listed or deleted, whatever a rule says.\r\n";
+
+}  // namespace
+
+std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<std::wstring>& errors) {
+    std::vector<CleanCategory> out;
+    CleanCategory* cur = nullptr;
+    auto error = [&](size_t line, const std::wstring& msg) { errors.push_back(L"line " + std::to_wstring(line) + L": " + msg); };
+    size_t pos = 0, lineNo = 0;
+    while (pos <= text.size()) {
+        size_t eol = text.find(L'\n', pos);
+        if (eol == std::wstring::npos) eol = text.size();
+        std::wstring line = Trim(text.substr(pos, eol - pos));
+        pos = eol + 1;
+        ++lineNo;
+        if (line.empty() || line[0] == L'#' || line[0] == L';') continue;
+        if (line[0] == L'[') {
+            size_t close = line.find(L']');
+            std::wstring id = close == std::wstring::npos ? L"" : util::ToLower(Trim(line.substr(1, close - 1)));
+            if (id.empty()) {
+                error(lineNo, L"expected [id]");
+                cur = nullptr;
+                continue;
+            }
+            out.emplace_back();
+            cur = &out.back();
+            cur->id = id;
+            cur->safe = false;  // only explicitly marked categories are preselected
+            continue;
+        }
+        size_t eq = line.find(L'=');
+        if (eq == std::wstring::npos) {
+            error(lineNo, L"expected key = value");
+            continue;
+        }
+        if (!cur) {
+            error(lineNo, L"setting outside a [section]");
+            continue;
+        }
+        std::wstring key = util::ToLower(Trim(line.substr(0, eq))), val = Trim(line.substr(eq + 1));
+        bool ok = true;
+        if (key == L"name") cur->name = val;
+        else if (key == L"desc") cur->desc = val;
+        else if (key == L"icon") cur->icon = static_cast<wchar_t>(wcstoul(val.c_str(), nullptr, 16));
+        else if (key == L"admin") ok = ParseBool(val, cur->needsAdmin);
+        else if (key == L"safe") ok = ParseBool(val, cur->safe);
+        else if (key == L"enabled") ok = ParseBool(val, cur->enabled);
+        else if (key == L"kind") {
+            std::wstring k = util::ToLower(val);
+            cur->recycleBin = k == L"recyclebin";
+            cur->external = k == L"external";
+            ok = cur->recycleBin || cur->external || k == L"files";
+        } else if (key == L"path") {
+            CleanTarget t;
+            size_t bar = val.find(L'|');
+            t.path = Trim(val.substr(0, bar));
+            while (bar != std::wstring::npos) {
+                size_t next = val.find(L'|', bar + 1);
+                std::wstring opt = Trim(val.substr(bar + 1, next == std::wstring::npos ? std::wstring::npos : next - bar - 1));
+                bar = next;
+                size_t oe = opt.find(L'=');
+                std::wstring ok2 = util::ToLower(Trim(opt.substr(0, oe))), ov = oe == std::wstring::npos ? L"" : Trim(opt.substr(oe + 1));
+                if (ok2 == L"files" && !ov.empty()) t.filePattern = ov;
+                else if (ok2 == L"age" && ParseAge(ov, t.minAgeHours)) {}
+                else error(lineNo, L"unknown path option \"" + opt + L"\"");
+            }
+            // A cleaner must name a folder, never a whole drive.
+            if (IsDriveRoot(t.path)) {
+                error(lineNo, L"path must be a folder, not a drive, e.g. %LOCALAPPDATA%\\App\\Cache");
+                continue;
+            }
+            cur->targets.push_back(t);
+        } else {
+            error(lineNo, L"unknown key \"" + key + L"\"");
+            continue;
+        }
+        if (!ok) error(lineNo, L"bad value for " + key + L": \"" + val + L"\"");
     }
-    v.push_back(Cat(L"temp", L"Temporary files", L"Leftovers from apps and installers (older than 1 day).", 0xE7C3,
-                    {{L"%TEMP%", L"", 24}}));
-    v.push_back(Cat(L"wintemp", L"Windows temporary files", L"System temp folder (older than 1 day).", 0xE7C3,
-                    {{L"%SystemRoot%\\Temp", L"", 24}}, true));
-    v.push_back(Cat(L"browser", L"Browser caches",
-                    L"Chrome, Edge, Brave, Vivaldi, Opera and Firefox caches. Close the browsers first for best results.", 0xE774,
-                    {{L"%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Cache"},
-                     {L"%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Code Cache"},
-                     {L"%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\GPUCache"},
-                     {L"%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Cache"},
-                     {L"%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Code Cache"},
-                     {L"%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\GPUCache"},
-                     {L"%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Cache"},
-                     {L"%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Code Cache"},
-                     {L"%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Cache"},
-                     {L"%LOCALAPPDATA%\\Opera Software\\Opera Stable\\Cache"},
-                     {L"%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\cache2"}}));
-    v.push_back(Cat(L"thumbs", L"Thumbnail cache", L"Explorer rebuilds thumbnails automatically when needed.", 0xE91B,
-                    {{L"%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer", L"thumbcache_*.db"},
-                     {L"%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer", L"iconcache_*.db"}}));
-    v.push_back(Cat(L"crash", L"Crash dumps & error reports", L"Memory dumps and Windows Error Reporting archives.", 0xE7BA,
-                    {{L"%LOCALAPPDATA%\\CrashDumps"},
-                     {L"%LOCALAPPDATA%\\Microsoft\\Windows\\WER\\ReportArchive"},
-                     {L"%LOCALAPPDATA%\\Microsoft\\Windows\\WER\\ReportQueue"},
-                     {L"%ProgramData%\\Microsoft\\Windows\\WER\\ReportArchive"},
-                     {L"%ProgramData%\\Microsoft\\Windows\\WER\\ReportQueue"},
-                     {L"%SystemRoot%\\Minidump"},
-                     {L"%SystemRoot%\\LiveKernelReports"},
-                     {L"%SystemRoot%", L"MEMORY.DMP"}}));
-    v.push_back(Cat(L"wu", L"Windows Update downloads", L"Update packages that were already installed.", 0xE895,
-                    {{L"%SystemRoot%\\SoftwareDistribution\\Download", L"", 24}}, true));
-    v.push_back(Cat(L"do", L"Delivery Optimization cache", L"Update pieces shared with other PCs.", 0xE895,
-                    {{L"%SystemRoot%\\ServiceProfiles\\NetworkService\\AppData\\Local\\Microsoft\\Windows\\DeliveryOptimization\\Cache"}},
-                    true));
-    v.push_back(Cat(L"shader", L"Graphics shader caches", L"DirectX / NVIDIA / AMD shader caches; games rebuild them.", 0xE7F4,
-                    {{L"%LOCALAPPDATA%\\D3DSCache"},
-                     {L"%LOCALAPPDATA%\\NVIDIA\\DXCache"},
-                     {L"%LOCALAPPDATA%\\NVIDIA\\GLCache"},
-                     {L"%LOCALAPPDATA%\\AMD\\DxCache"},
-                     {L"%LOCALAPPDATA%\\AMD\\DxcCache"}}));
-    v.push_back(Cat(L"dev", L"Developer package caches",
-                    L"npm, Yarn, pnpm, pip, NuGet, Gradle, Go and Cargo caches. Packages download again when needed.", 0xE943,
-                    {{L"%LOCALAPPDATA%\\npm-cache"},
-                     {L"%APPDATA%\\npm-cache"},
-                     {L"%LOCALAPPDATA%\\Yarn\\Cache"},
-                     {L"%LOCALAPPDATA%\\pnpm\\store"},
-                     {L"%LOCALAPPDATA%\\pip\\Cache"},
-                     {L"%USERPROFILE%\\.nuget\\packages"},
-                     {L"%USERPROFILE%\\.gradle\\caches"},
-                     {L"%LOCALAPPDATA%\\go-build"},
-                     {L"%USERPROFILE%\\.cargo\\registry\\cache"}},
-                    false, false));
-    {
-        CleanCategory c = Cat(L"winold", L"Previous Windows installation",
-                              L"Windows.old from an upgrade. Removed with Windows Disk Cleanup.", 0xE7F8,
-                              {{L"%SystemDrive%\\Windows.old"}}, true, false);
-        c.external = true;
-        v.push_back(c);
+    // Drop incomplete categories (but keep "enabled = false" stubs: they switch built-ins off).
+    for (size_t i = 0; i < out.size();) {
+        CleanCategory& c = out[i];
+        bool stub = !c.enabled;
+        if (!stub && c.name.empty()) {
+            errors.push_back(L"[" + c.id + L"]: missing name");
+            out.erase(out.begin() + i);
+        } else if (!stub && !c.recycleBin && c.targets.empty()) {
+            errors.push_back(L"[" + c.id + L"]: no path");
+            out.erase(out.begin() + i);
+        } else {
+            if (!c.icon) c.icon = 0xE74D;
+            ++i;
+        }
     }
+    return out;
+}
+
+std::wstring UserCleanersFile(bool create) {
+    PWSTR p = nullptr;
+    std::wstring file;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) file = std::wstring(p) + L"\\WinNCDU\\cleaners.ini";
+    CoTaskMemFree(p);
+    if (create && !file.empty() && GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        CreateDirectoryW(file.substr(0, file.rfind(L'\\')).c_str(), nullptr);
+        FILE* f = nullptr;
+        if (_wfopen_s(&f, file.c_str(), L"wb") == 0 && f) {
+            fwrite(kUserTemplate, 1, sizeof(kUserTemplate) - 1, f);
+            fclose(f);
+        }
+    }
+    return file;
+}
+
+std::vector<CleanCategory> BuildCleanupCategories(std::vector<std::wstring>* errors) {
+    std::vector<std::wstring> errs;
+    std::vector<CleanCategory> v = ParseCleaners(BuiltinCleaners(), errs);
+    for (auto& e : errs) e = L"built-in cleaners.ini " + e;
+    bool found = false;
+    std::wstring user = Utf8File(UserCleanersFile(false), found);
+    if (found) {
+        std::vector<std::wstring> uerrs;
+        for (auto& c : ParseCleaners(user, uerrs)) {
+            c.user = true;
+            auto it = std::find_if(v.begin(), v.end(), [&](const CleanCategory& b) { return b.id == c.id; });
+            if (it != v.end() && !c.enabled)
+                v.erase(it);
+            else if (it != v.end())
+                *it = c;
+            else if (c.enabled)
+                v.push_back(c);
+        }
+        for (auto& e : uerrs) errs.push_back(L"cleaners.ini " + e);
+    }
+    v.erase(std::remove_if(v.begin(), v.end(), [](const CleanCategory& c) { return !c.enabled; }), v.end());
+    if (errors) *errors = errs;
     return v;
 }
 
@@ -260,7 +396,7 @@ uint64_t CleanCategory::ToClean() const {
 }
 
 void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
-    c.bytes = c.files = 0;
+    c.bytes = c.files = c.guarded = 0;
     c.denied = false;
     c.entries.clear();
     if (c.recycleBin) {
@@ -288,6 +424,7 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
             Expand(Env(t.path), dirs);
             for (auto& d : dirs) {
                 if (cancel) return;
+                if (IsDriveRoot(d)) continue;  // e.g. an undefined %VAR% at the start of a rule
                 if (c.external) {
                     WIN32_FIND_DATAW top{};
                     top.dwFileAttributes = FILE_ATTRIBUTE_DIRECTORY;
@@ -297,6 +434,10 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
                 bool any = false;
                 ForEachEntry(t, d, [&](const std::wstring& p, const WIN32_FIND_DATAW& fd) {
                     any = true;
+                    if (CheckProtection(p).level >= Protect::Important) {
+                        ++c.guarded;
+                        return;
+                    }
                     CleanEntry e;
                     e.path = p;
                     e.dir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -350,8 +491,8 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
             }
             continue;
         }
-        // Safety net: categories are curated, but never let one reach a blocked location.
-        if (CheckProtection(e.path).level == Protect::Blocked) {
+        // Safety net, also for user rules: never reach protected data.
+        if (CheckProtection(e.path).level >= Protect::Important) {
             ++r.failed;
             continue;
         }
