@@ -1,0 +1,213 @@
+# WinNCDU
+
+A fast, modern disk usage analyzer for Windows, inspired by [ncdu](https://dev.yorhel.nl/ncdu).
+Native C++20 with Direct2D and no runtime dependencies: two self-contained `.exe` files.
+
+- **`winncdu.exe`**: the windowed app, with a folder browser, treemap, cleanup, scan history and a dark/light theme.
+- **`winncdu-cli.exe`**: the ncdu-style terminal app, for consoles, SSH sessions and scripting.
+
+Both share the same scanner, so results, exports and imports are interchangeable.
+
+## The windowed app (`winncdu.exe`)
+
+Start it, pick a drive (or drop a folder onto the window) and see what takes up the space.
+
+- **Folders**: an expandable tree sorted by size, with usage bars, share of the parent folder,
+  item counts and modified times. Breadcrumbs, back/forward, multi-select (Ctrl/Shift-click).
+- **Treemap** below the list: every file drawn to scale and colored by kind (video, images, audio,
+  documents, archives, code, programs, system). Hover for details, click to select the file in the
+  list, double-click to zoom into a folder. Drag the splitter to resize it, or hide it.
+- **Find**: the search box understands `*.iso`, `>1G`, `<10M`, `older:1y`, `newer:7d`, `type:d`,
+  `ext:mp4,mkv`, `empty`, and combinations such as `*.mp4 >500M older:1y`.
+- **Largest files**, **File types** (with a category breakdown; double-click a type to list its
+  files), **Old files** (filter by age and size) and **Empty folders**.
+- **Duplicates**: compares size, then a quick hash, then the full SHA-256. "Select all but oldest"
+  selects every redundant copy in one click.
+- **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
+  Junctions and symlinks are never followed.
+- **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
+  Properties and Rescan.
+- **Cleanup** (works without a scan): Recycle Bin, temporary files, browser caches, thumbnail cache,
+  crash dumps, Windows Update downloads, Delivery Optimization, shader caches and developer caches.
+  Each category is measured first, and only the safe ones are preselected.
+- **Protected locations**: WinNCDU knows which folders must not be deleted and which hold data you
+  can't get back, and checks every delete (and every Cleanup item) against them. See below.
+- **History & compare**: every completed scan stores its folder sizes in
+  `%LOCALAPPDATA%\WinNCDU\history`. Scan the same drive later and compare to see which folders grew
+  or shrank.
+- **Explorer integration** (menu `⋯` → *Add "Analyze with WinNCDU" to Explorer*): right-click any
+  folder, drive or folder background to analyze it. It is per-user and needs no admin rights; the
+  same menu item removes it again.
+- **Run as administrator** to read protected folders; disk usage vs. apparent size; JSON/CSV export
+  and import of ncdu JSON (including scans made with Linux `ncdu -o`); per-monitor DPI; dark, light
+  or system theme. Window size and preferences are remembered.
+
+Command line: `winncdu.exe [folder]` scans a folder, `winncdu.exe -f scan.json` opens a saved scan.
+
+| Key | Action |
+| --- | --- |
+| `Ctrl+F` | Search |
+| `Enter` / double-click | Open a folder, or open a file with its app |
+| `Backspace`, `Alt+←` / `Alt+→` / `Alt+↑` | Up / back / forward / up |
+| `Del` / `Shift+Del` | Delete to the Recycle Bin / delete permanently |
+| `Ctrl+E` / `Ctrl+C` | Show in Explorer / copy path |
+| `Ctrl+A`, `Space`, `Shift+↑↓` | Select all / toggle selection / extend selection |
+| `F5` | Rescan |
+| `Ctrl+O` / `Ctrl+S` | Scan a folder / export as JSON |
+| `Esc` | Clear the selection, then go back to the folder view |
+| `F1` | About and shortcuts |
+
+## Protected locations
+
+Before anything is deleted, each item is checked against built-in rules and your own
+(`src/protect.cpp`). The check covers the item itself, the folder it is in, and everything inside it,
+so deleting `C:\Users\me` warns about `.claude` and `.ssh` too.
+
+| Level | What happens | Examples |
+| --- | --- | --- |
+| **Blocked** | Never deleted. The rest of a selection still goes ahead. | Drive roots, `C:\Windows` (except Temp, update downloads and dumps), `WinSxS`, `Windows\Installer`, Program Files roots, `WindowsApps`, user profile and `AppData` roots, registry hives, `pagefile.sys`, `hiberfil.sys`, `System Volume Information`, `$Recycle.Bin`, DPAPI keys |
+| **Important** | An extra warning step that says what would be lost; the Recycle Bin is preselected. | AI assistant data, SSH/GPG/cloud credentials, crypto wallets, browser profiles, mail, Signal/WhatsApp, WSL/Docker/VM disks, OneDrive/Dropbox/Google Drive roots, game saves, folders inside Program Files, Git repositories, `.kdbx`, `.pst`, private keys |
+| **Caution** | A heads-up in the delete dialog. | Local AI models (Ollama, LM Studio, Hugging Face), `.env`, `.pem`, virtual disks, project `.claude`/`.cursor` folders, Downloads, Windows Temp |
+
+Caches inside protected folders stay deletable: browser `Cache`/`Code Cache`/`GPUCache`, the
+caches of VS Code, Cursor, Windsurf and the Claude desktop app, and so on.
+
+**AI assistants.** Sessions, memory, settings and sign-ins of: Claude Code (`~\.claude`,
+`~\.claude.json`), the Claude desktop app, OpenAI Codex CLI (`~\.codex`), ChatGPT desktop, Cursor,
+Windsurf/Codeium, VS Code (Copilot Chat, Cline, Roo, Continue), GitHub Copilot and Copilot CLI,
+Gemini CLI, Continue, Kiro, Trae, Zed, Aider, Augment, Qwen Code, opencode, Amp, Crush, Goose, Jan,
+Msty, LM Studio, Perplexity and SpecStory.
+
+**Your own rules** live in `%LOCALAPPDATA%\WinNCDU\protect.txt` (created with examples on first use;
+menu `⋯` → *Protected locations…* → *Edit protect.txt*):
+
+```text
+block      D:\Backups              ; nightly backups
+important  {HOME}\Work             ; client projects
+caution    *.blend
+allow      {HOME}\.cache\huggingface
+```
+
+A line with a backslash is a path (it covers everything inside); without one it matches a file or
+folder name anywhere. `%ENV%` variables, `{HOME}`, `{ROAMING}`, `{LOCAL}` and `*` work. The most
+specific path wins, so `allow` can switch off a built-in rule for a subfolder.
+
+`winncdu-cli --protected` lists the protected locations found on this PC.
+Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; pull requests welcome.
+
+## Build
+
+Requires Visual Studio 2022 (or Build Tools) with the *Desktop development with C++* workload.
+
+```bat
+build.cmd
+```
+
+The script finds Visual Studio, configures CMake with Ninja, and produces `build\winncdu.exe` and
+`build\winncdu-cli.exe`. Both link the C runtime statically, so you can copy them anywhere.
+
+Manual build:
+
+```bat
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build    :: runs winncdu-protect-test.exe
+```
+
+## The terminal app (`winncdu-cli.exe`)
+
+The keyboard-driven ncdu experience: the same browser, find, largest files, file types, duplicates,
+delete and export features in a true-color terminal UI.
+
+### Usage
+
+```text
+winncdu-cli [options] [path]
+
+  path                  Folder or drive to scan (no path: choose from a list)
+  -o FILE               Scan, write an ncdu-compatible JSON export to FILE and exit
+  --csv FILE            Scan, write a CSV report to FILE and exit
+  -f FILE               Browse a previously exported JSON file (read-only)
+  --exclude PATTERN     Skip matching files/folders (wildcards, repeatable;
+                        patterns containing '\' match the full path)
+  -X, --exclude-from F  Read exclude patterns from a file
+  -t, --threads N       Scanner threads (default: CPU count, 2-8)
+  -H, --hardlinks       Count NTFS hard links once (slower; useful for C:\Windows)
+  --apparent            Start with apparent sizes
+  --si                  Base-10 units (kB, MB)
+  --ascii               ASCII-only bars and borders
+  --no-mouse            Disable mouse input
+  --no-delete           Safe mode: deleting is disabled
+  --protected           List the protected locations found on this PC and exit
+```
+
+Examples:
+
+```bat
+winncdu-cli                     :: pick a drive
+winncdu-cli C:\Users\me         :: scan a folder
+winncdu-cli D:\ --exclude node_modules --exclude "*.tmp"
+winncdu-cli -o scan.json C:\    :: scan now, browse later with: winncdu-cli -f scan.json
+```
+
+Run it as Administrator to read folders that are otherwise "access denied" (marked `!`).
+
+### Keys
+
+| Key | Action |
+| --- | --- |
+| `↑ ↓` `k j` `PgUp PgDn` `Home End` | Move |
+| `Enter` `→` `l` | Open folder (on a file: show details) |
+| `←` `Backspace` `h` `u` | Parent folder |
+| `Space` / `Ctrl+A` / `U` | Mark item / mark all / clear marks |
+| `d` `Del` | Delete marked or selected items (Recycle Bin or permanently) |
+| `Shift+Del` | Delete, with "permanently" preselected |
+| `o` / `O` / `p` / `b` | Show in Explorer / open / copy path / terminal here |
+| `/` | Filter the current folder |
+| `f` / `L` / `y` / `D` | Find / largest files / file types / duplicates |
+| `Tab` | Switch between the browser and the last results list |
+| `a` | Disk usage ↔ apparent size |
+| `s` `n` `C` `M` | Sort by size / name / items / modified time (again to reverse) |
+| `t` `g` `c` `m` `H` `i` | Folders first, graph style, items column, time column, hide hidden, details panel |
+| `r` `F5` | Rescan current folder |
+| `E` | Export (JSON / CSV) |
+| `v` | Choose another drive or folder |
+| `?` `F1` | Help |
+| `q` | Quit |
+
+Flags in the left column: `!` read error, `.` error somewhere inside, `@` link/junction (not
+followed), `H` hard link already counted, `~` cloud placeholder (e.g. OneDrive online-only),
+`<` excluded, `e` empty folder.
+
+### Notes
+
+- Use Windows Terminal for the best rendering. The classic console also works; if your font
+  draws boxes or bars badly, use `--ascii`.
+- Hard links: Windows uses many of them in `C:\Windows\WinSxS`. Without `-H` they are counted once
+  per link, like in Explorer. With `-H` each file is counted once (the scan is slower).
+- Imported scans are read-only: delete and rescan are disabled.
+
+## Project layout
+
+```text
+src/                  core engine + terminal app
+  scanner.cpp         multithreaded directory scanner
+  tree.cpp            in-memory tree and size totals
+  fsops.cpp           delete, Recycle Bin, Explorer, clipboard, drives
+  analysis.cpp        search, largest files, file types, duplicates
+  export.cpp          ncdu JSON export/import, CSV export
+  protect.cpp         protected locations (system, AI assistants, keys, ...) and user rules
+  main.cpp, ui.cpp, console.cpp   terminal app
+src/gui/              windowed app
+  app.cpp             window, input, layout
+  actions.cpp         commands, background tasks, views
+  draw.cpp            all drawing (Direct2D / DirectWrite)
+  gfx.cpp             rendering helpers
+  treemap.cpp         squarified treemap layout
+  cleanup.cpp         cleanup categories
+  history.cpp         scan snapshots and comparison
+  platform.cpp        settings, theme, Explorer integration, file dialogs
+  icons.cpp           shell icon cache
+tests/protect_test.cpp  self-check of the protection rules (ctest)
+res/winncdu.ico       app icon
+```
