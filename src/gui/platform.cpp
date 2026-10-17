@@ -201,13 +201,13 @@ std::wstring PickFolder(HWND owner, const std::wstring& title) {
     return out;
 }
 
-std::wstring PickOpenFile(HWND owner) {
+std::wstring PickOpenFile(HWND owner, const wchar_t* title, const wchar_t* filterName, const wchar_t* filter) {
     IFileOpenDialog* dlg = nullptr;
     std::wstring out;
     if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&dlg)))) return out;
-    COMDLG_FILTERSPEC spec[] = {{L"Scan files (*.json)", L"*.json"}, {L"All files", L"*.*"}};
+    COMDLG_FILTERSPEC spec[] = {{filterName, filter}, {L"All files", L"*.*"}};
     dlg->SetFileTypes(2, spec);
-    dlg->SetTitle(L"Open a saved scan");
+    dlg->SetTitle(title);
     if (SUCCEEDED(dlg->Show(owner))) {
         IShellItem* item = nullptr;
         if (SUCCEEDED(dlg->GetResult(&item))) {

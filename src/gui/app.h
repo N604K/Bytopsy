@@ -75,6 +75,8 @@ enum Cmd : int {
     CMD_REVIEW_ALL,
     CMD_REVIEW_NONE,
     CMD_CLEANERS,
+    CMD_WINAPP2,
+    CMD_WINAPP2_REMOVE,
 };
 
 enum HitKind {

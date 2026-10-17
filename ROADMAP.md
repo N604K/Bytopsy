@@ -32,8 +32,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       in the repo, so contributors add apps without touching code. *Done: `res/cleaners.ini` (INI,
       embedded in the exe) plus a user `cleaners.ini` that adds, replaces or disables categories;
       protected items are left out of every category.*
-- [ ] **winapp2.ini import**: the community-maintained database with thousands of app cleaners
-      (also used by BleachBit). Run every imported entry through the protection rules.
+- [x] **winapp2.ini import**: the community-maintained database with thousands of app cleaners
+      (also used by BleachBit). Run every imported entry through the protection rules. *Done:
+      menu → Import winapp2.ini; file rules only, privacy entries and over-broad rules skipped,
+      stricter protection threshold, overlap with built-in categories removed.*
 - [ ] **Developer junk finder** (like npkill): `node_modules`, `target`, `bin/obj`, `.gradle`, Unity
       `Library`, `__pycache__`, `.venv`, grouped by project with the project's last change date.
 - [ ] More package caches: uv, Poetry, conda `pkgs`, Maven `.m2`, Bun, Deno, Composer, vcpkg, Conan.

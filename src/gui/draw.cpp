@@ -1167,10 +1167,28 @@ void App::DrawCleanup(const RectF& area) {
     bx -= 8 + 130;
     Button(RWH(bx, top + 6, 130, 34), IC_REFRESH, L"Measure", CMD_CLEAN_MEASURE, 0, !cleanupMeasuring_);
 
+    // Built-in and user categories in their order, then imported ones (winapp2.ini): only those
+    // that found something on this PC, largest first, under a header (kHeader in the list).
+    const size_t kHeader = static_cast<size_t>(-1);
+    std::vector<size_t> show, imported;
+    size_t importedAll = 0;
+    for (size_t i = 0; i < cleanup_.size(); ++i) {
+        const CleanCategory& c = cleanup_[i];
+        if (!c.imported) {
+            show.push_back(i);
+            continue;
+        }
+        ++importedAll;
+        if (c.measured && c.present && c.bytes > 0) imported.push_back(i);
+    }
+    std::stable_sort(imported.begin(), imported.end(), [&](size_t a, size_t b) { return cleanup_[a].bytes > cleanup_[b].bytes; });
+    if (importedAll && (!imported.empty() || cleanupMeasuring_)) show.push_back(kHeader);
+    show.insert(show.end(), imported.begin(), imported.end());
+
     float y = top + 62;
     RectF body = R(area.left, y, area.right, area.bottom);
     ListState& ls = lists_[static_cast<int>(View::Cleanup)];
-    float contentH = (elevated_ ? 0 : 64) + cleanup_.size() * 82.0f + 20;
+    float contentH = (elevated_ ? 0 : 64) + show.size() * 82.0f + 20;
     ls.scroll = std::clamp(ls.scroll, 0.0f, std::max(0.0f, contentH - H(body)));
     gfx_.PushClip(body);
     y -= ls.scroll;
@@ -1183,7 +1201,19 @@ void App::DrawCleanup(const RectF& area) {
         Button(R(b.right - 190, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, L"Restart as admin", CMD_ADMIN, 0);
         y += 64;
     }
-    for (size_t i = 0; i < cleanup_.size(); ++i) {
+    for (size_t i : show) {
+        if (i == kHeader) {
+            RectF hr = R(area.left + 28, y + 44, area.right - 28, y + 66);
+            float lw = gfx_.Measure(L"FROM WINAPP2.INI", Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+            gfx_.Text(L"FROM WINAPP2.INI", R(hr.left, hr.top, hr.left + lw, hr.bottom), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+            std::wstring note = cleanupMeasuring_ && imported.empty()
+                                    ? L"Checking " + util::FormatCount(importedAll) + L" community app cleaners…"
+                                    : util::FormatCount(imported.size()) + L" apps on this PC have something to clean  ·  community rules, "
+                                                                           L"never preselected: review before cleaning";
+            gfx_.Text(note, R(hr.left + lw, hr.top, hr.right, hr.bottom), P_.textDim, Small(12));
+            y += 82;
+            continue;
+        }
         CleanCategory& c = cleanup_[i];
         RectF card = R(area.left + 24, y, area.right - 24, y + 72);
         bool locked = c.needsAdmin && !elevated_;
@@ -1211,7 +1241,7 @@ void App::DrawCleanup(const RectF& area) {
             bxx += bw2 + 6;
         };
         if (locked) badge(L"Needs admin", P_.warning);
-        if (!c.safe && !c.external) badge(L"Review first", P_.accent2);
+        if (!c.safe && !c.external && !c.imported) badge(L"Review first", P_.accent2);
         if (c.denied && !locked) badge(L"Partly inaccessible", P_.textFaint);
         if (c.user) badge(L"Your rule", P_.accent);
         if (c.guarded) badge(L"Protected items left out", P_.success);

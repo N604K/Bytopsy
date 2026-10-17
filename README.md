@@ -40,6 +40,15 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   turns it off. User rules are never preselected, can't name a whole drive, and anything the
   protection rules mark Important or Blocked is left out of every category, as is any folder with
   a repository, key, password database or virtual disk somewhere inside.
+- **winapp2.ini import** (menu → *Import winapp2.ini…*): the community database of thousands of app
+  cleaners ([Winapp2](https://github.com/MoscaDotTo/Winapp2), also used by BleachBit). Apps found
+  on this PC that have something to clean appear below the built-in list, largest first, never
+  preselected. Only disk-space rules are used: entries about cookies, history, passwords, sessions,
+  settings, backups or saved games are skipped, no registry is touched, rules that would sweep a
+  whole profile, drive or Windows folder are dropped, and what the built-in categories already
+  clean is left to them. Every item still goes through the protection rules, with a stricter
+  threshold (anything WinNCDU would warn about is left out), and folders holding browser-profile
+  files (cookies, logins, history) are never taken whole.
 - **Who is using this file?** When something can't be deleted because it is open, WinNCDU asks the
   Windows Restart Manager which app holds it and says so ("Close Google Chrome, then try again"),
   in the delete dialog, after Cleanup and in the journal.
@@ -237,6 +246,7 @@ src/gui/              windowed app
   gfx.cpp             rendering helpers
   treemap.cpp         squarified treemap layout
   cleanup.cpp         cleanup rules: parsing, measuring, cleaning
+  winapp2.cpp         winapp2.ini import
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache

@@ -1337,6 +1337,8 @@ void App::ShowMoreMenu() {
                 L"Add “Analyze with WinNCDU” to Explorer");
     AppendMenuW(m, MF_STRING, CMD_PROTECTED, L"Protected locations…");
     AppendMenuW(m, MF_STRING, CMD_CLEANERS, L"Cleanup rules…");
+    AppendMenuW(m, MF_STRING, CMD_WINAPP2, L"Import winapp2.ini…");
+    if (PathExists(Winapp2File())) AppendMenuW(m, MF_STRING, CMD_WINAPP2_REMOVE, L"Remove winapp2.ini cleaners");
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     if (!elevated_) AppendMenuW(m, MF_STRING, CMD_ADMIN, L"Restart as administrator");
     AppendMenuW(m, MF_STRING, CMD_ABOUT, L"About && shortcuts\tF1");
@@ -1527,6 +1529,29 @@ void App::OnCommand(int cmd) {
             std::wstring f = UserCleanersFile(true);
             if (f.empty() || !OpenWithDefault(f)) return Toast(L"Can't open " + f, 1);
             Toast(L"Add your own cleanup categories, then click Measure in Cleanup", 2);
+            break;
+        }
+        case CMD_WINAPP2: {
+            std::wstring f = PickOpenFile(hwnd_, L"Import winapp2.ini", L"winapp2.ini", L"*.ini");
+            if (f.empty()) break;
+            Winapp2Stats st;
+            std::wstring err;
+            if (!ImportWinapp2(f, st, err)) return Toast(err, 1);
+            bool busy = cleanupMeasuring_;
+            if (!busy) MeasureCleanup();
+            ShowView(View::Cleanup);
+            Toast(busy ? L"Imported. Click Measure in a moment to include it."
+                       : L"Imported " + util::FormatCount(st.usable) + L" app cleaners (" + util::FormatCount(st.personal) +
+                             L" about personal data left out)",
+                  2);
+            break;
+        }
+        case CMD_WINAPP2_REMOVE: {
+            if (!DeleteFileW(Winapp2File().c_str())) return Toast(util::Win32ErrorMessage(GetLastError()), 1);
+            bool busy = cleanupMeasuring_;
+            if (!busy) MeasureCleanup();
+            ShowView(View::Cleanup);
+            Toast(busy ? L"Removed. Click Measure in a moment to update the list." : L"winapp2.ini cleaners removed", 2);
             break;
         }
         case CMD_OPEN_JOURNAL:

@@ -36,6 +36,7 @@ add_executable(winncdu WIN32
   src/gui/treemap.cpp
   src/gui/history.cpp
   src/gui/cleanup.cpp
+  src/gui/winapp2.cpp
   src/gui/platform.cpp
   src/gui/winncdu-gui.rc
 )
@@ -79,7 +80,7 @@ endif()
 add_test(NAME journal COMMAND winncdu-journal-test)
 
 # Cleanup preview semantics (kept entries survive, changed entries are skipped): build\winncdu-cleanup-test.exe
-add_executable(winncdu-cleanup-test tests/cleanup_test.cpp src/gui/cleanup.cpp)
+add_executable(winncdu-cleanup-test tests/cleanup_test.cpp src/gui/cleanup.cpp src/gui/winapp2.cpp)
 target_link_libraries(winncdu-cleanup-test PRIVATE winncdu_core)
 target_compile_definitions(winncdu-cleanup-test PRIVATE WINNCDU_SOURCE_DIR=L"${CMAKE_SOURCE_DIR}")
 if(MSVC)

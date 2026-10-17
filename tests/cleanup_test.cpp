@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <objbase.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
@@ -134,6 +135,137 @@ int main() {
         Check(gc.guarded == 3 && Find(gc, g + L"\\junk.tmp") && !Find(gc, g + L"\\passwords.kdbx") && !Find(gc, g + L"\\.git") &&
                   !Find(gc, g + L"\\repo"),
               L"KeePass file, .git and a folder with a repository inside left out (" + std::to_wstring(gc.guarded) + L" guarded)");
+    }
+
+    // ---- winapp2.ini: what is taken, what is skipped, and exactly what an entry deletes
+    {
+        std::wstring a = dir + L"\\w2app";
+        for (const wchar_t* d : {L"", L"\\Cache", L"\\Cache\\sub", L"\\Logs", L"\\Logs\\sub", L"\\Logs\\repo", L"\\Logs\\repo\\.git"})
+            CreateDirectoryW((a + d).c_str(), nullptr);
+        for (const wchar_t* f : {L"\\Cache\\a.bin", L"\\Cache\\sub\\b.bin", L"\\Logs\\x.log", L"\\Logs\\sub\\y.txt", L"\\Logs\\keep.log",
+                                 L"\\Logs\\z.dat", L"\\Logs\\History.log", L"\\Logs\\repo\\.git\\debug.log", L"\\t.tmp", L"\\u.dat"})
+            Put(a + f, "data");
+        std::wstring ini = L"; comment\r\n"
+                           L"[Test App Cache *]\r\nLangSecRef=3021\r\nDetectFile=" + dir + L"\\w2a*\r\n"
+                           L"FileKey1=" + a + L"\\Cache|*|REMOVESELF\r\n"
+                           L"FileKey2=" + a + L"\\Logs|*.log;*.txt|RECURSE\r\n"
+                           L"FileKey3=" + a + L"|*.tmp\r\n"
+                           L"ExcludeKey1=FILE|" + a + L"\\Logs\\|keep.log\r\n"
+                           L"[Test App Cookies *]\r\nFileKey1=" + a + L"|*\r\n"
+                           L"[Test App Registry *]\r\nRegKey1=HKCU\\Software\\WinNCDU-Test\r\n"
+                           L"[Whole Profile *]\r\nFileKey1=%UserProfile%|*|RECURSE\r\n"
+                           L"[Not Installed *]\r\nDetect=HKCU\\Software\\WinNCDU-Test-Not-There\r\nFileKey1=" + a + L"\\Cache|*\r\n";
+        Winapp2Stats st;
+        auto w = ParseWinapp2(ini, st);
+        Check(st.entries == 5 && st.usable == 2 && st.personal == 1 && st.broad == 1 && st.regOnly == 1,
+              L"winapp2: 5 entries, 2 usable, 1 personal, 1 too broad, 1 registry only (" + std::to_wstring(st.usable) + L" usable)");
+        if (w.size() == 2) {
+            CleanCategory& app = w[0];
+            Check(app.name == L"Test App Cache" && app.imported && !app.safe && app.targets.size() == 3 && app.excludes.size() == 1,
+                  L"winapp2: entry parsed (name, not preselected, 3 rules, 1 exclude)");
+            MeasureCategory(app, cancel);
+            std::wstring listed;
+            for (auto& e : app.entries) listed += e.path.substr(a.size()) + L" ";
+            bool ok = app.present && app.entries.size() == 5 && Find(app, a + L"\\Cache\\a.bin") && Find(app, a + L"\\Cache\\sub\\b.bin") &&
+                      Find(app, a + L"\\Logs\\x.log") && Find(app, a + L"\\Logs\\sub\\y.txt") && Find(app, a + L"\\t.tmp");
+            Check(ok, L"winapp2: lists matching files, not the excluded one, not inside .git: " + listed);
+            Check(app.guarded == 1 && !Find(app, a + L"\\Logs\\History.log"), L"winapp2: a file named like browser history is left out");
+            CleanCategoryNow(app, cancel, [](const std::wstring&) {});
+            Check(!PathExists(a + L"\\Cache\\a.bin") && !PathExists(a + L"\\Logs\\x.log") && !PathExists(a + L"\\t.tmp"),
+                  L"winapp2: listed files deleted");
+            Check(PathExists(a + L"\\Logs\\keep.log") && PathExists(a + L"\\Logs\\z.dat") && PathExists(a + L"\\Logs\\repo\\.git\\debug.log") &&
+                      PathExists(a + L"\\Logs\\History.log") && PathExists(a + L"\\u.dat"),
+                  L"winapp2: excluded, unmatched, repository and personal files survive");
+            MeasureCategory(w[1], cancel);
+            Check(!w[1].present && w[1].entries.empty(), L"winapp2: an app that isn't installed lists nothing");
+        }
+
+        // What a built-in category cleans is left to it; folders with personal data inside are left out.
+        CreateDirectoryW((a + L"\\Profile").c_str(), nullptr);
+        CreateDirectoryW((a + L"\\Profile\\Default").c_str(), nullptr);
+        Put(a + L"\\Profile\\Default\\Cookies", "c");
+        Put(a + L"\\Cache\\c.bin", "data");
+        Put(a + L"\\v.tmp", "data");
+        Put(a + L"\\w.log", "data");
+        auto w2 = ParseWinapp2(L"[Overlap *]\r\nFileKey1=" + a + L"|*|RECURSE\r\n", st);
+        if (w2.size() == 1) {
+            w2[0].coveredBy = std::make_shared<std::vector<CleanExclude>>(
+                std::vector<CleanExclude>{{a + L"\\Cache", L"*", true}, {a, L"*.tmp", false}});
+            MeasureCategory(w2[0], cancel);
+            std::wstring listed;
+            for (auto& e : w2[0].entries) listed += e.path.substr(a.size()) + L" ";
+            Check(!Find(w2[0], a + L"\\Cache") && !Find(w2[0], a + L"\\v.tmp") && Find(w2[0], a + L"\\w.log") && Find(w2[0], a + L"\\u.dat") &&
+                      !Find(w2[0], a + L"\\Logs"),  // Logs has a repository inside
+                  L"winapp2: what built-in rules clean is skipped: " + listed);
+            Check(!Find(w2[0], a + L"\\Profile") && w2[0].guarded >= 1, L"winapp2: a folder with a cookie store inside is left out");
+        }
+    }
+
+    // A real winapp2.ini (set WINNCDU_WINAPP2 to its path): parse it and measure what applies to
+    // this PC. Only reads.
+    if (const wchar_t* real = _wgetenv(L"WINNCDU_WINAPP2")) {
+        FILE* f = nullptr;
+        std::string data;
+        if (_wfopen_s(&f, real, L"rb") == 0 && f) {
+            char buf[65536];
+            size_t n;
+            while ((n = fread(buf, 1, sizeof(buf), f)) > 0) data.append(buf, n);
+            fclose(f);
+        }
+        if (data.size() >= 3 && static_cast<unsigned char>(data[0]) == 0xEF) data.erase(0, 3);
+        ULONGLONG t0 = GetTickCount64();
+        Winapp2Stats st;
+        auto cats = ParseWinapp2(util::Utf8ToWide(data), st);
+        ULONGLONG t1 = GetTickCount64();
+        // As in the app: what the shipped categories clean is left to them.
+        {
+            FILE* sf = nullptr;
+            std::string shipped;
+            if (_wfopen_s(&sf, WINNCDU_SOURCE_DIR L"/res/cleaners.ini", L"rb") == 0 && sf) {
+                char buf[4096];
+                size_t n;
+                while ((n = fread(buf, 1, sizeof(buf), sf)) > 0) shipped.append(buf, n);
+                fclose(sf);
+            }
+            std::vector<std::wstring> errs;
+            auto covered = std::make_shared<std::vector<CleanExclude>>();
+            for (auto& sc : ParseCleaners(util::Utf8ToWide(shipped), errs))
+                if (!sc.recycleBin && !sc.external)
+                    for (auto& t : sc.targets) covered->push_back({t.path, t.filePattern.empty() ? L"*" : t.filePattern, t.filePattern.empty()});
+            for (auto& k : cats) k.coveredBy = covered;
+        }
+        uint64_t total = 0, guarded = 0;
+        size_t present = 0, nonEmpty = 0;
+        for (auto& k : cats) {
+            MeasureCategory(k, cancel);
+            present += k.present ? 1 : 0;
+            nonEmpty += k.bytes ? 1 : 0;
+            total += k.bytes;
+            guarded += k.guarded;
+        }
+        ULONGLONG t2 = GetTickCount64();
+        std::stable_sort(cats.begin(), cats.end(), [](const CleanCategory& x, const CleanCategory& y) { return x.bytes > y.bytes; });
+        std::wstring s = L"\nwinapp2.ini: " + std::to_wstring(st.entries) + L" entries, " + std::to_wstring(st.usable) + L" usable, " +
+                         std::to_wstring(st.personal) + L" personal, " + std::to_wstring(st.broad) + L" broad rules, " +
+                         std::to_wstring(st.regOnly) + L" registry only; parsed in " + std::to_wstring(t1 - t0) + L" ms\n" +
+                         std::to_wstring(present) + L" apps found, " + std::to_wstring(nonEmpty) + L" with something to clean, " +
+                         util::FormatSizeShort(total) + L" total, " + std::to_wstring(guarded) + L" items left out; measured in " +
+                         std::to_wstring(t2 - t1) + L" ms\n";
+        for (size_t i = 0; i < cats.size() && i < 25 && cats[i].bytes; ++i)
+            s += L"  " + util::FormatSizeShort(cats[i].bytes) + L"\t" + cats[i].name + L"  (" + std::to_wstring(cats[i].entries.size()) +
+                 L" entries, " + std::to_wstring(cats[i].guarded) + L" left out)  " + cats[i].desc + L"\n";
+        // WINNCDU_WINAPP2_SHOW="Name|Other name": the largest entries of those categories.
+        if (const wchar_t* show = _wgetenv(L"WINNCDU_WINAPP2_SHOW"))
+            for (auto& k : cats)
+                if (std::wstring(L"|") + show + L"|" != L"" && (L"|" + std::wstring(show) + L"|").find(L"|" + k.name + L"|") != std::wstring::npos) {
+                    s += L"\n[" + k.name + L"] " + std::to_wstring(k.entries.size()) + L" entries, " + std::to_wstring(k.guarded) + L" left out\n";
+                    for (auto& t : k.targets)
+                        s += L"  rule: " + t.path + L" | " + t.filePattern + (t.recurse ? L" | RECURSE" : L"") + (t.removeSelf ? L" | REMOVESELF" : L"") + L"\n";
+                    for (size_t i = 0; i < k.entries.size() && i < 8; ++i)
+                        s += L"    " + util::FormatSizeShort(k.entries[i].bytes) + L"  " + k.entries[i].path + L"\n";
+                }
+        std::string u = util::WideToUtf8(s);
+        fputs(u.c_str(), stdout);
     }
 
     // Recycle Bin with one item kept: only the other one is removed (never the whole bin).
