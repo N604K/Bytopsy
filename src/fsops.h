@@ -22,9 +22,14 @@ bool PathExists(const std::wstring& path);
 // Resolves a user supplied path to an absolute directory path. Empty result + err on failure.
 std::wstring NormalizeDirPath(const std::wstring& in, std::wstring& err);
 
-// Recursive delete that never follows junctions/symlinks. Clears read-only attributes.
+// Recursive delete through handles: everything below `path` is opened relative to its folder's
+// handle and links are removed as links, so nothing can redirect it mid-way. Read-only items go too.
 bool DeletePermanently(const std::wstring& path, std::atomic<bool>& cancel, std::atomic<uint64_t>& removed,
                        std::wstring& err);
+// True if opening `path` reaches a different place than it names, because a folder above it is a
+// link or mount point; `actual` gets the real location. When running as administrator,
+// DeletePermanently refuses such paths (a folder swapped for a junction can't redirect it).
+bool PathLeadsElsewhere(const std::wstring& path, std::wstring& actual);
 // Moves to the Recycle Bin via IFileOperation. The calling thread must have COM initialized.
 bool DeleteToRecycleBin(const std::wstring& path, std::wstring& err);
 

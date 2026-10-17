@@ -23,7 +23,7 @@ add_library(winncdu_core STATIC
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll)
 
 # Windowed app (Direct2D): build\winncdu.exe
 add_executable(winncdu WIN32
@@ -85,5 +85,13 @@ if(MSVC)
   target_compile_options(winncdu-cleanup-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME cleanup COMMAND winncdu-cleanup-test)
+
+# Permanent deletion (links, read-only, locked files, long paths): build\winncdu-delete-test.exe
+add_executable(winncdu-delete-test tests/delete_test.cpp)
+target_link_libraries(winncdu-delete-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-delete-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME delete COMMAND winncdu-delete-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

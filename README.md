@@ -108,6 +108,11 @@ A line with a backslash is a path (it covers everything inside); without one it 
 folder name anywhere. `%ENV%` variables, `{HOME}`, `{ROAMING}`, `{LOCAL}` and `*` work. The most
 specific path wins, so `allow` can switch off a built-in rule for a subfolder.
 
+Permanent deletes work through file handles: everything inside the chosen folder is opened
+relative to its parent, and links (junctions, symlinks) are removed as links, never followed. As
+administrator, WinNCDU also refuses a path that no longer leads where it did (a folder above it was
+swapped for a link), so nobody can redirect an elevated delete into, say, `C:\Windows`.
+
 `winncdu-cli --protected` lists the protected locations found on this PC.
 Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; pull requests welcome.
 
@@ -127,7 +132,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal and cleanup self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup and delete self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -230,5 +235,6 @@ src/gui/              windowed app
 tests/protect_test.cpp  self-check of the protection rules (ctest)
 tests/journal_test.cpp  journal format and a real recycle + restore round trip (ctest)
 tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list (ctest)
+tests/delete_test.cpp   permanent delete: links, read-only, locked files, long paths (ctest)
 res/winncdu.ico       app icon
 ```

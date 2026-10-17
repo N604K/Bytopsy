@@ -1,6 +1,7 @@
 ﻿#include "fsops.h"
 
 #include <windows.h>
+#include <winternl.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
@@ -156,93 +157,263 @@ std::wstring NormalizeDirPath(const std::wstring& input, std::wstring& err) {
 
 namespace {
 
-bool RemoveOne(const std::wstring& lp, DWORD attrs, bool isDir, std::wstring& err) {
-    if (attrs & FILE_ATTRIBUTE_READONLY) {
-        DWORD na = attrs & (FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM |
-                            FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | FILE_ATTRIBUTE_TEMPORARY);
-        SetFileAttributesW(lp.c_str(), na ? na : FILE_ATTRIBUTE_NORMAL);
+// Handle-based deletion. Every item below the delete target is opened relative to its parent's
+// handle, with reparse points opened as themselves, so a folder that is swapped for a junction or
+// symlink while we work can never redirect the delete (this matters most when running as
+// administrator). Deleting goes through the handle too (FileDispositionInfoEx).
+
+#ifndef FILE_DIRECTORY_FILE
+#define FILE_DIRECTORY_FILE 0x00000001
+#endif
+#ifndef FILE_SYNCHRONOUS_IO_NONALERT
+#define FILE_SYNCHRONOUS_IO_NONALERT 0x00000020
+#endif
+#ifndef FILE_OPEN_FOR_BACKUP_INTENT
+#define FILE_OPEN_FOR_BACKUP_INTENT 0x00004000
+#endif
+#ifndef FILE_OPEN_REPARSE_POINT
+#define FILE_OPEN_REPARSE_POINT 0x00200000
+#endif
+#ifndef FILE_OPEN
+#define FILE_OPEN 0x00000001
+#endif
+
+constexpr ACCESS_MASK kDeleteAccess = DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE;
+constexpr ULONG kShareAll = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+
+// Opens `name` inside the directory `dir` (or `dir` itself again when `name` is empty).
+HANDLE OpenRelative(HANDLE dir, const std::wstring& name, ACCESS_MASK access, ULONG options, DWORD& err) {
+    UNICODE_STRING us;
+    us.Buffer = const_cast<PWSTR>(name.c_str());
+    us.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
+    us.MaximumLength = us.Length;
+    OBJECT_ATTRIBUTES oa;
+    InitializeObjectAttributes(&oa, &us, OBJ_CASE_INSENSITIVE, dir, nullptr);
+    IO_STATUS_BLOCK io{};
+    HANDLE h = nullptr;
+    NTSTATUS st = NtCreateFile(&h, access, &oa, &io, nullptr, 0, kShareAll, FILE_OPEN,
+                               options | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT,
+                               nullptr, 0);
+    if (st < 0) {
+        err = RtlNtStatusToDosError(st);
+        return nullptr;
     }
-    BOOL ok = isDir ? RemoveDirectoryW(lp.c_str()) : DeleteFileW(lp.c_str());
-    if (!ok) {
-        DWORD e = GetLastError();
-        if (e == ERROR_FILE_NOT_FOUND || e == ERROR_PATH_NOT_FOUND) return true;
-        if (err.empty()) {
-            std::wstring shown = lp.rfind(L"\\\\?\\", 0) == 0 ? lp.substr(4) : lp;
-            err = shown + L": " + util::Win32ErrorMessage(e);
-        }
-        return false;
-    }
+    return h;
+}
+
+bool AttrTag(HANDLE h, DWORD& attrs) {
+    FILE_ATTRIBUTE_TAG_INFO ti{};
+    if (!GetFileInformationByHandleEx(h, FileAttributeTagInfo, &ti, sizeof(ti))) return false;
+    attrs = ti.FileAttributes;
     return true;
+}
+
+bool IsRealDir(DWORD attrs) { return (attrs & FILE_ATTRIBUTE_DIRECTORY) && !(attrs & FILE_ATTRIBUTE_REPARSE_POINT); }
+
+// Marks the open item for deletion; it disappears when the handle is closed (at once, with POSIX
+// semantics). Read-only items are deleted too.
+bool DeleteByHandle(HANDLE h, DWORD attrs, DWORD& err) {
+    FILE_DISPOSITION_INFO_EX ex{FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
+                                FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE};
+    if (SetFileInformationByHandle(h, FileDispositionInfoEx, &ex, sizeof(ex))) return true;
+    err = GetLastError();
+    if (err != ERROR_INVALID_PARAMETER && err != ERROR_NOT_SUPPORTED && err != ERROR_INVALID_FUNCTION) return false;
+    // Older Windows and file systems without the extended form (FAT, some network shares).
+    if (attrs & FILE_ATTRIBUTE_READONLY) {
+        FILE_BASIC_INFO bi{};  // zero times: unchanged
+        bi.FileAttributes = (attrs & ~FILE_ATTRIBUTE_READONLY) ? (attrs & ~FILE_ATTRIBUTE_READONLY) : FILE_ATTRIBUTE_NORMAL;
+        SetFileInformationByHandle(h, FileBasicInfo, &bi, sizeof(bi));
+    }
+    FILE_DISPOSITION_INFO d{TRUE};
+    if (SetFileInformationByHandle(h, FileDispositionInfo, &d, sizeof(d))) return true;
+    err = GetLastError();
+    return false;
+}
+
+// Names in a directory, read completely before anything in it is deleted.
+bool ListDirectory(HANDLE h, std::vector<std::wstring>& names, DWORD& err) {
+    std::vector<unsigned char> buf(64 * 1024);
+    FILE_INFO_BY_HANDLE_CLASS cls = FileIdBothDirectoryRestartInfo;
+    while (true) {
+        if (!GetFileInformationByHandleEx(h, cls, buf.data(), static_cast<DWORD>(buf.size()))) {
+            DWORD e = GetLastError();
+            if (e == ERROR_NO_MORE_FILES) return true;
+            err = e;
+            return false;
+        }
+        cls = FileIdBothDirectoryInfo;
+        auto* p = buf.data();
+        while (true) {
+            auto* info = reinterpret_cast<FILE_ID_BOTH_DIR_INFO*>(p);
+            std::wstring name(info->FileName, info->FileNameLength / sizeof(wchar_t));
+            if (name != L"." && name != L"..") names.push_back(std::move(name));
+            if (!info->NextEntryOffset) break;
+            p += info->NextEntryOffset;
+        }
+    }
+}
+
+bool ProcessElevated() {
+    HANDLE token = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+    TOKEN_ELEVATION e{};
+    DWORD n = 0;
+    bool elevated = GetTokenInformation(token, TokenElevation, &e, sizeof(e), &n) && e.TokenIsElevated;
+    CloseHandle(token);
+    return elevated;
+}
+
+std::wstring Shown(const std::wstring& p) { return p.rfind(L"\\\\?\\", 0) == 0 ? p.substr(4) : p; }
+
+// True if the opened item `h` is not the one `path` names (a folder above it was swapped for a
+// link or mount point). `actual` gets where it really is. Unknown counts as "same".
+bool OpenedElsewhere(HANDLE h, const std::wstring& path, std::wstring& actual) {
+    std::vector<wchar_t> buf(32768);
+    DWORD n = GetFinalPathNameByHandleW(h, buf.data(), static_cast<DWORD>(buf.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    if (!n || n >= buf.size()) return false;
+    actual = Shown(std::wstring(buf.data(), n));
+    if (actual.rfind(L"UNC\\", 0) == 0) actual = L"\\" + actual.substr(3);
+    // Compare long names: the path may carry 8.3 short names (C:\Users\NATIV~1\...).
+    std::wstring want = Shown(path);
+    n = GetLongPathNameW(ToLongPath(want).c_str(), buf.data(), static_cast<DWORD>(buf.size()));
+    if (n && n < buf.size()) want = Shown(std::wstring(buf.data(), n));
+    while (want.size() > 3 && want.back() == L'\\') want.pop_back();
+    return _wcsicmp(actual.c_str(), want.c_str()) != 0;
 }
 
 }  // namespace
 
+bool PathLeadsElsewhere(const std::wstring& path, std::wstring& actual) {
+    HANDLE h = CreateFileW(ToLongPath(path).c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                           nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    bool r = OpenedElsewhere(h, path, actual);
+    CloseHandle(h);
+    return r;
+}
+
 bool DeletePermanently(const std::wstring& path, std::atomic<bool>& cancel, std::atomic<uint64_t>& removed,
                        std::wstring& err) {
-    std::wstring root = ToLongPath(path);
-    DWORD a = GetFileAttributesW(root.c_str());
-    if (a == INVALID_FILE_ATTRIBUTES) {
+    std::wstring shown = Shown(path);
+    HANDLE root = CreateFileW(ToLongPath(path).c_str(), kDeleteAccess, kShareAll, nullptr, OPEN_EXISTING,
+                              FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (root == INVALID_HANDLE_VALUE) {
         DWORD e = GetLastError();
         if (e == ERROR_FILE_NOT_FOUND || e == ERROR_PATH_NOT_FOUND) return true;
-        err = path + L": " + util::Win32ErrorMessage(e);
+        err = shown + L": " + util::Win32ErrorMessage(e);
         return false;
     }
-    bool isDir = (a & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    if (!isDir || (a & FILE_ATTRIBUTE_REPARSE_POINT)) {
+    // As administrator, also make sure no folder above the item was swapped for a link since it was
+    // chosen: the opened item must still be the one at that path.
+    std::wstring actual;
+    if (ProcessElevated() && OpenedElsewhere(root, path, actual)) {
+        CloseHandle(root);
+        err = shown + L": this path now leads to " + actual + L" (a link or mount point changed). Nothing was deleted.";
+        return false;
+    }
+
+    DWORD attrs = 0, e = 0;
+    if (!AttrTag(root, attrs)) {
+        e = GetLastError();
+        CloseHandle(root);
+        err = shown + L": " + util::Win32ErrorMessage(e);
+        return false;
+    }
+    if (!IsRealDir(attrs)) {
         // Files, and links to directories: remove the entry itself, never the target.
-        bool ok = RemoveOne(root, a, isDir, err);
-        if (ok) ++removed;
-        return ok;
+        bool ok = DeleteByHandle(root, attrs, e);
+        CloseHandle(root);
+        if (!ok) {
+            err = shown + L": " + util::Win32ErrorMessage(e);
+            return false;
+        }
+        ++removed;
+        return true;
     }
 
     struct Frame {
-        std::wstring path;
+        HANDLE h;
+        std::wstring path;  // for messages only; never opened by name
         DWORD attrs;
-        bool expanded;
+        std::vector<std::wstring> dirs;  // subfolders still to visit
+        size_t next = 0;
+        bool listed = false;
     };
     std::vector<Frame> stack;
-    stack.push_back({root, a, false});
+    HANDLE listable = OpenRelative(root, L"", kDeleteAccess | FILE_LIST_DIRECTORY, FILE_DIRECTORY_FILE, e);
+    CloseHandle(root);
+    if (!listable) {
+        err = shown + L": " + util::Win32ErrorMessage(e);
+        return false;
+    }
+    stack.push_back({listable, shown, attrs, {}, 0, false});
     bool allOk = true;
+    auto fail = [&](const std::wstring& p, DWORD code) {
+        allOk = false;
+        if (err.empty()) err = p + L": " + util::Win32ErrorMessage(code);
+    };
     while (!stack.empty()) {
-        if (cancel.load()) return false;
-        if (!stack.back().expanded) {
-            stack.back().expanded = true;
-            std::wstring dir = stack.back().path;
-            WIN32_FIND_DATAW fd;
-            HANDLE h = FindFirstFileExW((dir + L"\\*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr,
-                                        FIND_FIRST_EX_LARGE_FETCH);
-            if (h == INVALID_HANDLE_VALUE) {
-                DWORD e = GetLastError();
-                if (e != ERROR_FILE_NOT_FOUND) {
-                    allOk = false;
-                    if (err.empty()) err = dir.substr(4) + L": " + util::Win32ErrorMessage(e);
-                }
-                continue;
-            }
-            do {
-                if (fd.cFileName[0] == L'.' &&
-                    (fd.cFileName[1] == 0 || (fd.cFileName[1] == L'.' && fd.cFileName[2] == 0)))
+        if (cancel.load()) {
+            for (auto& f : stack) CloseHandle(f.h);
+            return false;
+        }
+        Frame& top = stack.back();
+        if (!top.listed) {
+            top.listed = true;
+            std::vector<std::wstring> names;
+            if (!ListDirectory(top.h, names, e)) fail(top.path, e);
+            for (auto& name : names) {
+                if (cancel.load()) break;
+                std::wstring childPath = top.path + L"\\" + name;
+                HANDLE ch = OpenRelative(top.h, name, kDeleteAccess, 0, e);
+                if (!ch) {
+                    if (e != ERROR_FILE_NOT_FOUND && e != ERROR_PATH_NOT_FOUND) fail(childPath, e);
                     continue;
-                std::wstring child = dir + L"\\" + fd.cFileName;
-                bool cDir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                bool cReparse = (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-                if (cDir && !cReparse) {
-                    stack.push_back({child, fd.dwFileAttributes, false});
-                } else if (RemoveOne(child, fd.dwFileAttributes, cDir, err)) {
+                }
+                DWORD ca = 0;
+                if (!AttrTag(ch, ca)) {
+                    fail(childPath, GetLastError());
+                } else if (IsRealDir(ca)) {
+                    top.dirs.push_back(name);  // visited one at a time, so few handles stay open
+                } else if (DeleteByHandle(ch, ca, e)) {
                     ++removed;
                 } else {
-                    allOk = false;
+                    fail(childPath, e);
                 }
-            } while (!cancel.load() && FindNextFileW(h, &fd));
-            FindClose(h);
+                CloseHandle(ch);
+            }
             continue;
         }
+        if (top.next < top.dirs.size()) {
+            std::wstring name = top.dirs[top.next++];
+            std::wstring childPath = top.path + L"\\" + name;
+            HANDLE ch = OpenRelative(top.h, name, kDeleteAccess | FILE_LIST_DIRECTORY, 0, e);
+            DWORD ca = 0;
+            if (!ch) {
+                if (e != ERROR_FILE_NOT_FOUND && e != ERROR_PATH_NOT_FOUND) fail(childPath, e);
+            } else if (!AttrTag(ch, ca)) {
+                fail(childPath, GetLastError());
+                CloseHandle(ch);
+            } else if (!IsRealDir(ca)) {
+                // It turned into a link (or file) since it was listed: remove that entry, don't enter it.
+                if (DeleteByHandle(ch, ca, e))
+                    ++removed;
+                else
+                    fail(childPath, e);
+                CloseHandle(ch);
+            } else {
+                stack.push_back({ch, childPath, ca, {}, 0, false});
+            }
+            continue;
+        }
+        // Everything inside is handled: remove the folder itself.
         Frame f = std::move(stack.back());
         stack.pop_back();
-        if (RemoveOne(f.path, f.attrs, true, err))
+        if (DeleteByHandle(f.h, f.attrs, e))
             ++removed;
-        else
-            allOk = false;
+        else if (e != ERROR_DIR_NOT_EMPTY || allOk)
+            fail(f.path, e);  // "not empty" is only news if nothing else failed inside it
+        CloseHandle(f.h);
     }
     return allOk;
 }

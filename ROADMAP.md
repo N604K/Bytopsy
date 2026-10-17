@@ -19,9 +19,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       Google Chrome, then try again") for failed deletes and skipped Cleanup items (`AppsUsing` in
       `src/fsops.cpp`).
 - [ ] **Restore point** before system-level cleanups (`SRSetRestorePoint`), optional.
-- [ ] **Handle-based deletion when elevated**: open with `FILE_FLAG_OPEN_REPARSE_POINT` and delete via
-      `SetFileInformationByHandle(FileDispositionInfoEx)` so a folder swapped for a junction mid-delete
-      can't redirect an administrator delete (TOCTOU).
+- [x] **Handle-based deletion**: permanent deletes open everything relative to the parent's handle
+      (`NtCreateFile` with `FILE_OPEN_REPARSE_POINT`) and delete via `FileDispositionInfoEx`; as
+      administrator, a target whose path now leads elsewhere is refused. (Recycle Bin moves still go
+      through the shell's `IFileOperation`.)
 
 ## 2. Cleaning coverage
 
