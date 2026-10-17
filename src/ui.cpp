@@ -498,6 +498,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
         std::vector<std::wstring> paths;
         std::vector<std::wstring> errors;
         std::vector<int64_t> times;  // when each item was done (for the journal)
+        std::vector<std::wstring> lockedBy;  // apps holding files of items that failed
         std::atomic<size_t> index{0};
         std::atomic<size_t> attempted{0};
         std::atomic<uint64_t> removed{0};
@@ -507,6 +508,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     for (Node* n : targets) st->paths.push_back(NodePath(n));
     st->errors.resize(targets.size());
     st->times.resize(targets.size());
+    st->lockedBy.resize(targets.size());
     auto t = std::make_unique<Task>();
     t->title = permanent ? L"Deleting permanently" : L"Moving to Recycle Bin";
     t->lines = [st, permanent] {
@@ -541,12 +543,15 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
                 graveyard_.push_back(DetachNode(n));
             } else if (i < st->attempted.load()) {
                 if (permanent) {  // some of it is gone for good: that belongs in the journal too
-                    je.note = L"partly deleted: " + st->errors[i];
+                    je.note = L"partly deleted: " + st->errors[i] + (st->lockedBy[i].empty() ? L"" : L" (in use by " + st->lockedBy[i] + L")");
                     JournalAppend(je);
                 }
                 partial.push_back(n);
             }
-            if (!st->errors[i].empty() && errLines.size() < 12) errLines.push_back(st->errors[i]);
+            if (!st->errors[i].empty() && errLines.size() < 12) {
+                errLines.push_back(st->errors[i]);
+                if (!st->lockedBy[i].empty()) errLines.push_back(L"  in use by " + st->lockedBy[i] + L": close it and try again");
+            }
         }
         PostMutation();
         Toast(L"Deleted " + util::FormatCount(deleted) + L" item" + (deleted == 1 ? L"" : L"s") + L" \u00B7 freed " +
@@ -570,6 +575,11 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
                                 : DeleteToRecycleBin(st->paths[i], err);
             if (!ok) st->errors[i] = err.empty() ? st->paths[i] + L": failed" : err;
             st->times[i] = util::NowFileTime();
+            if (!ok && PathExists(st->paths[i])) {
+                std::vector<std::wstring> names;
+                for (auto& a : AppsUsing(st->paths[i])) names.push_back(a.name);
+                st->lockedBy[i] = AppNames(names);
+            }
         }
         if (!permanent) CoUninitialize();
     });

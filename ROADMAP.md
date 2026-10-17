@@ -15,8 +15,9 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       still in the Recycle Bin, and `winncdu-cli --journal` (`src/journal.cpp`).
 - [x] **Dry run / preview**: Cleanup's *Review* lists exactly what each category deletes, with
       per-item opt-out; cleaning deletes only that list.
-- [ ] **Who is locking this?** Use the Restart Manager API (`RmGetList`) to name the app holding files
-      ("close Chrome to clean its cache") instead of silently skipping them.
+- [x] **Who is locking this?** The Restart Manager (`RmGetList`) names the app holding files ("Close
+      Google Chrome, then try again") for failed deletes and skipped Cleanup items (`AppsUsing` in
+      `src/fsops.cpp`).
 - [ ] **Restore point** before system-level cleanups (`SRSetRestorePoint`), optional.
 - [ ] **Handle-based deletion when elevated**: open with `FILE_FLAG_OPEN_REPARSE_POINT` and delete via
       `SetFileInformationByHandle(FileDispositionInfoEx)` so a folder swapped for a junction mid-delete

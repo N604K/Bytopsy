@@ -77,6 +77,27 @@ int main() {
         Check(read[1].time / 10000000 == a.time / 10000000, L"time to the second");
     }
 
+    // ---- Who is locking this? (Restart Manager): this process holds a file open
+    {
+        std::wstring lockDir = tmp + L"\\winncdu-lock-test-" + pid;
+        CreateDirectoryW(lockDir.c_str(), nullptr);
+        std::wstring f = lockDir + L"\\locked.txt";
+        HANDLE h = CreateFileW(f.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+        auto holds = [&](const std::wstring& p) {
+            for (auto& a : AppsUsing(p))
+                if (a.pid == GetCurrentProcessId()) return !a.name.empty();
+            return false;
+        };
+        Check(holds(f), L"the app holding a file is named");
+        Check(holds(lockDir), L"the app holding a file inside a folder is named");
+        CloseHandle(h);
+        Check(!holds(f), L"nobody once it is closed");
+        Check(AppNames({L"A", L"B", L"A", L"C", L"D", L"E"}) == L"A, B, C and 2 more" && AppNames({L"A", L"B"}) == L"A and B",
+              L"app names are joined readably");
+        DeleteFileW(f.c_str());
+        RemoveDirectoryW(lockDir.c_str());
+    }
+
     // ---- Recycle and restore a real folder
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     std::wstring dir = tmp + L"\\winncdu-restore-test-" + pid;

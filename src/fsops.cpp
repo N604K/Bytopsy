@@ -4,7 +4,9 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
+#include <restartmanager.h>
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -278,6 +280,79 @@ bool DeleteToRecycleBin(const std::wstring& path, std::wstring& err) {
         return false;
     }
     return true;
+}
+
+std::vector<AppUsingFile> AppsUsing(const std::wstring& path, size_t maxFiles) {
+    std::vector<AppUsingFile> out;
+    // The Restart Manager wants plain paths, not "\\?\" ones.
+    std::wstring p = path.rfind(L"\\\\?\\", 0) == 0 ? path.substr(4) : path;
+    std::vector<std::wstring> files;
+    DWORD a = GetFileAttributesW(ToLongPath(p).c_str());
+    if (a == INVALID_FILE_ATTRIBUTES) return out;
+    if (!(a & FILE_ATTRIBUTE_DIRECTORY)) {
+        files.push_back(p);
+    } else if (!(a & FILE_ATTRIBUTE_REPARSE_POINT)) {
+        std::vector<std::wstring> stack{p};
+        while (!stack.empty() && files.size() < maxFiles) {
+            std::wstring d = stack.back();
+            stack.pop_back();
+            WIN32_FIND_DATAW fd;
+            HANDLE h = FindFirstFileExW((ToLongPath(d) + L"\\*").c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr,
+                                        FIND_FIRST_EX_LARGE_FETCH);
+            if (h == INVALID_HANDLE_VALUE) continue;
+            do {
+                if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+                std::wstring child = d + L"\\" + fd.cFileName;
+                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+                    files.push_back(child);
+                else if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+                    stack.push_back(child);
+            } while (files.size() < maxFiles && FindNextFileW(h, &fd));
+            FindClose(h);
+        }
+    }
+    if (files.empty()) return out;
+
+    DWORD session = 0;
+    WCHAR key[CCH_RM_SESSION_KEY + 1] = {};
+    if (RmStartSession(&session, 0, key) != ERROR_SUCCESS) return out;
+    std::vector<LPCWSTR> ptrs;
+    for (auto& f : files) ptrs.push_back(f.c_str());
+    if (RmRegisterResources(session, static_cast<UINT>(ptrs.size()), ptrs.data(), 0, nullptr, 0, nullptr) == ERROR_SUCCESS) {
+        UINT needed = 0, count = 0;
+        DWORD reasons = 0;
+        std::vector<RM_PROCESS_INFO> info;
+        DWORD rc = RmGetList(session, &needed, &count, nullptr, &reasons);
+        for (int tries = 0; rc == ERROR_MORE_DATA && tries < 3; ++tries) {  // the list can grow in between
+            info.resize(needed);
+            count = needed;
+            rc = RmGetList(session, &needed, &count, info.data(), &reasons);
+        }
+        if (rc == ERROR_SUCCESS)
+            for (UINT i = 0; i < count && i < info.size(); ++i) {
+                AppUsingFile app;
+                app.pid = info[i].Process.dwProcessId;
+                app.name = info[i].strAppName;
+                if (app.name.empty()) app.name = L"process " + std::to_wstring(app.pid);
+                out.push_back(std::move(app));
+            }
+    }
+    RmEndSession(session);
+    return out;
+}
+
+std::wstring AppNames(const std::vector<std::wstring>& names, size_t max) {
+    std::vector<std::wstring> u;
+    for (auto& n : names)
+        if (std::find(u.begin(), u.end(), n) == u.end()) u.push_back(n);
+    std::wstring s;
+    size_t shown = std::min(u.size(), max);
+    for (size_t i = 0; i < shown; ++i) {
+        if (i) s += (i + 1 == shown && u.size() <= max) ? L" and " : L", ";
+        s += u[i];
+    }
+    if (u.size() > max) s += L" and " + std::to_wstring(u.size() - max) + L" more";
+    return s;
 }
 
 bool RevealInExplorer(const std::wstring& path) {

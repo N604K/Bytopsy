@@ -28,6 +28,16 @@ bool DeletePermanently(const std::wstring& path, std::atomic<bool>& cancel, std:
 // Moves to the Recycle Bin via IFileOperation. The calling thread must have COM initialized.
 bool DeleteToRecycleBin(const std::wstring& path, std::wstring& err);
 
+struct AppUsingFile {
+    std::wstring name;  // as Task Manager shows it, e.g. "Google Chrome"
+    unsigned long pid = 0;
+};
+// Apps that have `path` open (a file, or files inside a folder: the first `maxFiles` found).
+// Asks the Restart Manager, so it names the app instead of just failing with "in use".
+std::vector<AppUsingFile> AppsUsing(const std::wstring& path, size_t maxFiles = 1000);
+// "Google Chrome, Microsoft Teams and 2 more"
+std::wstring AppNames(const std::vector<std::wstring>& names, size_t max = 3);
+
 bool RevealInExplorer(const std::wstring& path);
 bool OpenWithDefault(const std::wstring& path);
 bool OpenTerminalAt(const std::wstring& dir);

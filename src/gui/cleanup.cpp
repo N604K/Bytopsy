@@ -324,6 +324,9 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
             continue;
         }
         ++r.failed;
+        if (r.failed <= 20)  // name the apps in the way (checking every failure would take long)
+            for (auto& a : AppsUsing(e.path, 200))
+                if (std::find(r.lockedBy.begin(), r.lockedBy.end(), a.name) == r.lockedBy.end()) r.lockedBy.push_back(a.name);
         // Partly deleted: count what is gone.
         uint64_t leftBytes = 0, leftFiles = 0;
         bool denied = false;

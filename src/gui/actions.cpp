@@ -648,6 +648,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     struct State {
         std::vector<std::wstring> paths, errors;
         std::vector<int64_t> times;  // when each item was done (for the journal)
+        std::vector<std::wstring> lockedBy;  // apps holding files of items that failed
         std::atomic<size_t> index{0}, attempted{0};
         std::atomic<uint64_t> removed{0};
         std::atomic<bool> cancel{false};
@@ -656,6 +657,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     for (Node* n : targets) st->paths.push_back(NodePath(n));
     st->errors.resize(targets.size());
     st->times.resize(targets.size());
+    st->lockedBy.resize(targets.size());
     auto t = std::make_unique<Task>();
     t->title = permanent ? L"Deleting" : L"Moving to the Recycle Bin";
     t->lines = [st, permanent] {
@@ -670,7 +672,7 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     t->cancel = [st] { st->cancel = true; };
     t->onDone = [this, st, targets, permanent] {
         std::vector<Node*> partial;
-        std::vector<std::wstring> errs;
+        std::vector<std::wstring> errs, apps;
         uint64_t freed = 0;
         size_t deleted = 0;
         for (size_t i = 0; i < targets.size(); ++i) {
@@ -690,12 +692,16 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
                 graveyard_.push_back(DetachNode(n));
             } else if (i < st->attempted.load()) {
                 if (permanent) {  // some of it is gone for good: that belongs in the journal too
-                    je.note = L"partly deleted: " + st->errors[i];
+                    je.note = L"partly deleted: " + st->errors[i] + (st->lockedBy[i].empty() ? L"" : L" (in use by " + st->lockedBy[i] + L")");
                     JournalAppend(je);
                 }
                 partial.push_back(n);
             }
-            if (!st->errors[i].empty() && errs.size() < 8) errs.push_back(st->errors[i]);
+            if (!st->errors[i].empty() && errs.size() < 8) {
+                errs.push_back(st->errors[i]);
+                if (!st->lockedBy[i].empty()) errs.push_back(L"In use by " + st->lockedBy[i]);
+            }
+            if (!st->lockedBy[i].empty()) apps.push_back(st->lockedBy[i]);
         }
         PostMutation();
         if (deleted)
@@ -706,7 +712,8 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
         if (!errs.empty()) {
             Dialog d;
             d.title = L"Some items could not be deleted";
-            d.message = L"They may be in use or need administrator rights.";
+            d.message = apps.empty() ? L"They may be in use or need administrator rights."
+                                     : L"Close " + AppNames(apps) + L", then try again.";
             d.lines = errs;
             d.icon = 0xE7BA;
             d.tone = 2;
@@ -727,6 +734,11 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
                                 : DeleteToRecycleBin(st->paths[i], err);
             if (!ok) st->errors[i] = err.empty() ? st->paths[i] + L": failed" : err;
             st->times[i] = util::NowFileTime();
+            if (!ok && PathExists(st->paths[i])) {
+                std::vector<std::wstring> names;
+                for (auto& a : AppsUsing(st->paths[i])) names.push_back(a.name);
+                st->lockedBy[i] = AppNames(names);
+            }
         }
         if (!permanent) CoUninitialize();
     });
@@ -900,6 +912,7 @@ void App::StartCleanup() {
             std::vector<CleanCategory> cats;
             std::atomic<size_t> index{0};
             std::atomic<uint64_t> freed{0}, failed{0};
+            std::vector<std::wstring> lockedBy;  // written by the worker, read after it finished
             std::atomic<bool> cancel{false};
             std::mutex m;
             std::wstring current;
@@ -918,7 +931,9 @@ void App::StartCleanup() {
         t->cancel = [st] { st->cancel = true; };
         t->onDone = [this, st] {
             Toast(L"Cleanup freed " + util::FormatSizeShort(st->freed) +
-                      (st->failed ? L" · " + util::FormatCount(st->failed) + L" items in use were skipped" : L""),
+                      (st->failed ? L" · " + util::FormatCount(st->failed) + L" items in use were skipped" +
+                                        (st->lockedBy.empty() ? L"" : L" (close " + AppNames(st->lockedBy) + L")")
+                                  : L""),
                   0);
             // Refresh the affected folders of the current scan.
             std::vector<Node*> touched;
@@ -940,6 +955,7 @@ void App::StartCleanup() {
                 });
                 st->freed += r.freed;
                 st->failed += r.failed;
+                st->lockedBy.insert(st->lockedBy.end(), r.lockedBy.begin(), r.lockedBy.end());
                 if (!c.external) {
                     JournalEntry je;
                     je.action = JournalAction::Clean;
@@ -948,6 +964,7 @@ void App::StartCleanup() {
                     je.path = c.name;
                     std::wstring note;
                     if (r.failed) note = util::FormatCount(r.failed) + L" items in use were skipped";
+                    if (!r.lockedBy.empty()) note += L" (by " + AppNames(r.lockedBy) + L")";
                     if (size_t kept = c.KeptCount()) note += (note.empty() ? L"" : L"; ") + util::FormatCount(kept) + L" kept";
                     je.note = note;
                     JournalAppend(je);

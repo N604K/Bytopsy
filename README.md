@@ -32,6 +32,9 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Each category is measured first, and only the safe ones are preselected. *Review* lists exactly
   what a category would delete (files, folders or Recycle Bin items) so you can uncheck anything to
   keep; cleaning deletes only that list, and skips entries that changed since they were measured.
+- **Who is using this file?** When something can't be deleted because it is open, WinNCDU asks the
+  Windows Restart Manager which app holds it and says so ("Close Google Chrome, then try again"),
+  in the delete dialog, after Cleanup and in the journal.
 - **Protected locations**: WinNCDU knows which folders must not be deleted and which hold data you
   can't get back, and checks every delete (and every Cleanup item) against them. See below.
 - **Recently deleted**: every delete and cleanup is written to a journal

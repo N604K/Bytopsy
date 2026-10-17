@@ -45,6 +45,7 @@ struct CleanCategory {
 
 struct CleanResult {
     uint64_t freed = 0, files = 0, failed = 0;
+    std::vector<std::wstring> lockedBy;  // apps that held skipped items open
 };
 
 std::vector<CleanCategory> BuildCleanupCategories();

@@ -23,7 +23,7 @@ add_library(winncdu_core STATIC
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr)
 
 # Windowed app (Direct2D): build\winncdu.exe
 add_executable(winncdu WIN32
