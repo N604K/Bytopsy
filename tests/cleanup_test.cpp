@@ -131,8 +131,9 @@ int main() {
         CleanCategory gc;
         gc.targets = {{g, L"", 0}};
         MeasureCategory(gc, cancel);
-        Check(gc.guarded == 2 && Find(gc, g + L"\\junk.tmp") && !Find(gc, g + L"\\passwords.kdbx") && !Find(gc, g + L"\\.git"),
-              L"KeePass file and .git left out (" + std::to_wstring(gc.guarded) + L" guarded)");
+        Check(gc.guarded == 3 && Find(gc, g + L"\\junk.tmp") && !Find(gc, g + L"\\passwords.kdbx") && !Find(gc, g + L"\\.git") &&
+                  !Find(gc, g + L"\\repo"),
+              L"KeePass file, .git and a folder with a repository inside left out (" + std::to_wstring(gc.guarded) + L" guarded)");
     }
 
     // Recycle Bin with one item kept: only the other one is removed (never the whole bin).

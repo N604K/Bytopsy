@@ -38,7 +38,8 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   app needs no code. Your own rules go in `%LOCALAPPDATA%\WinNCDU\cleaners.ini` (menu → *Cleanup
   rules…* creates it with examples): a section with a built-in's id replaces it, `enabled = false`
   turns it off. User rules are never preselected, can't name a whole drive, and anything the
-  protection rules mark Important or Blocked is left out of every category.
+  protection rules mark Important or Blocked is left out of every category, as is any folder with
+  a repository, key, password database or virtual disk somewhere inside.
 - **Who is using this file?** When something can't be deleted because it is open, WinNCDU asks the
   Windows Restart Manager which app holds it and says so ("Close Google Chrome, then try again"),
   in the delete dialog, after Cleanup and in the journal.

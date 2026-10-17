@@ -984,6 +984,21 @@ ProtectReport CheckProtection(const std::wstring& path, const Node* node) {
     return CheckLocked(s, path, node);
 }
 
+ProtectNames::ProtectNames() {
+    State& s = S();
+    std::lock_guard<std::mutex> lk(s.m);
+    if (!s.built) BuildLocked(s);
+    for (const Rule& r : s.rules)
+        if (r.nameRule && r.contains != P::None) rules_.push_back({r.pat, r.fileOnly, r.contains});
+}
+
+Protect ProtectNames::Contains(const std::wstring& name, bool isDir) const {
+    Protect best = Protect::None;
+    for (const R& r : rules_)
+        if (!(r.fileOnly && isDir) && r.contains > best && NameMatch(name, r.pat)) best = r.contains;
+    return best;
+}
+
 std::vector<ProtectHit> ProtectedLocationsOnThisPC() {
     State& s = S();
     std::lock_guard<std::mutex> lk(s.m);

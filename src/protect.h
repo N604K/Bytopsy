@@ -83,6 +83,23 @@ private:
     unsigned gen_ = 0;
 };
 
+// The name rules (Git repositories, password databases, ...) for walking a folder on disk rather
+// than a scan tree: a snapshot of the current rules, safe to use from a worker thread.
+class ProtectNames {
+public:
+    ProtectNames();
+    // How protected a folder is that contains an item with this name (None: not at all).
+    Protect Contains(const std::wstring& name, bool isDir) const;
+
+private:
+    struct R {
+        std::wstring pat;  // lowercase
+        bool fileOnly;
+        Protect contains;
+    };
+    std::vector<R> rules_;
+};
+
 // Every built-in or user protected location that exists on this PC (for listings).
 std::vector<ProtectHit> ProtectedLocationsOnThisPC();
 

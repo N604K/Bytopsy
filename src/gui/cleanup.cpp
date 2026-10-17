@@ -76,15 +76,17 @@ void ForEachEntry(const CleanTarget& t, const std::wstring& dir, F&& f) {
     FindClose(h);
 }
 
-// Size and file count of a path (recursive, links not followed).
-void SizeOf(const std::wstring& path, const WIN32_FIND_DATAW& top, uint64_t& bytes, uint64_t& files, bool& denied,
-            std::atomic<bool>& cancel) {
+// Size and file count of a path (recursive, links not followed). With `names`, returns false as
+// soon as a name rule matches anything inside (a Git repository, a password database, a virtual
+// disk, ...): deleting the folder by hand only asks for care, but Cleanup never takes it along.
+bool SizeOf(const std::wstring& path, const WIN32_FIND_DATAW& top, uint64_t& bytes, uint64_t& files, bool& denied,
+            std::atomic<bool>& cancel, const ProtectNames* names = nullptr) {
     if (!(top.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
         bytes += (static_cast<uint64_t>(top.nFileSizeHigh) << 32) | top.nFileSizeLow;
         ++files;
-        return;
+        return true;
     }
-    if (top.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) return;
+    if (top.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) return true;
     std::vector<std::wstring> stack{path};
     while (!stack.empty() && !cancel) {
         std::wstring d = stack.back();
@@ -98,7 +100,12 @@ void SizeOf(const std::wstring& path, const WIN32_FIND_DATAW& top, uint64_t& byt
         }
         do {
             if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
-            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            bool isDir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            if (names && names->Contains(fd.cFileName, isDir) != Protect::None) {
+                FindClose(h);
+                return false;
+            }
+            if (isDir) {
                 if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) stack.push_back(d + L"\\" + fd.cFileName);
             } else {
                 bytes += (static_cast<uint64_t>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow;
@@ -107,6 +114,7 @@ void SizeOf(const std::wstring& path, const WIN32_FIND_DATAW& top, uint64_t& byt
         } while (FindNextFileW(h, &fd));
         FindClose(h);
     }
+    return true;
 }
 
 }  // namespace
@@ -418,6 +426,7 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
             c.entries.push_back(std::move(e));
         }
     } else {
+        ProtectNames names;
         for (size_t ti = 0; ti < c.targets.size(); ++ti) {
             const CleanTarget& t = c.targets[ti];
             std::vector<std::wstring> dirs;
@@ -443,7 +452,10 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
                     e.dir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                     e.mtime = FtToI(fd.ftLastWriteTime);
                     e.target = static_cast<int>(ti);
-                    SizeOf(p, fd, e.bytes, e.files, c.denied, cancel);
+                    if (!SizeOf(p, fd, e.bytes, e.files, c.denied, cancel, &names)) {
+                        ++c.guarded;
+                        return;
+                    }
                     c.bytes += e.bytes;
                     c.files += e.files;
                     c.entries.push_back(std::move(e));
