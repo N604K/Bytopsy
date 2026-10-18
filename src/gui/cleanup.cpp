@@ -506,6 +506,19 @@ std::wstring UserCleanersFile(bool create) {
 
 std::vector<CleanCategory> BuildCleanupCategories(std::vector<std::wstring>* errors) {
     std::vector<std::wstring> errs;
+    // Tests: WINNCDU_CLEANERS names a cleaners.ini that replaces all rules (built-in, yours and
+    // winapp2.ini), so a test can clean its own fixture folder and nothing else.
+    wchar_t over[MAX_PATH];
+    DWORD on = GetEnvironmentVariableW(L"WINNCDU_CLEANERS", over, MAX_PATH);
+    if (on && on < MAX_PATH) {
+        bool found = false;
+        std::wstring text = Utf8File(over, found);
+        std::vector<CleanCategory> v = ParseCleaners(text, errs);
+        if (!found) errs.push_back(std::wstring(over) + L": not found");
+        v.erase(std::remove_if(v.begin(), v.end(), [](const CleanCategory& c) { return !c.enabled; }), v.end());
+        if (errors) *errors = errs;
+        return v;
+    }
     std::vector<CleanCategory> v = ParseCleaners(BuiltinCleaners(), errs);
     for (auto& e : errs) e = L"built-in cleaners.ini " + e;
     bool found = false;
@@ -904,5 +917,25 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
         r.freed += e.bytes > leftBytes ? e.bytes - leftBytes : 0;
         r.files += e.files > leftFiles ? e.files - leftFiles : 0;
     }
+    return r;
+}
+
+CleanResult CleanAndJournal(const CleanCategory& c, std::atomic<bool>& cancel, const std::function<void(const std::wstring&)>& onItem,
+                            const std::wstring& via) {
+    CleanResult r = CleanCategoryNow(c, cancel, onItem);
+    if (c.external) return r;
+    JournalEntry je;
+    je.action = JournalAction::Clean;
+    je.bytes = r.freed;
+    je.items = r.files;
+    je.path = c.name;
+    std::wstring note;
+    if (r.failed) note = util::FormatCount(r.failed) + L" items in use were skipped";
+    if (!r.lockedBy.empty()) note += L" (by " + AppNames(r.lockedBy) + L")";
+    if (size_t kept = c.KeptCount()) note += (note.empty() ? L"" : L"; ") + util::FormatCount(kept) + L" kept";
+    if (!c.command.empty()) note += (note.empty() ? L"ran " : L"; ran ") + c.command + (r.error.empty() ? L"" : L": " + r.error);
+    if (!via.empty()) note += (note.empty() ? L"" : L"; ") + via;
+    je.note = note;
+    JournalAppend(je);
     return r;
 }

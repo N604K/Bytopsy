@@ -23,7 +23,8 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_HISTORY = 0xE81C, IC_BACK = 0xE72B, IC_FWD = 0xE72A, IC_UP = 0xE74A, IC_CHEV_R = 0xE76C,
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
-                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770, IC_GAME = 0xE7FC;
+                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770, IC_GAME = 0xE7FC,
+                  IC_CALENDAR = 0xE787;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -1991,7 +1992,7 @@ void App::DrawCleanup(const RectF& area) {
         all += c.bytes;
         if (c.selected) selTotal += c.ToClean();
     }
-    DrawViewHeader(R(area.left + 24, top, area.right - 360, top + 46), L"Cleanup",
+    DrawViewHeader(R(area.left + 24, top, area.right - 500, top + 46), L"Cleanup",
                    cleanupMeasuring_ ? L"Measuring caches and leftovers…"
                                      : util::FormatSizeShort(all) + L" of caches and leftovers found  ·  works without a scan",
                    IC_CLEAN);
@@ -2002,6 +2003,8 @@ void App::DrawCleanup(const RectF& area) {
            selTotal ? 2 : 0, selTotal > 0 && !cleanupMeasuring_);
     bx -= 8 + 130;
     Button(RWH(bx, top + 6, 130, 34), IC_REFRESH, L"Measure", CMD_CLEAN_MEASURE, 0, !cleanupMeasuring_);
+    bx -= 8 + 132;
+    Button(RWH(bx, top + 6, 132, 34), IC_CALENDAR, L"Schedule…", CMD_CLEAN_SCHEDULE, 0, !cleanupMeasuring_);
 
     // Built-in and user categories in their order, then imported ones (winapp2.ini): only those
     // that found something on this PC, largest first, under a header (kHeader in the list).
@@ -2024,10 +2027,32 @@ void App::DrawCleanup(const RectF& area) {
     float y = top + 62;
     RectF body = R(area.left, y, area.right, area.bottom);
     ListState& ls = lists_[static_cast<int>(View::Cleanup)];
-    float contentH = (elevated_ ? 0 : 64) + show.size() * 82.0f + 20;
+    bool scheduled = schedule_.exists;
+    float contentH = (elevated_ ? 0 : 64) + (scheduled ? 68 : 0) + show.size() * 82.0f + 20;
     ls.scroll = std::clamp(ls.scroll, 0.0f, std::max(0.0f, contentH - H(body)));
     gfx_.PushClip(body);
     y -= ls.scroll;
+    if (scheduled) {
+        // The scheduled cleanup: when, what, and how the last run went.
+        RectF b = R(area.left + 24, y, area.right - 24, y + 56);
+        gfx_.FillRound(b, 10, WithAlpha(P_.accent, 0.10f));
+        gfx_.Icon(IC_CALENDAR, RWH(b.left + 10, b.top, 30, H(b)), P_.accent, 16);
+        std::wstring when = schedule_.specKnown ? DescribeSchedule(schedule_.spec) : std::wstring(L"Custom schedule (changed in Task Scheduler)");
+        if (!schedule_.enabled) when += L"  ·  turned off in Task Scheduler";
+        std::wstring names;
+        for (auto& id : schedule_.spec.ids) {
+            auto it = std::find_if(cleanup_.begin(), cleanup_.end(), [&](const CleanCategory& c) { return c.id == id; });
+            names += (names.empty() ? L"" : L", ") + (it != cleanup_.end() ? it->name : id);
+        }
+        std::wstring detail = names.empty() ? std::wstring(L"?") : names;
+        if (schedule_.nextRun) detail += L"  ·  next run " + util::FormatTime(schedule_.nextRun);
+        detail += L"  ·  last run " + (schedule_.lastRun ? util::FormatTime(schedule_.lastRun) + L": " : std::wstring()) +
+                  DescribeTaskResult(schedule_.lastResult);
+        gfx_.Text(L"Scheduled cleanup: " + when, R(b.left + 46, b.top + 7, b.right - 130, b.top + 29), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(FitPath(detail, W(b) - 186, 12), R(b.left + 46, b.top + 29, b.right - 130, b.bottom - 6), P_.textDim, Small(12));
+        Button(R(b.right - 112, b.top + 11, b.right - 12, b.bottom - 11), 0, L"Change", CMD_CLEAN_SCHEDULE, 0);
+        y += 68;
+    }
     if (!elevated_) {
         RectF b = R(area.left + 24, y, area.right - 24, y + 52);
         gfx_.FillRound(b, 10, WithAlpha(P_.warning, 0.12f));
@@ -2507,7 +2532,10 @@ void App::DrawDialog() {
     msgStyle.center = false;
     float msgH = dialog_.message.empty() ? 0 : gfx_.MeasureHeight(dialog_.message, w - 100, msgStyle) + 6;
     float listH = dialog_.lines.empty() ? 0 : dialog_.lines.size() * 24.0f + 20;
-    float h = 24 + 30 + msgH + (listH ? listH + 14 : 0) + (dialog_.hasCheck ? 40 : 0) + 24 + 40 + 24;
+    int shownChoices = 0;
+    for (auto& ch : dialog_.choices) shownChoices += ch.hidden ? 0 : 1;
+    float choicesH = shownChoices ? shownChoices * 40.0f + 10 : 0;
+    float h = 24 + 30 + msgH + (listH ? listH + 14 : 0) + (dialog_.hasCheck ? 40 : 0) + choicesH + 24 + 40 + 24;
     RectF card = RWH((sz.width - w) / 2, std::max(20.0f, (sz.height - h) / 2 - 20), w, h);
     gfx_.Shadow(card, 16, 24);
     gfx_.FillRound(card, 16, P_.surface);
@@ -2552,6 +2580,36 @@ void App::DrawDialog() {
         gfx_.Text(dialog_.checkText, R(tx + 28, y, cr.right, cr.bottom), dialog_.checked && dialog_.checkDanger ? P_.danger : P_.text, TS(13));
         AddHit(cr, HK_DIALOG, -1);
         y += 28;
+    }
+    if (shownChoices) {
+        y += 10;
+        TextStyle cs = TS(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center);
+        for (int ci = 0; ci < static_cast<int>(dialog_.choices.size()); ++ci) {
+            const DialogChoice& ch = dialog_.choices[ci];
+            if (ch.hidden) continue;
+            gfx_.Text(ch.label, R(tx, y, tx + 84, y + 32), P_.textDim, TS(13));
+            float cx = tx + 88;
+            auto chip = [&](const std::wstring& t, float w, bool active, intptr_t value) {
+                RectF r = RWH(cx, y + 1, w, 30);
+                bool hv = Hovered(HK_DIALOG_CHOICE, ci, value);
+                gfx_.FillRound(r, 15, active ? P_.accent : (hv ? P_.surface3 : P_.surface2));
+                if (!active) gfx_.StrokeRound(r, 15, P_.border);
+                gfx_.Text(t, r, active ? P_.accentText : P_.text, cs);
+                AddHit(r, HK_DIALOG_CHOICE, ci, value);
+                cx += w + 6;
+            };
+            if (ch.stepper) {
+                chip(L"‹", 32, false, ch.value - 1);
+                std::wstring v = ch.value >= 0 && ch.value < static_cast<int>(ch.options.size()) ? ch.options[ch.value] : L"";
+                gfx_.Text(v, R(cx, y, cx + 72, y + 32), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                cx += 78;
+                chip(L"›", 32, false, ch.value + 1);
+            } else {
+                for (int oi = 0; oi < static_cast<int>(ch.options.size()); ++oi)
+                    chip(ch.options[oi], gfx_.Measure(ch.options[oi], cs) + 22, oi == ch.value, oi);
+            }
+            y += 40;
+        }
     }
     // Buttons, right aligned.
     float bx = card.right - 24, by = card.bottom - 24 - 38;

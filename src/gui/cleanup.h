@@ -112,6 +112,10 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel);
 // were measured and no longer qualify (too new now) are left alone.
 CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
                              const std::function<void(const std::wstring&)>& onItem);
+// CleanCategoryNow plus its journal entry: what both the windowed app and `winncdu-cli --clean`
+// run for each category. `via` is added to the journal note (e.g. "command line").
+CleanResult CleanAndJournal(const CleanCategory& c, std::atomic<bool>& cancel, const std::function<void(const std::wstring&)>& onItem,
+                            const std::wstring& via = L"");
 std::vector<std::wstring> ExpandedPaths(const CleanCategory& c);
 bool IsElevated();
 // A System Restore point (needs administrator rights and System Protection on the system drive).

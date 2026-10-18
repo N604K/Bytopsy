@@ -11,8 +11,10 @@
 #include "aimodels.h"
 #include "diskhealth.h"
 #include "games.h"
+#include "gui/cleanup.h"
 #include "journal.h"
 #include "protect.h"
+#include "schedule.h"
 #include "scanner.h"
 #include "ui.h"
 #include "util.h"
@@ -58,6 +60,13 @@ void PrintUsage() {
         "                        and leftovers of uninstalled ones, and exit\n"
         "  --disks               List physical disks (health, wear, temperature, TRIM, drive\n"
         "                        letters) and each drive's used-space trend, and exit\n"
+        "  --clean IDS           Cleanup categories (comma list of ids, e.g. temp,browser,dev,\n"
+        "                        or all-safe = the preselected ones): shows what would be\n"
+        "                        freed and exits. Unknown ids list the valid ones.\n"
+        "    --yes               ...really clean (permanently; protected items never), journal\n"
+        "                        it and append a line to cleanup.log. Exit code 0 = done,\n"
+        "                        1 = some items in use, 2 = bad ids, 3 = all skipped (admin)\n"
+        "    --quiet             ...print nothing (used by the scheduled task)\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -335,6 +344,119 @@ int Fail(const std::wstring& msg) {
     return 2;
 }
 
+std::atomic<bool> g_cleanCancel{false};
+
+BOOL WINAPI OnCtrl(DWORD) {
+    g_cleanCancel = true;  // stop after the current item
+    return TRUE;
+}
+
+// --clean <ids> [--yes] [--quiet]: the windowed app's Cleanup from the command line (and from the
+// scheduled task). Measures exactly like the app, deletes through the same code path (protection
+// rules, per-category excludes, age limits, re-checks before each delete) and journals the same.
+int RunClean(const CleanCommand& cmd) {
+    if (cmd.si) util::g_si = true;
+    // A scheduled run gets a console of its own: let it go, nothing is printed anyway.
+    if (cmd.quiet) {
+        DWORD procs[4];
+        if (GetConsoleProcessList(procs, 4) == 1) FreeConsole();
+    }
+    UINT oldCp = GetConsoleOutputCP();
+    if (!cmd.quiet) SetConsoleOutputCP(CP_UTF8);
+    auto print = [&](const std::wstring& s) {
+        if (cmd.quiet) return;
+        std::string u = util::WideToUtf8(s);
+        fwrite(u.data(), 1, u.size(), stdout);
+        fflush(stdout);
+    };
+    auto done = [&](int code) {
+        if (!cmd.quiet) SetConsoleOutputCP(oldCp);
+        return code;
+    };
+
+    std::vector<std::wstring> ruleErrors;
+    std::vector<CleanCategory> cats = BuildCleanupCategories(&ruleErrors);
+    for (auto& e : ruleErrors) print(L"Note: " + e + L"\n");
+    std::vector<CleanerInfo> infos;
+    for (auto& c : cats) infos.push_back({c.id, c.safe, c.external, c.needsAdmin, c.imported});
+    std::vector<std::wstring> ids;
+    std::wstring err;
+    if (!ResolveCleanIds(cmd.ids, infos, ids, err)) {
+        if (cmd.yes) CleanLogAppend(L"--clean " + JoinIds(cmd.ids) + L": " + err);
+        done(0);
+        return Fail(err);
+    }
+
+    bool elevated = IsElevated();
+    std::vector<CleanCategory*> run;
+    std::vector<std::wstring> skipped;  // "id (reason)"
+    std::wstring out = cmd.yes ? L"Cleaning up (deleted permanently; protected items are never touched).\n\n"
+                               : L"Dry run: nothing is deleted. Add --yes to clean.\n\n";
+    print(out);
+    uint64_t total = 0;
+    for (auto& id : ids) {
+        CleanCategory& c = *std::find_if(cats.begin(), cats.end(), [&](const CleanCategory& x) { return x.id == id; });
+        std::wstring why;
+        if (c.external)
+            why = L"removed with Windows Disk Cleanup, not from the command line";
+        else if (c.needsAdmin && !elevated)
+            why = L"needs administrator rights";
+        if (why.empty()) {
+            MeasureCategory(c, g_cleanCancel);
+            if (c.toolMissing) why = c.command.substr(0, c.command.find(L' ')) + L" not found on PATH";
+        }
+        wchar_t head[64];
+        if (!why.empty()) {
+            skipped.push_back(c.id + L" (" + why + L")");
+            swprintf(head, 64, L"  %10ls  %-14ls ", L"skipped", L"");
+            print(head + c.name + L" [" + c.id + L"]: " + why + L"\n");
+            continue;
+        }
+        run.push_back(&c);
+        total += c.ToClean();
+        std::wstring count = util::FormatCount(c.files) + (c.recycleBin ? L" items" : L" files");
+        swprintf(head, 64, L"  %10ls  %-14ls ", util::FormatSizeShort(c.ToClean()).c_str(), count.c_str());
+        print(head + c.name + L" [" + c.id + L"]" + (c.guarded ? L"  (" + util::FormatCount(c.guarded) + L" protected items left out)" : L"") +
+              (c.command.empty() ? L"" : L"  (runs " + c.command + L")") + L"\n");
+    }
+    if (!cmd.yes) {
+        print(L"\nWould free " + util::FormatSizeShort(total) + L". Run again with --yes to clean.\n");
+        return done(kCleanOk);
+    }
+
+    SetConsoleCtrlHandler(OnCtrl, TRUE);
+    uint64_t freed = 0, failed = 0;
+    size_t toolErrors = 0;
+    std::wstring parts;
+    print(L"\n");
+    for (CleanCategory* c : run) {
+        if (g_cleanCancel) break;
+        // Nothing to clean: the Recycle Bin isn't even touched.
+        if (c->ToClean() == 0) continue;
+        CleanResult r = CleanAndJournal(*c, g_cleanCancel, [](const std::wstring&) {}, L"command line");
+        freed += r.freed;
+        failed += r.failed;
+        if (!r.error.empty()) ++toolErrors;
+        std::wstring note;
+        if (r.failed) note = L"  (" + util::FormatCount(r.failed) + L" items in use skipped" +
+                             (r.lockedBy.empty() ? L"" : L", close " + AppNames(r.lockedBy)) + L")";
+        if (!r.error.empty()) note += L"  (" + r.error + L")";
+        wchar_t head[64];
+        swprintf(head, 64, L"  freed %10ls  ", util::FormatSizeShort(r.freed).c_str());
+        print(head + c->name + L" [" + c->id + L"]" + note + L"\n");
+        parts += (parts.empty() ? L"" : L", ") + c->id + L" " + util::FormatSizeShort(r.freed) + (r.failed ? L" (" + util::FormatCount(r.failed) + L" in use)" : L"") +
+                 (r.error.empty() ? L"" : L" (" + r.error + L")");
+    }
+    int code = g_cleanCancel ? kCleanPartial : CleanExitCode(!run.empty(), failed, toolErrors);
+    print(L"\nFreed " + util::FormatSizeShort(freed) + L". See --journal for the record.\n");
+    std::wstring line = L"clean " + JoinIds(ids) + L": freed " + util::FormatSizeShort(freed) + (parts.empty() ? L"" : L" (" + parts + L")");
+    if (!skipped.empty()) line += L"; skipped " + JoinIds(skipped);
+    if (g_cleanCancel) line += L"; cancelled";
+    line += L"; exit " + std::to_wstring(code);
+    CleanLogAppend(line);
+    return done(code);
+}
+
 int HeadlessExport(const AppConfig& cfg, const std::wstring& outJson, const std::wstring& outCsv) {
     std::wstring err;
     std::wstring path = NormalizeDirPath(cfg.path.empty() ? L"." : cfg.path, err);
@@ -378,6 +500,14 @@ int wmain(int argc, wchar_t** argv) {
     AppConfig cfg;
     cfg.scan.threads = static_cast<int>(std::clamp(std::thread::hardware_concurrency(), 2u, 8u));
     std::wstring outJson, outCsv;
+
+    {
+        std::vector<std::wstring> args(argv + 1, argv + argc);
+        CleanCommand clean;
+        std::wstring err;
+        if (!ParseCleanCommandLine(args, clean, err)) return Fail(err);
+        if (clean.clean) return RunClean(clean);
+    }
 
     for (int i = 1; i < argc; ++i) {
         std::wstring a = argv[i];
