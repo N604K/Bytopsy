@@ -46,8 +46,11 @@ static bool Junction(const std::wstring& link, const std::wstring& target) {
 }
 
 int main() {
-    wchar_t b[MAX_PATH];
-    std::wstring tmp(b, GetTempPathW(MAX_PATH, b));
+    // With long names: on GitHub's runners %TEMP% is C:\Users\RUNNER~1\..., and Windows reports
+    // where a junction leads with long names.
+    wchar_t b[MAX_PATH], lb[MAX_PATH];
+    DWORD tn = GetTempPathW(MAX_PATH, b), ln = tn ? GetLongPathNameW(b, lb, MAX_PATH) : 0;
+    std::wstring tmp = ln && ln < MAX_PATH ? std::wstring(lb, ln) : std::wstring(b, tn);
     std::wstring base = tmp + L"winncdu-delete-test-" + std::to_wstring(GetCurrentProcessId());
     Dir(base);
     std::atomic<bool> cancel{false};

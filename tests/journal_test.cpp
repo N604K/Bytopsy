@@ -18,10 +18,13 @@ static void Check(bool ok, const std::wstring& what) {
     fputs(u.c_str(), stdout);
 }
 
+// With long names: on GitHub's runners %TEMP% is C:\Users\RUNNER~1\..., and the Recycle Bin
+// reports long paths.
 static std::wstring TempDir() {
-    wchar_t b[MAX_PATH];
+    wchar_t b[MAX_PATH], lb[MAX_PATH];
     DWORD n = GetTempPathW(MAX_PATH, b);
-    std::wstring s(b, n);
+    DWORD m = n ? GetLongPathNameW(b, lb, MAX_PATH) : 0;
+    std::wstring s = m && m < MAX_PATH ? std::wstring(lb, m) : std::wstring(b, n);
     if (!s.empty() && s.back() == L'\\') s.pop_back();
     return s;
 }

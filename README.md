@@ -255,6 +255,11 @@ cmake --build build
 ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools and games self-tests
 ```
 
+GitHub Actions builds and runs the self-tests on every push and pull request
+([.github/workflows/build.yml](.github/workflows/build.yml)). A tag `v*` publishes a release with
+`winncdu-<version>-x64.zip` (both programs and this README) and its SHA-256 in a `.sha256` file; see
+[docs/RELEASING.md](docs/RELEASING.md).
+
 ## The terminal app (`winncdu-cli.exe`)
 
 The keyboard-driven ncdu experience: the same browser, find, largest files, file types, duplicates,
@@ -380,4 +385,6 @@ res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 CONTRIBUTING.md       building, testing, adding a protected location or a cleaner
 .github/ISSUE_TEMPLATE  issue forms: false alarm, missing protected folder, bug report
+.github/workflows/build.yml  CI: build and self-tests; release zips with SHA-256 on tags
+docs/RELEASING.md     how releases are built and published
 ```

@@ -84,7 +84,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 ## 4. Open-source project health
 
 - [ ] Add a LICENSE file (MIT or GPL-3.0); without one, nobody may legally reuse or contribute.
-- [ ] GitHub Actions on `windows-latest`: build, `ctest`, upload release zips with SHA-256.
+- [x] GitHub Actions on `windows-latest`: build, `ctest`, upload release zips with SHA-256.
+      *Done: `.github/workflows/build.yml`; tags `v*` must match `src/version.h` and create a
+      release with the zip and its `.sha256` (docs/RELEASING.md). Not yet run on GitHub: the tests
+      were checked locally with `%TEMP%` set to an 8.3 short path like the runners'.*
 - [ ] Code signing for releases (SignPath offers free signing for open-source projects), so
       SmartScreen and antivirus don't flag a tool that deletes files.
 - [ ] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
