@@ -107,6 +107,16 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   deleting files (the tool must be on PATH; the current folder is never searched). User rules are never preselected, can't name a whole drive, and anything the
   protection rules mark Important or Blocked is left out of every category, as is any folder with
   a repository, key, password database or virtual disk somewhere inside.
+- **Scheduled cleanup** (Cleanup → *Schedule…*): runs the checked categories daily, weekly, monthly
+  or at logon through a Task Scheduler task of your own (`\WinNCDU\Scheduled cleanup`, no
+  administrator rights needed). The task runs `winncdu-cli --clean <ids> --yes --quiet` as you, only
+  while you're signed in and never on battery; a missed run starts as soon as possible. Categories
+  that need administrator rights and imported winapp2.ini rules are left out (the task never runs
+  elevated). Each run deletes what its categories list at that moment, through the same code as the
+  *Clean up* button: protected items are never touched, but items unchecked under *Review* are not
+  remembered. Cleanup shows the schedule, its next run and how the last one went; *Remove schedule*
+  deletes only that task. Runs are journaled and every run and schedule change adds a line to
+  `%LOCALAPPDATA%\WinNCDU\cleanup.log`.
 - **winapp2.ini import** (menu → *Import winapp2.ini…*): the community database of thousands of app
   cleaners ([Winapp2](https://github.com/MoscaDotTo/Winapp2), also used by BleachBit). Apps found
   on this PC that have something to clean appear below the built-in list, largest first, never
@@ -217,7 +227,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools and games self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games and schedule self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -255,6 +265,13 @@ winncdu-cli [options] [path]
                         Restore, event logs) and exit
   --games               List installed games of every launcher (size, last played)
                         and leftovers of uninstalled ones, and exit
+  --clean IDS           Cleanup categories (comma list of ids, e.g. temp,browser,dev,
+                        or all-safe = the preselected ones): shows what would be
+                        freed and exits. Unknown ids list the valid ones.
+    --yes               ...really clean (permanently; protected items never), journal
+                        it and append a line to cleanup.log. Exit code 0 = done,
+                        1 = some items in use, 2 = bad ids, 3 = all skipped (admin)
+    --quiet             ...print nothing (used by the scheduled task)
 ```
 
 Examples:
@@ -319,6 +336,7 @@ src/                  core engine + terminal app
   vdisks.cpp          WSL and Docker virtual disks: usage, compaction, Docker prune
   wintools.cpp        Windows: component store, old drivers, System Restore, hibernation, ...
   games.cpp           games of every launcher, uninstall through the launcher, leftovers
+  schedule.cpp        scheduled cleanup: --clean arguments, Task Scheduler task, cleanup.log
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -341,6 +359,7 @@ tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the
 tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
 tests/wintools_test.cpp Windows: DISM report parsing, which driver packages count as old (ctest)
 tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
+tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --clean --yes on a fixture (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

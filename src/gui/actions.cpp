@@ -1713,7 +1713,7 @@ void App::StartCleanup() {
             for (size_t i = 0; i < st->cats.size() && !st->cancel; ++i) {
                 st->index = i;
                 const CleanCategory& c = st->cats[i];
-                CleanResult r = CleanCategoryNow(c, st->cancel, [&](const std::wstring& p) {
+                CleanResult r = CleanAndJournal(c, st->cancel, [&](const std::wstring& p) {
                     std::lock_guard<std::mutex> lk(st->m);
                     st->current = p;
                 });
@@ -1721,22 +1721,137 @@ void App::StartCleanup() {
                 st->failed += r.failed;
                 st->lockedBy.insert(st->lockedBy.end(), r.lockedBy.begin(), r.lockedBy.end());
                 if (!r.error.empty()) st->errors.push_back(c.name + L": " + r.error);
-                if (!c.external) {
-                    JournalEntry je;
-                    je.action = JournalAction::Clean;
-                    je.bytes = r.freed;
-                    je.items = r.files;
-                    je.path = c.name;
-                    std::wstring note;
-                    if (r.failed) note = util::FormatCount(r.failed) + L" items in use were skipped";
-                    if (!r.lockedBy.empty()) note += L" (by " + AppNames(r.lockedBy) + L")";
-                    if (size_t kept = c.KeptCount()) note += (note.empty() ? L"" : L"; ") + util::FormatCount(kept) + L" kept";
-                    if (!c.command.empty()) note += (note.empty() ? L"ran " : L"; ran ") + c.command + (r.error.empty() ? L"" : L": " + r.error);
-                    je.note = note;
-                    JournalAppend(je);
-                }
             }
         });
+    };
+    ShowDialog(std::move(d));
+}
+
+void App::LoadSchedule() {
+    TaskInfo info;
+    std::wstring err;
+    if (TaskQuery(ScheduleFolder(), kScheduleTask, info, err)) {
+        schedule_ = info;
+        scheduleErr_.clear();
+    } else {
+        schedule_ = TaskInfo{};
+        scheduleErr_ = err;
+    }
+    Invalidate();
+}
+
+// A per-user Task Scheduler task that runs `winncdu-cli --clean <checked ids> --yes --quiet`.
+void App::ShowScheduleDialog() {
+    LoadSchedule();
+    if (!scheduleErr_.empty()) return Toast(scheduleErr_, 1);
+    // What can run unattended: checked categories that need no administrator rights (the task never
+    // runs elevated) and aren't community rules (those are reviewed by hand first).
+    std::vector<std::wstring> ids, leftOut;
+    std::vector<std::wstring> lines;
+    for (auto& c : cleanup_) {
+        if (!c.selected || c.external) continue;
+        if (c.needsAdmin)
+            leftOut.push_back(c.name + L" (needs administrator rights)");
+        else if (c.imported)
+            leftOut.push_back(c.name + L" (winapp2.ini rules are reviewed by hand)");
+        else {
+            ids.push_back(c.id);
+            lines.push_back((c.measured ? util::FormatSizeShort(c.ToClean()) : L"…") + L"\t" + c.name);
+        }
+    }
+    bool exists = schedule_.exists;
+    if (ids.empty() && exists && !schedule_.spec.ids.empty()) {
+        ids = schedule_.spec.ids;  // nothing checked: keep what the schedule cleans
+        for (auto& id : ids) {
+            auto it = std::find_if(cleanup_.begin(), cleanup_.end(), [&](const CleanCategory& c) { return c.id == id; });
+            lines.push_back(L"\t" + (it != cleanup_.end() ? it->name : id));
+        }
+    }
+    if (ids.empty() && !exists) return Toast(L"Check the categories to clean on a schedule first", 2);
+    std::wstring exe = ExePath();
+    std::wstring cli = exe.substr(0, exe.find_last_of(L"\\/") + 1) + L"winncdu-cli.exe";
+    if (!PathExists(cli)) return Toast(L"winncdu-cli.exe was not found next to winncdu.exe", 1);
+
+    ScheduleSpec spec;
+    spec.freq = ScheduleFreq::Weekly;
+    spec.weekday = 0;
+    spec.hour = 12;
+    if (exists && schedule_.specKnown) spec = schedule_.spec;
+    Dialog d;
+    d.title = exists ? L"Scheduled cleanup" : L"Schedule cleanup";
+    d.icon = 0xE787;  // calendar
+    d.message = L"Windows runs “winncdu-cli " + CleanArguments(ids) +
+                L"” as you, without administrator rights, only while you're signed in and never on battery; a missed run starts as "
+                L"soon as possible. Each run deletes what these categories list at that moment, permanently. Protected items are "
+                L"never touched, but items unchecked under Review are not remembered. Every run is journaled and logged in "
+                L"cleanup.log.";
+    if (!leftOut.empty()) {
+        std::wstring s;
+        for (auto& l : leftOut) s += (s.empty() ? L"" : L", ") + l;
+        d.message += L"\n\nLeft out: " + s + L".";
+    }
+    if (ids.empty()) d.message = L"No categories are checked. Remove the schedule, or check categories and come back to change it.";
+    d.lines = lines;
+    DialogChoice repeat{L"Repeat", {L"Daily", L"Weekly", L"Monthly", L"At logon"}, static_cast<int>(spec.freq)};
+    DialogChoice day{L"Day", {L"Sun", L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat"}, std::clamp(spec.weekday, 0, 6)};
+    DialogChoice mday{L"Day", {}, std::clamp(spec.monthDay, 1, 28) - 1, true};
+    for (int i = 1; i <= 28; ++i) mday.options.push_back(L"day " + std::to_wstring(i));
+    DialogChoice time{L"Time", {}, spec.hour * 2 + (spec.minute >= 30 ? 1 : 0), true};
+    for (int i = 0; i < 48; ++i) {
+        wchar_t t[8];
+        swprintf(t, 8, L"%02d:%02d", i / 2, i % 2 ? 30 : 0);
+        time.options.push_back(t);
+    }
+    d.choices = {repeat, day, mday, time};
+    d.onChoice = [](Dialog& dd) {
+        int f = dd.choices[0].value;
+        dd.choices[1].hidden = f != static_cast<int>(ScheduleFreq::Weekly);
+        dd.choices[2].hidden = f != static_cast<int>(ScheduleFreq::Monthly);
+        dd.choices[3].hidden = f == static_cast<int>(ScheduleFreq::Logon);
+    };
+    d.onChoice(d);
+    if (ids.empty()) d.choices.clear();
+    if (exists) {
+        d.buttons = ids.empty() ? std::vector<std::wstring>{L"Cancel", L"Remove schedule"}
+                                : std::vector<std::wstring>{L"Cancel", L"Remove schedule", L"Save"};
+        d.primary = ids.empty() ? -1 : 2;
+    } else {
+        d.buttons = {L"Cancel", L"Schedule"};
+        d.primary = 1;
+    }
+    d.cancel = 0;
+    d.onCloseWith = [this, ids, cli, exists](int b, const Dialog& dd) {
+        if (b == 0) return;
+        std::wstring err;
+        std::wstring where = ScheduleFolder() + L"\\" + kScheduleTask;
+        if (exists && b == 1) {
+            if (TaskRemove(ScheduleFolder(), kScheduleTask, err)) {
+                CleanLogAppend(L"schedule removed (" + where + L")");
+                Toast(L"Scheduled cleanup removed", 0);
+            } else {
+                Toast(err, 1);
+            }
+            LoadSchedule();
+            return;
+        }
+        if (dd.choices.size() < 4) return;
+        ScheduleSpec s;
+        s.freq = static_cast<ScheduleFreq>(std::clamp(dd.choices[0].value, 0, 3));
+        s.weekday = dd.choices[1].value;
+        s.monthDay = dd.choices[2].value + 1;
+        s.hour = dd.choices[3].value / 2;
+        s.minute = dd.choices[3].value % 2 ? 30 : 0;
+        s.ids = ids;
+        std::wstring desc = L"WinNCDU cleanup of " + JoinIds(ids) + L" (deleted permanently, protected items never). Change or remove it in "
+                            L"WinNCDU: Cleanup, Schedule.";
+        if (TaskSave(ScheduleFolder(), kScheduleTask, s, cli, CleanArguments(ids), desc, err)) {
+            CleanLogAppend(L"schedule " + std::wstring(exists ? L"changed: " : L"set: ") + DescribeSchedule(s) + L", --clean " + JoinIds(ids) +
+                           L" (" + where + L")");
+            Toast(L"Cleanup scheduled: " + DescribeSchedule(s), 0);
+        } else {
+            Toast(err, 1);
+        }
+        LoadSchedule();
     };
     ShowDialog(std::move(d));
 }
@@ -1793,6 +1908,7 @@ void App::ShowView(View v) {
             break;
         case View::Cleanup:
             if (cleanup_.empty()) MeasureCleanup();
+            LoadSchedule();
             break;
         case View::History: LoadHistory(); break;
         case View::Deleted: LoadDeleted(); break;
@@ -2213,7 +2329,11 @@ void App::OnCommand(int cmd) {
         case CMD_GAME_UNINSTALL: StartGameUninstall(); break;
         case CMD_GAMES_DELETE: StartGameLeftoversDelete(); break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
-        case CMD_CLEAN_MEASURE: MeasureCleanup(); break;
+        case CMD_CLEAN_MEASURE:
+            MeasureCleanup();
+            LoadSchedule();
+            break;
+        case CMD_CLEAN_SCHEDULE: ShowScheduleDialog(); break;
         case CMD_ADMIN: {
             std::wstring args = root_ && !readOnly_ ? L"\"" + root_->name + L"\"" : L"";
             if (!args.empty() && args[args.size() - 2] == L'\\') args.insert(args.size() - 1, L"\\");

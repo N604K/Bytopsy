@@ -75,8 +75,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       then offer leftover folders (checked against the protection rules).
 - [ ] **Disk health**: SMART/wear via `MSFT_PhysicalDisk` and `MSFT_StorageReliabilityCounter`, TRIM
       status, free-space trend from scan history.
-- [ ] **Scheduled cleanup**: `winncdu-cli --clean temp,browser,dev --yes` plus a Task Scheduler entry
-      from the GUI.
+- [x] **Scheduled cleanup**: `winncdu-cli --clean temp,browser,dev --yes` plus a Task Scheduler entry
+      from the GUI. *Done: `--clean` (dry run unless `--yes`, `all-safe`, exit codes, cleanup.log)
+      runs the GUI's own clean-and-journal path; Cleanup → Schedule… creates a per-user task
+      (`src/schedule.cpp`, ITaskService): not elevated, not on battery, missed runs caught up.*
 - [ ] Duplicate photos with a perceptual hash (not only byte-identical files).
 - [ ] **No registry cleaner.** Say so in the README: it frees nothing measurable and breaks things.
       This stance is a selling point.

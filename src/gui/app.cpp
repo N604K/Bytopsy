@@ -306,7 +306,8 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
                 bool link = hover_.kind == HK_BUTTON || hover_.kind == HK_NAV || hover_.kind == HK_DRIVE ||
                             hover_.kind == HK_CARD || hover_.kind == HK_RECENT || hover_.kind == HK_CHIP ||
                             hover_.kind == HK_CRUMB || hover_.kind == HK_CHECK || hover_.kind == HK_SNAPSHOT ||
-                            hover_.kind == HK_DIALOG || hover_.kind == HK_RESTORE || hover_.kind == HK_REVIEW;
+                            hover_.kind == HK_DIALOG || hover_.kind == HK_RESTORE || hover_.kind == HK_REVIEW ||
+                            hover_.kind == HK_DIALOG_CHOICE;
                 SetCursor(LoadCursorW(nullptr, link ? IDC_HAND : IDC_ARROW));
                 return TRUE;
             }
@@ -549,6 +550,15 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 Dialog d = std::move(dialog_);
                 dialog_ = Dialog{};
                 if (d.onClose) d.onClose(hit.a, d.checked);
+                if (d.onCloseWith) d.onCloseWith(hit.a, d);
+            }
+            break;
+        case HK_DIALOG_CHOICE:
+            if (hit.a >= 0 && hit.a < static_cast<int>(dialog_.choices.size())) {
+                DialogChoice& ch = dialog_.choices[hit.a];
+                int n = static_cast<int>(ch.options.size());
+                if (n) ch.value = static_cast<int>((hit.b % n + n) % n);  // steppers wrap around
+                if (dialog_.onChoice) dialog_.onChoice(dialog_);
             }
             break;
     }
@@ -628,6 +638,7 @@ void App::OnKeyDown(WPARAM vk) {
             Dialog d = std::move(dialog_);
             dialog_ = Dialog{};
             if (d.onClose && btn >= 0) d.onClose(btn, d.checked);
+            if (d.onCloseWith && btn >= 0) d.onCloseWith(btn, d);
             Invalidate();
         }
         return;

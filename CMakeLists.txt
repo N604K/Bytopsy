@@ -26,10 +26,11 @@ add_library(winncdu_core STATIC
   src/runtool.cpp
   src/wintools.cpp
   src/games.cpp
+  src/schedule.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil taskschd oleaut32 secur32)
 
 # Windowed app (Direct2D): build\winncdu.exe
 add_executable(winncdu WIN32
@@ -56,9 +57,12 @@ add_executable(winncdu-cli
   src/main.cpp
   src/ui.cpp
   src/console.cpp
+  src/gui/cleanup.cpp
+  src/gui/winapp2.cpp
   src/winncdu.rc
 )
 target_link_libraries(winncdu-cli PRIVATE winncdu_core)
+set_source_files_properties(src/winncdu.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/cleaners.ini;${CMAKE_SOURCE_DIR}/res/winncdu.ico")
 
 foreach(t winncdu_core winncdu winncdu-cli)
   if(MSVC)
@@ -144,5 +148,15 @@ if(MSVC)
   target_compile_options(winncdu-games-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME games COMMAND winncdu-games-test)
+
+# Scheduled cleanup (id lists, --clean arguments, triggers, CLI dry run and --yes on a fixture):
+# build/winncdu-schedule-test.exe. Never touches Task Scheduler unless WINNCDU_TEST_TASKSCHED=1.
+add_executable(winncdu-schedule-test tests/schedule_test.cpp)
+target_link_libraries(winncdu-schedule-test PRIVATE winncdu_core)
+add_dependencies(winncdu-schedule-test winncdu-cli)
+if(MSVC)
+  target_compile_options(winncdu-schedule-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME schedule COMMAND winncdu-schedule-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

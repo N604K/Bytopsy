@@ -19,6 +19,7 @@
 #include "../journal.h"
 #include "../protect.h"
 #include "../scanner.h"
+#include "../schedule.h"
 #include "../vdisks.h"
 #include "../wintools.h"
 #include "../tree.h"
@@ -93,6 +94,7 @@ enum Cmd : int {
     CMD_GAMES_REFRESH,
     CMD_GAME_UNINSTALL,
     CMD_GAMES_DELETE,
+    CMD_CLEAN_SCHEDULE,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 
@@ -133,6 +135,7 @@ enum HitKind {
     HK_BADGE,     // shield badge (tooltip): a = row, -1 = the open folder
     HK_RESTORE,   // a = index into deleted_
     HK_REVIEW,    // a = cleanup category: open its file list
+    HK_DIALOG_CHOICE,  // a = choice index, b = option index
 };
 
 struct Hit {
@@ -179,6 +182,15 @@ struct Task {
     bool cancelRequested = false;
 };
 
+// A row of options in a dialog: chips, or "< value >" for long lists (times, days).
+struct DialogChoice {
+    std::wstring label;
+    std::vector<std::wstring> options;
+    int value = 0;
+    bool stepper = false;
+    bool hidden = false;
+};
+
 struct Dialog {
     bool active = false;
     std::wstring title, message;
@@ -193,6 +205,9 @@ struct Dialog {
     bool checkDanger = true;  // checked = risky (e.g. "delete permanently"): drawn in the danger color
     std::function<void(Dialog&)> onCheck;
     std::function<void(int button, bool checked)> onClose;
+    std::vector<DialogChoice> choices;
+    std::function<void(Dialog&)> onChoice;                       // a choice changed
+    std::function<void(int button, const Dialog&)> onCloseWith;  // like onClose, with the choices
 };
 
 // One line of the "Recently deleted" view.
@@ -292,6 +307,8 @@ private:
     void OnCleanupMeasured(std::vector<CleanCategory>* result);
     CleanEntry* ReviewEntry(int row);
     void ToggleKeep(int row);
+    void LoadSchedule();
+    void ShowScheduleDialog();
     void NavigateTo(Node* dir, bool remember = true);
     void ShowView(View v);
     void RunSearchQuery(const std::wstring& q);
@@ -433,6 +450,8 @@ private:
     std::vector<CleanCategory> cleanup_;
     bool cleanupMeasuring_ = false;
     int reviewCat_ = -1;  // category shown in View::CleanReview
+    TaskInfo schedule_;          // the scheduled cleanup task (\WinNCDU\Scheduled cleanup)
+    std::wstring scheduleErr_;   // Task Scheduler couldn't be read
     std::vector<SnapshotInfo> snapshots_;
     std::vector<DiffEntry> diff_;
     SnapshotInfo diffInfo_;
