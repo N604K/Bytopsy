@@ -503,7 +503,7 @@ void BuiltinRules(std::vector<Rule>& v) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// User rules: %LOCALAPPDATA%\WinNCDU\protect.txt
+// User rules: protect.txt in util::DataDir() (%LOCALAPPDATA%\WinNCDU, or next to the exe)
 
 const char kTemplate[] =
     "# WinNCDU protected locations\r\n"
@@ -964,11 +964,8 @@ const ProtectHit* ProtectBadges::ForContents(const Node* dir) {
 }
 
 std::wstring ProtectRulesFile() {
-    PWSTR p = nullptr;
-    std::wstring out;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) out = std::wstring(p) + L"\\WinNCDU\\protect.txt";
-    CoTaskMemFree(p);
-    return out;
+    std::wstring dir = util::DataDir();
+    return dir.empty() ? L"" : dir + L"\\protect.txt";
 }
 
 void RefreshProtection() {

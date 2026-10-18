@@ -108,6 +108,22 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+      # winget, Scoop and Chocolatey manifests for this release, kept as a workflow artifact for
+      # submitting by hand (not attached to the release).
+      - name: Package manager manifests
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: >-
+          packaging/update-manifests.ps1 -Version "${{ steps.version.outputs.version }}"
+          -ZipPath "dist/winncdu-${{ steps.version.outputs.version }}-x64.zip" -OutDir manifests
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifests-${{ steps.version.outputs.version }}
+          path: manifests
+          if-no-files-found: error
+
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')

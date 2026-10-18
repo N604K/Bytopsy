@@ -66,6 +66,37 @@ To turn it on:
 Check a signed program with `Get-AuthenticodeSignature winncdu.exe` (status `Valid`) or in the
 file's *Properties → Digital Signatures*.
 
+## Package managers (prepared, not published)
+
+Templates live in `packaging/`: a winget multi-file manifest (schema 1.6, `N604K.WinNCDU`, a zip
+with both programs as portable commands `winncdu` and `winncdu-cli`), a Scoop manifest (with
+`checkver` and `autoupdate` from the GitHub releases; it installs in portable mode and persists
+`WinNCDU-data`), and a Chocolatey package (`winncdu`, downloading the release zip). They use the
+repository URL `https://github.com/N604K/WinNCDU` (from `git remote`) and contain
+`LICENSE-PLACEHOLDER` where the license goes: set it once there is a LICENSE.
+
+`packaging/update-manifests.ps1` fills in the version, URL and SHA-256 and writes the results to
+`packaging/out/`. The release workflow runs it too and keeps the output as the workflow artifact
+`manifests-<version>`.
+
+```powershell
+packaging\update-manifests.ps1 -Version 1.0.0        # SHA-256 from the release's .sha256 file
+packaging\update-manifests.ps1 -Version 1.0.0 -ZipPath dist\winncdu-1.0.0-x64.zip
+```
+
+Then, per release:
+
+- **winget**: copy `out\winget\manifests\n\N604K\WinNCDU\<version>` into a fork of
+  [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs), test with
+  `winget validate --manifest <folder>` and `winget install --manifest <folder>`, and open a pull
+  request (or use `wingetcreate submit <folder>`).
+- **Scoop**: put `out\scoop\winncdu.json` in a bucket repository (your own, or a pull request to
+  an existing one such as *extras*); test with `scoop install .\winncdu.json`. Afterwards the
+  bucket's autoupdate picks up new releases by itself.
+- **Chocolatey**: in `out\chocolatey`, run `choco pack`, test with
+  `choco install winncdu -s . -y`, then `choco push winncdu.<version>.nupkg --source https://push.chocolatey.org/`
+  with an API key from community.chocolatey.org. New packages go through moderation.
+
 ## Checking a download
 
 ```powershell

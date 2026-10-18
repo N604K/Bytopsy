@@ -106,5 +106,5 @@ std::vector<ProtectHit> ProtectedLocationsOnThisPC();
 const wchar_t* ProtectLevelName(Protect p);
 // "AI · Claude Code (sessions, memory, settings) · contains C:\Users\me\.claude"
 std::wstring DescribeHit(const ProtectHit& h);
-// %LOCALAPPDATA%\WinNCDU\protect.txt (created with a commented template on first use).
+// protect.txt in util::DataDir() (created with a commented template on first use).
 std::wstring ProtectRulesFile();

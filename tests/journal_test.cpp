@@ -1,5 +1,6 @@
 // Self-check of the deletion journal and Recycle Bin restore: winncdu-journal-test.exe
 // Uses a journal file in %TEMP% (not yours) and a temporary folder that it recycles and restores.
+// Also checks where WinNCDU keeps its files (portable mode).
 #include <windows.h>
 #include <objbase.h>
 
@@ -8,6 +9,7 @@
 
 #include "fsops.h"
 #include "journal.h"
+#include "protect.h"
 #include "util.h"
 
 static int g_fail = 0;
@@ -51,6 +53,35 @@ static std::string GetText(const std::wstring& path) {
 int main() {
     std::wstring tmp = TempDir();
     std::wstring pid = std::to_wstring(GetCurrentProcessId());
+
+    // ---- Where WinNCDU keeps its files: %LOCALAPPDATA%\WinNCDU, or next to the exe in portable mode
+    {
+        std::wstring exeDir = tmp + L"\\winncdu-portable-test-" + pid;
+        CreateDirectoryW(exeDir.c_str(), nullptr);
+        Check(util::DataDirFor(exeDir, L"C:\\Users\\me\\AppData\\Local") == L"C:\\Users\\me\\AppData\\Local\\WinNCDU",
+              L"data folder: %LOCALAPPDATA%\\WinNCDU by default");
+        std::wstring marker = exeDir + L"\\" + util::kPortableMarker;
+        CreateDirectoryW(marker.c_str(), nullptr);
+        Check(util::DataDirFor(exeDir, L"C:\\L") == L"C:\\L\\WinNCDU", L"data folder: a folder named winncdu.portable doesn't count");
+        RemoveDirectoryW(marker.c_str());
+        PutText(marker, "");
+        Check(util::DataDirFor(exeDir, L"C:\\L") == exeDir + L"\\WinNCDU-data", L"data folder: WinNCDU-data next to the exe with winncdu.portable");
+        DeleteFileW(marker.c_str());
+        Check(util::DataDirFor(exeDir, L"").empty(), L"data folder: none without %LOCALAPPDATA% or a marker");
+        RemoveDirectoryW(exeDir.c_str());
+
+        wchar_t exe[MAX_PATH], lad[MAX_PATH];
+        DWORD n = GetModuleFileNameW(nullptr, exe, MAX_PATH);
+        std::wstring here(exe, n);
+        here = here.substr(0, here.rfind(L'\\'));
+        DWORD ln = GetEnvironmentVariableW(L"LOCALAPPDATA", lad, MAX_PATH);
+        Check(util::DataDir() == util::DataDirFor(here, std::wstring(lad, ln < MAX_PATH ? ln : 0)) && !util::DataDir().empty(),
+              L"data folder of this run: " + util::DataDir() + (util::PortableMode() ? L" (portable)" : L""));
+        SetEnvironmentVariableW(L"WINNCDU_JOURNAL", nullptr);
+        Check(JournalFile() == util::DataDir() + L"\\journal.log" && ProtectRulesFile() == util::DataDir() + L"\\protect.txt",
+              L"journal.log and protect.txt are in it");
+    }
+
     std::wstring journal = tmp + L"\\winncdu-journal-test-" + pid + L".log";
     SetEnvironmentVariableW(L"WINNCDU_JOURNAL", journal.c_str());
     DeleteFileW(journal.c_str());

@@ -1,0 +1,33 @@
+{
+    "version": "__VERSION__",
+    "description": "Fast disk usage analyzer and cleaner for Windows, inspired by ncdu.",
+    "homepage": "https://github.com/N604K/WinNCDU",
+    "license": "LICENSE-PLACEHOLDER",
+    "notes": "Runs in portable mode: settings, history, journal and rules are kept in $persist_dir\\WinNCDU-data.",
+    "architecture": {
+        "64bit": {
+            "url": "__URL__",
+            "hash": "__SHA256__"
+        }
+    },
+    "pre_install": "New-Item -ItemType File -Force \"$dir\\winncdu.portable\" | Out-Null",
+    "bin": "winncdu-cli.exe",
+    "shortcuts": [
+        [
+            "winncdu.exe",
+            "WinNCDU"
+        ]
+    ],
+    "persist": "WinNCDU-data",
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/N604K/WinNCDU/releases/download/v$version/winncdu-$version-x64.zip",
+                "hash": {
+                    "url": "$url.sha256"
+                }
+            }
+        }
+    }
+}

@@ -17,14 +17,6 @@ namespace {
 std::mutex g_journalLock;
 constexpr int64_t kRotateBytes = 4 << 20;  // journal.log -> journal.1.log
 
-std::wstring LocalAppDataDir() {
-    PWSTR p = nullptr;
-    std::wstring out;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) out = std::wstring(p) + L"\\WinNCDU";
-    CoTaskMemFree(p);
-    return out;
-}
-
 std::wstring FormatUtc(int64_t ticks) {
     FILETIME ft;
     ft.dwLowDateTime = static_cast<DWORD>(ticks);
@@ -146,7 +138,7 @@ std::wstring JournalFile() {
     wchar_t over[MAX_PATH];
     DWORD n = GetEnvironmentVariableW(L"WINNCDU_JOURNAL", over, MAX_PATH);  // tests
     if (n && n < MAX_PATH) return over;
-    std::wstring dir = LocalAppDataDir();
+    std::wstring dir = util::DataDir();
     return dir.empty() ? L"" : dir + L"\\journal.log";
 }
 
@@ -164,7 +156,7 @@ void JournalAppend(const JournalEntry& e) {
     std::wstring file = JournalFile();
     if (file.empty()) return;
     std::lock_guard<std::mutex> lk(g_journalLock);
-    CreateDirectoryW(LocalAppDataDir().c_str(), nullptr);
+    CreateDirectoryW(util::DataDir().c_str(), nullptr);
     WIN32_FILE_ATTRIBUTE_DATA fa;
     bool exists = GetFileAttributesExW(file.c_str(), GetFileExInfoStandard, &fa) != FALSE;
     if (exists && ((static_cast<int64_t>(fa.nFileSizeHigh) << 32) | fa.nFileSizeLow) > kRotateBytes) {

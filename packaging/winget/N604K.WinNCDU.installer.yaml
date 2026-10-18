@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+# Template: packaging/update-manifests.ps1 fills in the version, download URL and SHA-256.
+PackageIdentifier: N604K.WinNCDU
+PackageVersion: __VERSION__
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: winncdu.exe
+    PortableCommandAlias: winncdu
+  - RelativeFilePath: winncdu-cli.exe
+    PortableCommandAlias: winncdu-cli
+Installers:
+  - Architecture: x64
+    InstallerUrl: __URL__
+    InstallerSha256: __SHA256__
+ManifestType: installer
+ManifestVersion: 1.6.0

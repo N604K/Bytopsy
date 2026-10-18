@@ -30,7 +30,7 @@ for %t in (build\winncdu-*-test.exe) do %t
 | --- | --- |
 | `winncdu-protect-test` | protection levels of well-known paths, shield badges, `protect.txt` rules |
 | `winncdu-cleanup-test` | `res/cleaners.ini` parses, Cleanup deletes exactly the reviewed list, winapp2.ini import |
-| `winncdu-journal-test` | journal format, a real Recycle Bin move and restore |
+| `winncdu-journal-test` | journal format, a real Recycle Bin move and restore, where the data folder is (portable mode) |
 | `winncdu-delete-test` | permanent delete: links, read-only and locked files, long paths |
 | `winncdu-devjunk-test` | developer junk: project markers, grouping, app folders left alone |
 | `winncdu-aimodels-test` | Hugging Face / Ollama / LM Studio: revisions, shared layers, nothing outside model folders |

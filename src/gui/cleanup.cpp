@@ -489,10 +489,8 @@ std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<s
 }
 
 std::wstring UserCleanersFile(bool create) {
-    PWSTR p = nullptr;
-    std::wstring file;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) file = std::wstring(p) + L"\\WinNCDU\\cleaners.ini";
-    CoTaskMemFree(p);
+    std::wstring dir = util::DataDir();
+    std::wstring file = dir.empty() ? L"" : dir + L"\\cleaners.ini";
     if (create && !file.empty() && GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES) {
         CreateDirectoryW(file.substr(0, file.rfind(L'\\')).c_str(), nullptr);
         FILE* f = nullptr;

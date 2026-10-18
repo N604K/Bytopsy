@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Template: packaging/update-manifests.ps1 fills in the version, download URL and SHA-256 (see docs/RELEASING.md).
+     TODO(owner): add <license type="expression">...</license> or a licenseUrl once the repository
+     has a LICENSE file. -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>winncdu</id>
+    <version>__VERSION__</version>
+    <title>WinNCDU</title>
+    <authors>N604K</authors>
+    <owners>N604K</owners>
+    <projectUrl>https://github.com/N604K/WinNCDU</projectUrl>
+    <projectSourceUrl>https://github.com/N604K/WinNCDU</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/N604K/WinNCDU/issues</bugTrackerUrl>
+    <docsUrl>https://github.com/N604K/WinNCDU#readme</docsUrl>
+    <releaseNotes>https://github.com/N604K/WinNCDU/releases/tag/v__VERSION__</releaseNotes>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <tags>disk-usage disk-space ncdu treemap cleanup duplicates portable</tags>
+    <summary>Fast disk usage analyzer and cleaner for Windows, inspired by ncdu.</summary>
+    <description>WinNCDU shows what takes up space on a drive: a folder tree sorted by size, a treemap, largest files, file types, duplicates, developer junk, AI models, WSL and Docker disks, and games. Cleanup removes caches and temporary files after a review of exactly what is deleted, checks every item against protected locations, and keeps a journal with Restore from the Recycle Bin.
+
+Two programs: `winncdu` (windowed) and `winncdu-cli` (ncdu-style terminal app). Settings and data stay in %LOCALAPPDATA%\WinNCDU.</description>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

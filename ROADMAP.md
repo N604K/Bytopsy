@@ -94,7 +94,12 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       `SIGNPATH_ORGANIZATION_ID` variable and `SIGNPATH_API_TOKEN` secret are set (docs/RELEASING.md,
       `packaging/signpath/artifact-configuration.xml`). Left: a LICENSE, applying to SignPath
       Foundation, and the SignPath project setup. Releases are unsigned until then.*
-- [ ] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
+- [x] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
+      *Done: portable mode (a `winncdu.portable` file next to the exe puts all data in
+      `WinNCDU-data` beside it; one place decides, `util::DataDir()`). Manifest templates in
+      `packaging/`, filled per release by `packaging/update-manifests.ps1` (docs/RELEASING.md).
+      Left: choosing the license for the manifests and submitting them to winget-pkgs, a Scoop
+      bucket and Chocolatey.*
 - [x] CONTRIBUTING.md with a short guide "add a protected location / add a cleaner", and issue
       templates for "false alarm" and "missing protected folder".
       *Done: CONTRIBUTING.md (build, self-tests, both guides) and issue forms in
