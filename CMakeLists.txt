@@ -25,6 +25,7 @@ add_library(winncdu_core STATIC
   src/vdisks.cpp
   src/runtool.cpp
   src/wintools.cpp
+  src/games.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
@@ -135,5 +136,13 @@ if(MSVC)
   target_compile_options(winncdu-wintools-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME wintools COMMAND winncdu-wintools-test)
+
+# Games (Steam libraries, Epic manifests, launcher uninstall entries): build/winncdu-games-test.exe
+add_executable(winncdu-games-test tests/games_test.cpp)
+target_link_libraries(winncdu-games-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-games-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME games COMMAND winncdu-games-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

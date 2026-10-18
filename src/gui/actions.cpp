@@ -166,6 +166,17 @@ void App::BuildRows() {
                     for (int k = 0; k < 4; ++k) rows_.push_back({nullptr, 0, RK_WSL, kWslDocker + k});
             }
             break;
+        case View::Games:
+            for (int leftovers = 0; leftovers < 2; ++leftovers) {
+                bool any = false;
+                for (size_t i = 0; i < games_.size(); ++i) {
+                    if (games_[i].leftover != (leftovers == 1)) continue;
+                    if (!any) rows_.push_back({nullptr, 0, RK_GROUP, leftovers});
+                    any = true;
+                    rows_.push_back({nullptr, 0, RK_GAME, static_cast<int>(i)});
+                }
+            }
+            break;
         case View::CleanReview:
             if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
                 for (size_t i = 0; i < cleanup_[reviewCat_].entries.size(); ++i) rows_.push_back({nullptr, 0, RK_CLEAN, static_cast<int>(i)});
@@ -853,6 +864,150 @@ void App::WinToolAction(int action) {
     }
     d.onClose = [run](int b, bool) {
         if (b == 1 && run) run();
+    };
+    ShowDialog(std::move(d));
+}
+
+// =============================================================================================
+// Games: every launcher's installed games (works without a scan).
+
+void App::LoadGames() {
+    if (task_) return;
+    auto st = std::make_shared<std::vector<Game>>();
+    auto t = std::make_unique<Task>();
+    t->title = L"Looking for games";
+    t->lines = [] {
+        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net, Xbox"}};
+    };
+    t->onDone = [this, st] {
+        games_ = std::move(*st);
+        gamesLoaded_ = true;
+        gameChosen_ = -1;
+        gameLeftSel_.clear();
+        SortGames();
+    };
+    StartTask(std::move(t), [st] { *st = FindGames(); });
+}
+
+void App::SortGames() {
+    gameChosen_ = -1;
+    gameLeftSel_.clear();
+    std::stable_sort(games_.begin(), games_.end(), [this](const Game& a, const Game& b) {
+        if (gamesByAge_ && a.lastPlayed != b.lastPlayed) {
+            // Never-played (unknown) last, then oldest first.
+            if (!a.lastPlayed || !b.lastPlayed) return a.lastPlayed != 0;
+            return a.lastPlayed < b.lastPlayed;
+        }
+        return a.bytes > b.bytes;
+    });
+    rowsDirty_ = true;
+    Invalidate();
+}
+
+// An installed game is chosen for Uninstall (one at a time: its launcher asks); leftovers are checked.
+void App::OnGameRow(int row) {
+    if (row < 0 || row >= static_cast<int>(rows_.size()) || rows_[row].kind != RK_GAME) return;
+    size_t i = static_cast<size_t>(rows_[row].idx);
+    if (i >= games_.size()) return;
+    lists_[static_cast<int>(view_)].focus = row;
+    if (games_[i].leftover) {
+        if (!gameLeftSel_.erase(i)) gameLeftSel_.insert(i);
+    } else {
+        gameChosen_ = gameChosen_ == static_cast<int>(i) ? -1 : static_cast<int>(i);
+    }
+}
+
+void App::StartGameUninstall() {
+    if (gameChosen_ < 0 || gameChosen_ >= static_cast<int>(games_.size())) return Toast(L"Choose a game first", 2);
+    Game g = games_[gameChosen_];
+    Dialog d;
+    d.title = L"Uninstall " + g.name + L" (" + util::FormatSizeShort(g.bytes) + L")?";
+    d.message = g.uninstallHow + L", just as from its own library. WinNCDU deletes nothing itself here; press Refresh when it is done.";
+    d.icon = 0xE7FC;
+    d.tone = 1;
+    d.buttons = {L"Cancel", L"Uninstall"};
+    d.primary = 1;
+    d.onClose = [this, g](int b, bool) {
+        if (b != 1) return;
+        std::wstring err;
+        if (StartUninstall(g, err))
+            Toast(L"Finish in " + g.launcher + L", then press Refresh", 0);
+        else
+            Toast(err, 1);
+    };
+    ShowDialog(std::move(d));
+}
+
+void App::StartGameLeftoversDelete() {
+    std::vector<Game> chosen;
+    uint64_t bytes = 0;
+    for (size_t i : gameLeftSel_)
+        if (i < games_.size() && games_[i].leftover) {
+            chosen.push_back(games_[i]);
+            bytes += games_[i].bytes;
+        }
+    if (chosen.empty()) return;
+    Dialog d;
+    d.title = L"Move " + util::FormatCount(chosen.size()) + (chosen.size() == 1 ? L" leftover (" : L" leftovers (") +
+              util::FormatSizeShort(bytes) + L") to the Recycle Bin?";
+    d.message = L"No launcher has these games installed any more. If a game still keeps saves or settings in its folder, you can "
+                L"restore it from Recently deleted.";
+    for (size_t i = 0; i < chosen.size() && i < 8; ++i) d.lines.push_back(util::FormatSizeShort(chosen[i].bytes) + L"\t" + chosen[i].folder);
+    if (chosen.size() > 8) d.lines.push_back(L"\t… and " + util::FormatCount(chosen.size() - 8) + L" more");
+    d.icon = 0xE74D;
+    d.tone = 1;
+    d.buttons = {L"Cancel", L"Move to Recycle Bin"};
+    d.primary = 1;
+    d.onClose = [this, chosen](int b, bool) {
+        if (b != 1) return;
+        struct State {
+            std::vector<Game> items;
+            uint64_t freed = 0;
+            std::vector<std::wstring> errors;
+            std::atomic<size_t> index{0};
+        };
+        auto st = std::make_shared<State>();
+        st->items = chosen;
+        auto t = std::make_unique<Task>();
+        t->title = L"Moving leftovers to the Recycle Bin";
+        t->lines = [st] {
+            size_t i = std::min(st->index.load(), st->items.size() - 1);
+            return std::vector<std::pair<std::wstring, std::wstring>>{{L"", st->items[i].folder}};
+        };
+        t->progress = [st] { return static_cast<double>(st->index) / st->items.size(); };
+        t->onDone = [this, st] {
+            Toast(st->errors.empty() ? L"Moved " + util::FormatSizeShort(st->freed) + L" of leftovers to the Recycle Bin"
+                                     : st->errors[0],
+                  st->errors.empty() ? 0 : 1);
+            LoadGames();
+        };
+        StartTask(std::move(t), [st] {
+            CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+            RefreshProtection();
+            for (size_t i = 0; i < st->items.size(); ++i) {
+                st->index = i;
+                const Game& g = st->items[i];
+                ProtectReport pr = CheckProtection(g.folder);
+                if (pr.level == Protect::Important || pr.level == Protect::Blocked) {
+                    st->errors.push_back(g.folder + L" is protected and was left alone");
+                    continue;
+                }
+                std::wstring err;
+                if (!DeleteToRecycleBin(g.folder, err)) {
+                    st->errors.push_back(g.folder + L": " + err);
+                    continue;
+                }
+                st->freed += g.bytes;
+                JournalEntry je;
+                je.action = JournalAction::Recycle;
+                je.bytes = g.bytes;
+                je.items = 1;
+                je.path = g.folder;
+                je.note = L"leftover of an uninstalled " + g.launcher + L" game";
+                JournalAppend(je);
+            }
+            CoUninitialize();
+        });
     };
     ShowDialog(std::move(d));
 }
@@ -1618,7 +1773,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
-        v != View::Wsl && v != View::WinTools && v != View::CleanReview && !root_)
+        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::CleanReview && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -1649,6 +1804,9 @@ void App::ShowView(View v) {
             break;
         case View::WinTools:
             if (!winLoaded_) LoadWinTools();
+            break;
+        case View::Games:
+            if (!gamesLoaded_) LoadGames();
             break;
         default: break;
     }
@@ -1693,6 +1851,11 @@ void App::OpenRow(int row) {
     }
     if (view_ == View::Wsl) {
         if (r.kind == RK_WSL && r.idx < static_cast<int>(vdisks_.size())) RevealInExplorer(vdisks_[r.idx].path);
+        return;
+    }
+    if (view_ == View::Games) {
+        if (r.kind == RK_GAME && r.idx < static_cast<int>(games_.size()) && !games_[r.idx].folder.empty())
+            OpenWithDefault(games_[r.idx].folder);
         return;
     }
     if (view_ == View::AiModels) {
@@ -2046,6 +2209,9 @@ void App::OnCommand(int cmd) {
         case CMD_WSL_REFRESH: LoadWsl(); break;
         case CMD_WSL_FREE: StartWslFree(); break;
         case CMD_WIN_REFRESH: LoadWinTools(); break;
+        case CMD_GAMES_REFRESH: LoadGames(); break;
+        case CMD_GAME_UNINSTALL: StartGameUninstall(); break;
+        case CMD_GAMES_DELETE: StartGameLeftoversDelete(); break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE: MeasureCleanup(); break;
         case CMD_ADMIN: {

@@ -95,18 +95,18 @@ int main() {
         Check(errs.empty(), L"res/cleaners.ini has no errors" + (errs.empty() ? L"" : L": " + errs[0]));
         std::wstring ids;
         for (auto& k : cats) ids += k.id + L" ";
-        Check(ids == L"recycle temp wintemp browser thumbs crash wu do shader dev jvm conda conan winold winbt ", L"all categories, in order: " + ids);
-        if (cats.size() == 15) {
-            Check(cats[0].recycleBin && cats[13].external && cats[13].needsAdmin && cats[14].external && cats[14].targets.size() == 2,
+        Check(ids == L"recycle temp wintemp browser thumbs crash wu do shader launchers dev jvm conda conan winold winbt ", L"all categories, in order: " + ids);
+        if (cats.size() == 16) {
+            Check(cats[0].recycleBin && cats[14].external && cats[14].needsAdmin && cats[15].external && cats[15].targets.size() == 2,
                   L"kinds and admin flags");
             Check(cats[7].command.find(L"Delete-DeliveryOptimizationCache") != std::wstring::npos && cats[7].needsAdmin,
                   L"Delivery Optimization is emptied through its own command");
-            Check(cats[12].command == L"conan remove \"*\" -c" && cats[11].targets[0].filePattern == L"*.conda;*.tar.bz2",
+            Check(cats[13].command == L"conan remove \"*\" -c" && cats[12].targets[0].filePattern == L"*.conda;*.tar.bz2",
                   L"conan runs its own command; conda takes only archives");
             Check(cats[1].targets.size() == 1 && cats[1].targets[0].path == L"%TEMP%" && cats[1].targets[0].minAgeHours == 24,
                   L"temp: path and age");
             Check(cats[4].targets[0].filePattern == L"thumbcache_*.db", L"thumbs: file pattern");
-            Check(cats[1].safe && !cats[9].safe, L"temp preselected, developer caches not");
+            Check(cats[1].safe && !cats[10].safe && !cats[9].safe, L"temp preselected, developer and launcher caches not");
             Check(cats[3].targets.size() == 11 && cats[3].icon == 0xE774, L"browser: 11 paths and its icon");
         }
     }

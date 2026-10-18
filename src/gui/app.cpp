@@ -415,6 +415,14 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 if (dbl) OpenRow(hit.a);
                 break;
             }
+            if (view_ == View::Games) {
+                // The first click of a double-click already chose the row.
+                if (dbl)
+                    OpenRow(hit.a);
+                else
+                    OnGameRow(hit.a);
+                break;
+            }
             if (view_ == View::Wsl) {
                 ToggleWslRow(hit.a);
                 if (dbl) OpenRow(hit.a);
@@ -510,6 +518,10 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
             if (hit.a == 4) {
                 devJunkByAge_ = hit.b != 0;
                 SortDevJunk();
+            }
+            if (hit.a == 5) {
+                gamesByAge_ = hit.b != 0;
+                SortGames();
             }
             break;
         case HK_CHECK:
@@ -685,6 +697,8 @@ void App::OnKeyDown(WPARAM vk) {
                 ToggleAiRow(ls.focus);
             else if (view_ == View::Wsl)
                 ToggleWslRow(ls.focus);
+            else if (view_ == View::Games)
+                OnGameRow(ls.focus);
             else if (ls.focus >= 0)
                 SelectRow(ls.focus, true, false);
             break;

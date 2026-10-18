@@ -23,7 +23,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_HISTORY = 0xE81C, IC_BACK = 0xE72B, IC_FWD = 0xE72A, IC_UP = 0xE74A, IC_CHEV_R = 0xE76C,
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
-                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770;
+                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770, IC_GAME = 0xE7FC;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -249,6 +249,7 @@ void App::Paint() {
         case View::AiModels: DrawAiModels(contentArea_); break;
         case View::Wsl: DrawWsl(contentArea_); break;
         case View::WinTools: DrawWinTools(contentArea_); break;
+        case View::Games: DrawGames(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -399,6 +400,9 @@ void App::DrawSidebar() {
     for (auto& p : win_.drivers)
         if (p.old) oldDrivers += p.bytes;
     drawItem({View::WinTools, IC_SYSTEM, L"Windows", false, oldDrivers ? util::FormatSizeShort(oldDrivers) : L""});
+    uint64_t gamesTotal = 0;
+    for (auto& g : games_) gamesTotal += g.bytes;
+    drawItem({View::Games, IC_GAME, L"Games", false, gamesTotal ? util::FormatSizeShort(gamesTotal) : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
     drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 
@@ -1632,6 +1636,104 @@ void App::DrawWinTools(const RectF& area) {
         y += 102;
     }
     gfx_.PopClip();
+}
+
+void App::DrawGames(const RectF& area) {
+    float top = area.top + 18;
+    uint64_t installed = 0, leftovers = 0, chosenLeft = 0;
+    size_t count = 0;
+    for (size_t i = 0; i < games_.size(); ++i) {
+        if (games_[i].leftover) {
+            leftovers += games_[i].bytes;
+            if (gameLeftSel_.count(i)) chosenLeft += games_[i].bytes;
+        } else {
+            installed += games_[i].bytes;
+            ++count;
+        }
+    }
+    std::wstring sub = !gamesLoaded_ || games_.empty()
+                           ? L"Installed games from every launcher, uninstalled through the launcher itself"
+                           : util::FormatCount(count) + (count == 1 ? L" game  ·  " : L" games  ·  ") + util::FormatSizeShort(installed) +
+                                 (leftovers ? L"  ·  " + util::FormatSizeShort(leftovers) + L" left behind by uninstalled games" : L"");
+    float bx = area.right - 24;
+    auto button = [&](const std::wstring& t, wchar_t icon, int cmd, int style) {
+        float w = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + (icon ? 54 : 36);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), icon, t, cmd, style);
+        bx -= 8;
+    };
+    if (!gameLeftSel_.empty()) button(L"Delete leftovers " + util::FormatSizeShort(chosenLeft), IC_DELETE, CMD_GAMES_DELETE, 2);
+    if (gameChosen_ >= 0 && gameChosen_ < static_cast<int>(games_.size())) {
+        std::wstring name = games_[gameChosen_].name;
+        if (name.size() > 28) name = name.substr(0, 27) + L"…";
+        button(L"Uninstall " + name, IC_DELETE, CMD_GAME_UNINSTALL, 2);
+    }
+    button(L"Refresh", IC_REFRESH, CMD_GAMES_REFRESH, 0);
+    bx -= 8;
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Games", sub, IC_GAME);
+    float y = top + 58;
+    if (!gamesLoaded_) return;
+    if (games_.empty()) {
+        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_GAME, L"No games found",
+                       L"Looked for Steam libraries, Epic Games manifests, GOG, EA app, Ubisoft Connect and Battle.net games, and "
+                       L"XboxGames folders.");
+        return;
+    }
+    {
+        float x = area.left + 24;
+        gfx_.Text(L"Sort by", R(x, y, x + 60, y + 30), P_.textDim, Small(12.5f));
+        x += 58;
+        x += Chip(x, y, L"Size", !gamesByAge_, 5, 0) + 6;
+        Chip(x, y, L"Least recently played", gamesByAge_, 5, 1);
+        gfx_.Text(L"Click a game to choose it  ·  double-click to open its folder", R(area.left + 24, y, area.right - 24, y + 30),
+                  P_.textFaint, Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+        y += 44;
+    }
+    std::vector<Column> cols = {{L"Game", -1.3f, Align::Left, -1},
+                                {L"Launcher", 120, Align::Left, -1},
+                                {L"Size", 96, Align::Right, -1},
+                                {L"Last played", 140, Align::Left, -1},
+                                {L"Folder", -1.0f, Align::Left, -1}};
+    DrawTable(
+        R(area.left, y, area.right, area.bottom), cols, -1, true,
+        [&](int i, const Column&, int ci, const RectF& cr, bool) {
+            size_t k = static_cast<size_t>(rows_[i].idx);
+            if (k >= games_.size()) return;
+            const Game& g = games_[k];
+            float cy = (cr.top + cr.bottom) / 2;
+            switch (ci) {
+                case 0: {
+                    bool on = g.leftover ? gameLeftSel_.count(k) > 0 : gameChosen_ == static_cast<int>(k);
+                    Checkbox(RWH(cr.left, cy - 9, 18, 18), on, Hovered(HK_ROW, i));
+                    gfx_.Text(g.name, R(cr.left + 30, cr.top, cr.right, cr.bottom), P_.text,
+                              TS(13, g.leftover ? DWRITE_FONT_WEIGHT_NORMAL : DWRITE_FONT_WEIGHT_SEMI_BOLD));
+                    break;
+                }
+                case 1: gfx_.Text(g.launcher, cr, P_.textDim, Small(12.5f)); break;
+                case 2: gfx_.Text(util::FormatSizeShort(g.bytes), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
+                case 3: {
+                    std::wstring t = g.leftover         ? L""
+                                     : g.lastPlayed      ? AgeText(g.lastPlayed) + (g.lastPlayedGuess ? L" (approx.)" : L"")
+                                     : g.launcher == L"Steam" ? L"never"
+                                                              : L"unknown";
+                    int64_t days = g.lastPlayed ? (util::NowFileTime() - g.lastPlayed) / 864000000000LL : 0;
+                    gfx_.Text(t, cr, days >= 180 ? P_.warning : P_.textDim, Small(12.5f));
+                    break;
+                }
+                default: gfx_.Text(FitPath(g.folder, W(cr), 12), cr, P_.textFaint, Small(12));
+            }
+        },
+        [&](int i, const RectF& r) {
+            bool left = rows_[i].idx == 1;
+            gfx_.Icon(left ? IC_DELETE : IC_GAME, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
+            std::wstring title = left ? L"Leftovers" : L"Installed games";
+            std::wstring note = left ? L"folders of games no launcher has installed any more: check them to move them to the Recycle Bin"
+                                     : L"choose one to uninstall it through its launcher";
+            TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            float tw = gfx_.Measure(title, ts) + 4;
+            gfx_.Text(title, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
+            gfx_.Text(note, R(r.left + 48 + tw, r.top, r.right - 12, r.bottom), P_.textFaint, Small(12));
+        });
 }
 
 void App::DrawCleanup(const RectF& area) {

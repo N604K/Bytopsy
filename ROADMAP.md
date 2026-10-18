@@ -58,10 +58,12 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       optimization via its API, event logs, `$Windows.~BT`.
       *Done: Windows view and `winncdu-cli --windows`; Delivery Optimization and `$Windows.~BT` /
       `~WS` are Cleanup categories. The Security event log is never cleared.*
-- [ ] **Games**: every installed game across Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net
+- [x] **Games**: every installed game across Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net
       and Xbox, with its size and when it was last played, uninstalled through its own launcher
       (so saves in the cloud and the launcher's library stay right); plus the launchers' shader
       and download caches.
+      *Done: Games view and `winncdu-cli --games`, with leftovers of uninstalled games; a "Game
+      launcher caches" Cleanup category. Only Steam could be checked on a real PC so far.*
 - [ ] Chat apps: Teams, Discord, Slack caches; WhatsApp/Telegram media folders (show, don't preselect).
 - [ ] Browsers: cookies and history as opt-in categories, with a "keep me signed in to" list.
 

@@ -71,12 +71,22 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
     (`powercfg`).
   - *Compact OS*: compress Windows' own files, or undo it (`compact /compactos`).
   - *Event logs*: clear every log except Security (`wevtutil`).
+- **Games** (works without a scan): installed games from Steam (every library), Epic Games, GOG,
+  EA app, Ubisoft Connect, Battle.net and the Xbox app, with their size and when they were last
+  played (from Steam itself, or from when the game's program was last opened). Sort by size or by
+  least recently played. Uninstalling goes through the game's own launcher or uninstaller
+  (`steam://uninstall/<id>`, `uplay://uninstall/<id>`, the registered uninstaller, Settings for
+  Xbox games), so the launcher's library and shared runtimes stay right; WinNCDU deletes nothing
+  itself there. Steam runtimes (redistributables, Proton) are not listed. *Leftovers* are what
+  launchers leave behind: game folders, workshop items and shader caches of games that are no
+  longer installed; they go to the Recycle Bin.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
   Properties and Rescan.
 - **Cleanup** (works without a scan): Recycle Bin, temporary files, browser caches, thumbnail cache,
-  crash dumps, Windows Update downloads, Delivery Optimization, shader caches and package caches:
+  crash dumps, Windows Update downloads, Delivery Optimization, shader caches, game launcher caches
+  (Steam, Epic, Battle.net) and package caches:
   npm, Yarn, pnpm, Bun, Deno, pip, uv, Poetry, NuGet, Go, Cargo, Composer and vcpkg; Maven and
   Gradle; conda archives; Conan. Where a tool keeps more than downloads in its cache folder, only the
   downloads are taken (Poetry's virtualenvs, Deno's localStorage data and conda's hard-linked
@@ -207,7 +217,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks and wintools self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools and games self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -243,6 +253,8 @@ winncdu-cli [options] [path]
                         inside) and what Docker could prune, and exit
   --windows             List space Windows keeps (old drivers, hibernation, System
                         Restore, event logs) and exit
+  --games               List installed games of every launcher (size, last played)
+                        and leftovers of uninstalled ones, and exit
 ```
 
 Examples:
@@ -306,6 +318,7 @@ src/                  core engine + terminal app
   aimodels.cpp        AI models: Hugging Face cache, Ollama, LM Studio (list and delete)
   vdisks.cpp          WSL and Docker virtual disks: usage, compaction, Docker prune
   wintools.cpp        Windows: component store, old drivers, System Restore, hibernation, ...
+  games.cpp           games of every launcher, uninstall through the launcher, leftovers
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -327,6 +340,7 @@ tests/devjunk_test.cpp  developer junk: project markers, grouping, app folders l
 tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the model folders (ctest)
 tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
 tests/wintools_test.cpp Windows: DISM report parsing, which driver packages count as old (ctest)
+tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

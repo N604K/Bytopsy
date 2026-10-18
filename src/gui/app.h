@@ -15,6 +15,7 @@
 #include "../analysis.h"
 #include "../devjunk.h"
 #include "../fsops.h"
+#include "../games.h"
 #include "../journal.h"
 #include "../protect.h"
 #include "../scanner.h"
@@ -28,7 +29,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -89,6 +90,9 @@ enum Cmd : int {
     CMD_WINAPP2,
     CMD_WINAPP2_REMOVE,
     CMD_WIN_REFRESH,
+    CMD_GAMES_REFRESH,
+    CMD_GAME_UNINSTALL,
+    CMD_GAMES_DELETE,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 
@@ -138,7 +142,7 @@ struct Hit {
     intptr_t b = 0;
 };
 
-enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL };
+enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL, RK_GAME };
 
 struct Row {
     Node* node = nullptr;
@@ -264,6 +268,11 @@ private:
     void StartWslFree();
     uint64_t WslRowBytes(int id) const;
     void LoadWinTools();
+    void LoadGames();
+    void SortGames();
+    void OnGameRow(int row);
+    void StartGameUninstall();
+    void StartGameLeftoversDelete();
     void WinToolAction(int action);
     void RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
                     std::function<AdminRun()> work);
@@ -319,6 +328,7 @@ private:
     void DrawAiModels(const RectF& area);
     void DrawWsl(const RectF& area);
     void DrawWinTools(const RectF& area);
+    void DrawGames(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -412,6 +422,11 @@ private:
     };
     WinToolsInfo win_;
     bool winLoaded_ = false;
+    std::vector<Game> games_;
+    bool gamesLoaded_ = false;
+    bool gamesByAge_ = false;       // least recently played first instead of largest
+    int gameChosen_ = -1;           // the installed game the Uninstall button acts on
+    std::set<size_t> gameLeftSel_;  // checked leftovers
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

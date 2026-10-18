@@ -9,6 +9,7 @@
 #include "export.h"
 #include "fsops.h"
 #include "aimodels.h"
+#include "games.h"
 #include "journal.h"
 #include "protect.h"
 #include "scanner.h"
@@ -51,6 +52,8 @@ void PrintUsage() {
         "                        inside) and what Docker could prune, and exit\n"
         "  --windows             List space Windows keeps (old drivers, hibernation, System\n"
         "                        Restore, event logs) and exit\n"
+        "  --games               List installed games of every launcher (size, last played)\n"
+        "                        and leftovers of uninstalled ones, and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -215,6 +218,37 @@ int ListWindowsTools() {
     return 0;
 }
 
+int ListGames() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    auto games = FindGames();
+    std::wstring out = L"Installed games (Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net, Xbox), largest first.\n\n";
+    if (games.empty()) out += L"  None found.\n";
+    for (int leftovers = 0; leftovers < 2; ++leftovers) {
+        bool header = false;
+        for (auto& g : games) {
+            if (g.leftover != (leftovers == 1)) continue;
+            if (leftovers && !header) out += L"\nLeftovers of uninstalled games:\n";
+            header = true;
+            wchar_t head[64];
+            swprintf(head, 64, L"  %10ls  %-16ls ", util::FormatSizeShort(g.bytes).c_str(), g.launcher.c_str());
+            out += head + g.name +
+                   (g.leftover ? L"  " + g.folder
+                               : L"  (last played " +
+                                     (g.lastPlayed ? util::FormatTime(g.lastPlayed).substr(0, 10) + (g.lastPlayedGuess ? L", approx." : L"")
+                                                   : std::wstring(L"unknown")) +
+                                     L")") +
+                   L"\n";
+        }
+    }
+    out += L"\nUninstall through the launcher, or remove leftovers, in the windowed app: Games.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
 int Fail(const std::wstring& msg) {
     fwprintf(stderr, L"winncdu-cli: %s\n", msg.c_str());
     return 2;
@@ -334,6 +368,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListVDisks();
         } else if (a == L"--windows") {
             return ListWindowsTools();
+        } else if (a == L"--games") {
+            return ListGames();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {
