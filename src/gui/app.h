@@ -19,6 +19,7 @@
 #include "../journal.h"
 #include "../protect.h"
 #include "../scanner.h"
+#include "../startup.h"
 #include "../vdisks.h"
 #include "../wintools.h"
 #include "../tree.h"
@@ -29,7 +30,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, Startup, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -93,6 +94,7 @@ enum Cmd : int {
     CMD_GAMES_REFRESH,
     CMD_GAME_UNINSTALL,
     CMD_GAMES_DELETE,
+    CMD_STARTUP_REFRESH,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 
@@ -133,6 +135,7 @@ enum HitKind {
     HK_BADGE,     // shield badge (tooltip): a = row, -1 = the open folder
     HK_RESTORE,   // a = index into deleted_
     HK_REVIEW,    // a = cleanup category: open its file list
+    HK_SWITCH,    // a = startup entry index: its on/off switch
 };
 
 struct Hit {
@@ -142,7 +145,7 @@ struct Hit {
     intptr_t b = 0;
 };
 
-enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL, RK_GAME };
+enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL, RK_GAME, RK_STARTUP };
 
 struct Row {
     Node* node = nullptr;
@@ -273,6 +276,10 @@ private:
     void OnGameRow(int row);
     void StartGameUninstall();
     void StartGameLeftoversDelete();
+    void LoadStartup();
+    bool StartupVisible(const StartupEntry& e) const;
+    void OnStartupSwitch(int index);
+    void ApplyStartupChange(int index, bool enable);
     void WinToolAction(int action);
     void RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
                     std::function<AdminRun()> work);
@@ -329,6 +336,7 @@ private:
     void DrawWsl(const RectF& area);
     void DrawWinTools(const RectF& area);
     void DrawGames(const RectF& area);
+    void DrawStartup(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -427,6 +435,9 @@ private:
     bool gamesByAge_ = false;       // least recently played first instead of largest
     int gameChosen_ = -1;           // the installed game the Uninstall button acts on
     std::set<size_t> gameLeftSel_;  // checked leftovers
+    StartupList startup_;
+    bool startupLoaded_ = false;
+    bool startupShowMs_ = false;  // also list Microsoft's own services and tasks
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

@@ -69,8 +69,12 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 
 ## 3. Maintenance beyond disk space
 
-- [ ] **Startup manager**: Run keys, Startup folders, scheduled tasks and services, with impact
+- [x] **Startup manager**: Run keys, Startup folders, scheduled tasks and services, with impact
       estimates; disable (reversible) rather than delete.
+      *Done: "Startup" view and `--startup` (`src/startup.cpp`); off = StartupApproved (as Task
+      Manager), Task Scheduler's switch, or Manual start for services (previous start type kept in
+      the journal); impact measured from the Diagnostics-Performance log when readable, else an
+      estimate from program size and type, else "unknown"; Microsoft's services never changed.*
 - [ ] **Uninstaller with leftovers**: list apps from the Uninstall registry keys, run their uninstaller,
       then offer leftover folders (checked against the protection rules).
 - [ ] **Disk health**: SMART/wear via `MSFT_PhysicalDisk` and `MSFT_StorageReliabilityCounter`, TRIM

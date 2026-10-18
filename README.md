@@ -80,6 +80,22 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   itself there. Steam runtimes (redistributables, Proton) are not listed. *Leftovers* are what
   launchers leave behind: game folders, workshop items and shader caches of games that are no
   longer installed; they go to the Recycle Bin.
+- **Startup** (works without a scan): what starts with Windows: the Run keys (this user, all users,
+  32-bit), Run once entries, both Startup folders, scheduled tasks with an "at log on" or "at
+  startup" trigger (Windows' own `\Microsoft\Windows\` tasks are left out), and services that start
+  automatically. Each row shows the program's publisher, where it is registered, the command and an
+  impact. Turning an entry off never deletes it: Run keys and Startup folder items are marked
+  disabled in `StartupApproved` exactly as Task Manager does it (so Task Manager agrees), tasks are
+  disabled in Task Scheduler, and services are set to Manual start, with the previous start type
+  kept in the journal so turning it on sets it back. This user's Run and Startup folder entries flip
+  at once; anything for all users, tasks and services are confirmed first and ask for
+  administrator permission when needed. Microsoft's own services are only shown (behind "Show
+  Microsoft's services and tasks"), never changed; Run once entries are only listed. *Impact* is
+  honest about what it is: measured when Windows' boot performance log (Diagnostics-Performance,
+  events 101/103) recorded the program slowing a boot, which needs administrator rights to read;
+  otherwise an estimate from the program file's size and type (Electron/Chromium apps high, small
+  updaters and delayed-start services low), and "unknown" when the program file or its size isn't
+  there. Hover the impact to see why. Every change is journaled.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -217,7 +233,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools and games self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games and startup self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -255,6 +271,8 @@ winncdu-cli [options] [path]
                         Restore, event logs) and exit
   --games               List installed games of every launcher (size, last played)
                         and leftovers of uninstalled ones, and exit
+  --startup             List what starts with Windows (Run keys, Startup folders,
+                        logon/boot tasks, services) with impact estimates, and exit
 ```
 
 Examples:
@@ -319,6 +337,7 @@ src/                  core engine + terminal app
   vdisks.cpp          WSL and Docker virtual disks: usage, compaction, Docker prune
   wintools.cpp        Windows: component store, old drivers, System Restore, hibernation, ...
   games.cpp           games of every launcher, uninstall through the launcher, leftovers
+  startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -341,6 +360,7 @@ tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the
 tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
 tests/wintools_test.cpp Windows: DISM report parsing, which driver packages count as old (ctest)
 tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
+tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```
