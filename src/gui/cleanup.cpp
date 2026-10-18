@@ -380,8 +380,8 @@ const char kUserTemplate[] =
     "# path = %LOCALAPPDATA%\\MyApp\\Cache\r\n"
     "# path = %LOCALAPPDATA%\\MyApp\\Logs | files=*.log | age=7d\r\n"
     "#\r\n"
-    "# Turn a built-in category off (ids: recycle, temp, wintemp, browser, chat, chatmedia, thumbs,\r\n"
-    "# crash, wu, do, shader, launchers, dev, jvm, conda, conan, winold, winbt):\r\n"
+    "# Turn a built-in category off (ids: recycle, temp, wintemp, browser, cookies, history, chat,\r\n"
+    "# chatmedia, thumbs, crash, wu, do, shader, launchers, dev, jvm, conda, conan, winold, winbt):\r\n"
     "# [dev]\r\n"
     "# enabled = false\r\n"
     "#\r\n"
@@ -437,8 +437,9 @@ std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<s
             std::wstring k = util::ToLower(val);
             cur->recycleBin = k == L"recyclebin";
             cur->external = k == L"external";
+            cur->browserData = k == L"cookies" ? BrowserData::Cookies : k == L"history" ? BrowserData::History : BrowserData::None;
             if (k == L"command") commandKind.insert(cur->id);
-            ok = cur->recycleBin || cur->external || k == L"files" || k == L"command";
+            ok = cur->recycleBin || cur->external || cur->browserData != BrowserData::None || k == L"files" || k == L"command";
         } else if (key == L"command") {
             cur->command = val;
         } else if (key == L"path") {
@@ -538,7 +539,7 @@ std::vector<CleanCategory> BuildCleanupCategories(std::vector<std::wstring>* err
         }
         auto covered = std::make_shared<std::vector<CleanExclude>>();
         for (auto& c : v)
-            if (!c.recycleBin && !c.external)
+            if (!c.recycleBin && !c.external && c.browserData == BrowserData::None)
                 for (auto& t : c.targets) covered->push_back({t.path, t.filePattern.empty() ? L"*" : t.filePattern, t.filePattern.empty()});
         size_t builtins = v.size();
         for (auto& c : *cached)
@@ -688,6 +689,58 @@ bool DetectPresent(const std::wstring& what) {
     return absolute && p.find(L'%') == std::wstring::npos && GlobExists(p);
 }
 
+namespace {
+
+// kind = cookies / history: one entry per database of each profile folder. The profiles are
+// browser profiles, which the protection rules mark Important; these categories exist to clean
+// exactly that data, opt-in and reviewed, so only Blocked folders (yours, in protect.txt) are left out.
+void MeasureBrowserData(CleanCategory& c, std::atomic<bool>& cancel) {
+    std::vector<std::wstring> dirs;
+    for (auto& t : c.targets) Expand(Env(t.path), dirs);
+    dirs.erase(std::remove_if(dirs.begin(), dirs.end(), [&](const std::wstring& d) {
+                   bool blocked = IsDriveRoot(d) || CheckProtection(d).level >= Protect::Blocked;
+                   c.guarded += blocked ? 1 : 0;
+                   return blocked;
+               }),
+               dirs.end());
+    if (c.browserData == BrowserData::Cookies) {
+        // The first time, the list starts with the most visited sites, so cleaning cookies doesn't
+        // sign you out of the sites you use every day unless you say so.
+        std::wstring file = KeepSignedInFile();
+        if (!file.empty() && GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES) {
+            bool any = std::any_of(dirs.begin(), dirs.end(), [&](const std::wstring& d) { return !InspectProfile(d, BrowserData::Cookies, {}).empty(); });
+            if (any) CreateKeepList(file, MostVisitedSites(dirs, 15));
+        }
+        c.keep = LoadKeepList(file);
+    }
+    for (auto& d : dirs) {
+        if (cancel) return;
+        std::wstring err;
+        for (auto& b : InspectProfile(d, c.browserData, c.keep, &err)) {
+            if (!b.rows) continue;
+            CleanEntry e;
+            e.path = b.file;
+            e.bytes = b.bytes;
+            e.files = b.rows;
+            e.mtime = b.mtime;
+            if (c.browserData == BrowserData::Cookies)
+                e.note = util::FormatCount(b.rows) + (b.rows == 1 ? L" cookie" : L" cookies") +
+                         (b.keptRows ? L"  ·  " + util::FormatCount(b.keptRows) + L" kept for " + util::FormatCount(b.keptSites) +
+                                           (b.keptSites == 1 ? L" site" : L" sites")
+                                     : L"");
+            else
+                e.note = util::FormatCount(b.rows) + (b.rows == 1 ? L" visit" : L" visits") +
+                         (b.firefox ? L"  ·  bookmarks stay" : L"");
+            c.bytes += e.bytes;
+            c.files += e.files;
+            c.entries.push_back(std::move(e));
+        }
+        if (!err.empty()) c.denied = true;
+    }
+}
+
+}  // namespace
+
 uint64_t CleanCategory::KeptBytes() const {
     uint64_t n = 0;
     for (auto& e : entries)
@@ -729,6 +782,8 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel) {
             e.dir = a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
             c.entries.push_back(std::move(e));
         }
+    } else if (c.browserData != BrowserData::None) {
+        MeasureBrowserData(c, cancel);
     } else {
         c.toolMissing = !c.command.empty() && FindTool(c.command).empty();
         if (!c.detect.empty()) {
@@ -843,6 +898,40 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
         MeasureCategory(after, measureAll);
         r.freed = c.bytes > after.bytes ? c.bytes - after.bytes : 0;
         r.files = c.files > after.files ? c.files - after.files : 0;
+        return r;
+    }
+    if (c.browserData != BrowserData::None) {
+        // Kept sites: those on the list when it was measured, and any added since.
+        std::vector<std::wstring> keep = c.keep;
+        if (c.browserData == BrowserData::Cookies)
+            for (auto& k : LoadKeepList(KeepSignedInFile()))
+                if (std::find(keep.begin(), keep.end(), k) == keep.end()) keep.push_back(k);
+        for (auto& e : c.entries) {
+            if (cancel) break;
+            if (e.keep) continue;
+            onItem(e.path);
+            if (CheckProtection(e.path).level >= Protect::Blocked) {
+                ++r.failed;
+                continue;
+            }
+            if (!PathExists(e.path)) continue;
+            // A running browser holds its databases open, and would undo or trip over the change.
+            std::vector<AppUsingFile> apps = AppsUsing(e.path);
+            if (apps.empty()) {
+                BrowserCleanResult br;
+                std::wstring err;
+                if (CleanBrowserDb(e.path, c.browserData, keep, br, err)) {
+                    r.freed += br.freed;
+                    r.files += br.rows;
+                    continue;
+                }
+                if (!br.busy && r.error.empty()) r.error = e.path + L": " + err;
+                if (br.busy) apps = AppsUsing(e.path);
+            }
+            ++r.failed;
+            for (auto& a : apps)
+                if (std::find(r.lockedBy.begin(), r.lockedBy.end(), a.name) == r.lockedBy.end()) r.lockedBy.push_back(a.name);
+        }
         return r;
     }
     if (c.recycleBin && c.KeptCount() == 0) {

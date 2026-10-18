@@ -96,7 +96,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Optimization cache is emptied with Windows' own `Delete-DeliveryOptimizationCache`; previous
   Windows installations and upgrade leftovers (`Windows.old`, `$Windows.~BT`, `$Windows.~WS`) are
   measured and handed to Windows Disk Cleanup. Media you received in WhatsApp Desktop
-  (`LocalState\shared	ransfers`) and Telegram Desktop (`Downloads\Telegram Desktop` and its media
+  (`LocalState\shared\transfers`) and Telegram Desktop (`Downloads\Telegram Desktop` and its media
   cache, never the rest of `tdata`, which holds the sign-in) is shown with its size but never
   preselected: apart from Telegram's cache, those files are gone from the PC for good.
   Each category is measured first, and only the safe ones are preselected. *Review* lists exactly
@@ -107,10 +107,24 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Categories are rules in [res/cleaners.ini](res/cleaners.ini) (built into the exe), so adding an
   app needs no code. Your own rules go in `%LOCALAPPDATA%\WinNCDU\cleaners.ini` (menu → *Cleanup
   rules…* creates it with examples): a section with a built-in's id replaces it, `enabled = false`
-  turns it off, and `kind = command` with `command = ...` runs a tool's clean command instead of
+  turns it off, `kind = cookies` / `kind = history` cleans the browser profile folders it names,
+  and `kind = command` with `command = ...` runs a tool's clean command instead of
   deleting files (the tool must be on PATH; the current folder is never searched). User rules are never preselected, can't name a whole drive, and anything the
   protection rules mark Important or Blocked is left out of every category, as is any folder with
   a repository, key, password database or virtual disk somewhere inside.
+- **Browser cookies and history** (Cleanup, opt-in, never preselected): Chrome, Edge, Brave, Vivaldi,
+  Chromium, Opera and Firefox, per profile. Cookies are deleted inside the browser's own cookie
+  database (with SQLite), except those of the sites on your **keep me signed in to** list
+  (`%LOCALAPPDATA%\WinNCDU\keep-signed-in.txt`, opened from the card or menu → *Keep me signed in
+  to…*; a site covers its subdomains). The list starts with your most visited sites, so nothing
+  you use daily signs you out unless you remove it. History: Chromium's `History` file goes with the
+  files made from it (Visited Links, Top Sites, Shortcuts, Network Action Predictor); Firefox's
+  visits are deleted in `places.sqlite` together with pages nothing else refers to, so bookmarks and
+  keywords stay. Passwords, bookmarks and open tabs are never touched. Measuring reads the databases
+  as read-only snapshots (no locks, nothing written); cleaning needs the browser closed, and a
+  browser that still has its database open is named and skipped. A database whose layout isn't the
+  expected one is left alone. Browser profiles are Important in the protection rules, which these
+  two categories exist to clean; only Blocked folders are left out of them.
 - **winapp2.ini import** (menu → *Import winapp2.ini…*): the community database of thousands of app
   cleaners ([Winapp2](https://github.com/MoscaDotTo/Winapp2), also used by BleachBit). Apps found
   on this PC that have something to clean appear below the built-in list, largest first, never
@@ -333,13 +347,14 @@ src/gui/              windowed app
   gfx.cpp             rendering helpers
   treemap.cpp         squarified treemap layout
   cleanup.cpp         cleanup rules: parsing, measuring, cleaning
+  browserdata.cpp     browser cookies (with the keep list) and history, through SQLite
   winapp2.cpp         winapp2.ini import
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
 tests/protect_test.cpp  self-check of the protection rules (ctest)
 tests/journal_test.cpp  journal format and a real recycle + restore round trip (ctest)
-tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list (ctest)
+tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list; kept sites' cookies and Firefox bookmarks survive (ctest)
 tests/delete_test.cpp   permanent delete: links, read-only, locked files, long paths (ctest)
 tests/devjunk_test.cpp  developer junk: project markers, grouping, app folders left alone (ctest)
 tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the model folders (ctest)
@@ -348,4 +363,11 @@ tests/wintools_test.cpp Windows: DISM report parsing, which driver packages coun
 tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
+third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified
 ```
+
+## Third-party code
+
+[SQLite](https://www.sqlite.org) (`third_party/sqlite`, version 3.54.1, the amalgamation from
+sqlite.org) is in the public domain. It is used only to read and edit browsers' cookie and history
+databases.

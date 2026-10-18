@@ -12,6 +12,7 @@
 #include "gui/cleanup.h"
 #include "journal.h"
 #include "protect.h"
+#include "sqlite3.h"
 #include "util.h"
 
 static int g_fail = 0;
@@ -45,6 +46,66 @@ static CleanEntry* Find(CleanCategory& c, const std::wstring& path) {
         if (_wcsicmp(e.path.c_str(), path.c_str()) == 0) return &e;
     return nullptr;
 }
+
+static void MkDirs(const std::wstring& path) {
+    for (size_t i = path.find(L'\\', 3); ; i = path.find(L'\\', i + 1)) {
+        CreateDirectoryW(path.substr(0, i).c_str(), nullptr);
+        if (i == std::wstring::npos) break;
+    }
+}
+
+// Runs SQL on a fixture database (made if missing).
+static bool Sql(const std::wstring& file, const char* sql) {
+    sqlite3* db = nullptr;
+    int rc = sqlite3_open16(file.c_str(), &db);
+    char* msg = nullptr;
+    if (rc == SQLITE_OK) rc = sqlite3_exec(db, sql, nullptr, nullptr, &msg);
+    if (msg) {
+        printf("SQL error: %s\n", msg);
+        sqlite3_free(msg);
+    }
+    sqlite3_close(db);
+    return rc == SQLITE_OK;
+}
+
+// The rows of a query, one "a|b|c" string each.
+static std::string Rows(const std::wstring& file, const char* sql) {
+    sqlite3* db = nullptr;
+    std::string out;
+    if (sqlite3_open16(file.c_str(), &db) == SQLITE_OK) {
+        sqlite3_stmt* st = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &st, nullptr) == SQLITE_OK)
+            while (sqlite3_step(st) == SQLITE_ROW) {
+                for (int i = 0; i < sqlite3_column_count(st); ++i) {
+                    const unsigned char* t = sqlite3_column_text(st, i);
+                    out += (i ? "|" : "") + std::string(t ? reinterpret_cast<const char*>(t) : "NULL");
+                }
+                out += ";";
+            }
+        sqlite3_finalize(st);
+    }
+    sqlite3_close(db);
+    return out;
+}
+
+// Every file under `dir` with its size and time: measuring must leave all of it as it was.
+static std::wstring Listing(const std::wstring& dir) {
+    std::wstring out;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW((dir + L"\\*").c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return out;
+    do {
+        if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            out += Listing(dir + L"\\" + fd.cFileName);
+        else
+            out += dir + L"\\" + fd.cFileName + L" " + std::to_wstring(fd.nFileSizeLow) + L" " + std::to_wstring(fd.ftLastWriteTime.dwLowDateTime) + L"\n";
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return out;
+}
+
+static std::wstring W(const std::string& s) { return util::Utf8ToWide(s); }
 
 int main() {
     wchar_t b[MAX_PATH];
@@ -96,29 +157,34 @@ int main() {
         Check(errs.empty(), L"res/cleaners.ini has no errors" + (errs.empty() ? L"" : L": " + errs[0]));
         std::wstring ids;
         for (auto& k : cats) ids += k.id + L" ";
-        Check(ids == L"recycle temp wintemp browser chat chatmedia thumbs crash wu do shader launchers dev jvm conda conan winold winbt ",
+        Check(ids == L"recycle temp wintemp browser cookies history chat chatmedia thumbs crash wu do shader launchers dev jvm conda conan "
+                     L"winold winbt ",
               L"all categories, in order: " + ids);
-        if (cats.size() == 18) {
-            Check(cats[0].recycleBin && cats[16].external && cats[16].needsAdmin && cats[17].external && cats[17].targets.size() == 2,
+        if (cats.size() == 20) {
+            Check(cats[0].recycleBin && cats[18].external && cats[18].needsAdmin && cats[19].external && cats[19].targets.size() == 2,
                   L"kinds and admin flags");
-            Check(cats[9].command.find(L"Delete-DeliveryOptimizationCache") != std::wstring::npos && cats[9].needsAdmin,
+            Check(cats[11].command.find(L"Delete-DeliveryOptimizationCache") != std::wstring::npos && cats[11].needsAdmin,
                   L"Delivery Optimization is emptied through its own command");
-            Check(cats[15].command == L"conan remove \"*\" -c" && cats[14].targets[0].filePattern == L"*.conda;*.tar.bz2",
+            Check(cats[17].command == L"conan remove \"*\" -c" && cats[16].targets[0].filePattern == L"*.conda;*.tar.bz2",
                   L"conan runs its own command; conda takes only archives");
             Check(cats[1].targets.size() == 1 && cats[1].targets[0].path == L"%TEMP%" && cats[1].targets[0].minAgeHours == 24,
                   L"temp: path and age");
-            Check(cats[6].targets[0].filePattern == L"thumbcache_*.db", L"thumbs: file pattern");
-            Check(cats[1].safe && !cats[12].safe && !cats[11].safe, L"temp preselected, developer and launcher caches not");
+            Check(cats[8].targets[0].filePattern == L"thumbcache_*.db", L"thumbs: file pattern");
+            Check(cats[1].safe && !cats[14].safe && !cats[13].safe, L"temp preselected, developer and launcher caches not");
             Check(cats[3].targets.size() == 11 && cats[3].icon == 0xE774, L"browser: 11 paths and its icon");
+            // Cookies and history: opt-in, cleaned in the databases of the same browser profiles.
+            Check(cats[4].browserData == BrowserData::Cookies && cats[5].browserData == BrowserData::History && !cats[4].safe &&
+                      !cats[5].safe && cats[4].targets.size() == 8 && cats[5].targets.size() == 8 && cats[3].browserData == BrowserData::None,
+                  L"cookies and history: 8 browser profile paths each, never preselected");
             // Chat apps: only cache folders, never their sign-in, storage or message databases.
-            bool onlyCaches = cats[4].targets.size() == 33;
-            for (auto& t : cats[4].targets) {
+            bool onlyCaches = cats[6].targets.size() == 33;
+            for (auto& t : cats[6].targets) {
                 std::wstring last = util::ToLower(t.path.substr(t.path.rfind(L'\\') + 1));
                 onlyCaches = onlyCaches && t.filePattern.empty() && t.minAgeHours == 0 &&
                              ((last.size() >= 5 && last.compare(last.size() - 5, 5, L"cache") == 0) || last == L"cachestorage");
             }
-            Check(onlyCaches && cats[4].safe, L"chat: 33 cache folders (Teams, Discord, Slack), preselected like browser caches");
-            Check(!cats[5].safe && cats[5].targets.size() == 4 && cats[5].desc.find(L"for good") != std::wstring::npos,
+            Check(onlyCaches && cats[6].safe, L"chat: 33 cache folders (Teams, Discord, Slack), preselected like browser caches");
+            Check(!cats[7].safe && cats[7].targets.size() == 4 && cats[7].desc.find(L"for good") != std::wstring::npos,
                   L"chat media: 4 folders, never preselected, says what is lost");
         }
     }
@@ -338,6 +404,160 @@ int main() {
                 }
         std::string u = util::WideToUtf8(s);
         fputs(u.c_str(), stdout);
+    }
+
+    // ---- Browser cookies and history, on fixture profiles made with SQLite: cookies of kept sites
+    // survive, Firefox's bookmarks survive, measuring writes nothing, an open database is left alone.
+    {
+        std::wstring root = dir + L"\\browsers";
+        std::wstring chrome = root + L"\\Chrome\\User Data\\Default", other = root + L"\\Chrome\\User Data\\Profile 2";
+        std::wstring ff = root + L"\\Firefox\\Profiles\\abc.default-release";
+        std::wstring keepFile = root + L"\\keep-signed-in.txt";
+        MkDirs(chrome + L"\\Network");
+        MkDirs(other);
+        MkDirs(ff);
+        SetEnvironmentVariableW(L"WINNCDU_KEEP_SIGNED_IN", keepFile.c_str());
+        bool made =
+            Sql(chrome + L"\\Network\\Cookies",
+                "CREATE TABLE meta(key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR);"
+                "CREATE TABLE cookies(creation_utc INTEGER NOT NULL, host_key TEXT NOT NULL, name TEXT NOT NULL, value TEXT NOT NULL,"
+                " path TEXT NOT NULL, encrypted_value BLOB);"
+                "INSERT INTO cookies VALUES(1,'.google.com','SID','','/',x'00'),(2,'accounts.google.com','LSID','','/',x'00'),"
+                "(3,'.notgoogle.com','a','','/',x'00'),(4,'.tracker.example','t','','/',x'00'),(5,'github.com','user_session','','/',x'00'),"
+                "(6,'.github.com','_gh_sess','','/',x'00');") &&
+            Sql(chrome + L"\\History",
+                "CREATE TABLE meta(key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR);"
+                "CREATE TABLE urls(id INTEGER PRIMARY KEY, url LONGVARCHAR, title LONGVARCHAR, visit_count INTEGER DEFAULT 0 NOT NULL,"
+                " typed_count INTEGER DEFAULT 0 NOT NULL, last_visit_time INTEGER NOT NULL, hidden INTEGER DEFAULT 0 NOT NULL);"
+                "CREATE TABLE visits(id INTEGER PRIMARY KEY, url INTEGER NOT NULL, visit_time INTEGER NOT NULL);"
+                "INSERT INTO urls VALUES(1,'https://mail.google.com/mail/u/0/','Mail',40,0,1,0),(2,'https://github.com/x/y','GitHub',25,0,1,0),"
+                "(3,'https://www.bbc.co.uk/news','BBC',9,0,1,0),(4,'https://once.example/','Once',1,0,1,0),"
+                "(5,'chrome://settings/','Settings',50,0,1,0),(6,'http://192.168.1.1/','Router',30,0,1,0);"
+                "INSERT INTO visits VALUES(1,1,1),(2,1,2),(3,2,3),(4,3,4);") &&
+            Sql(other + L"\\Cookies", "CREATE TABLE foo(host_key TEXT); INSERT INTO foo VALUES('.example.com');") &&
+            Sql(ff + L"\\cookies.sqlite",
+                "PRAGMA journal_mode=WAL;"
+                "CREATE TABLE moz_cookies(id INTEGER PRIMARY KEY, originAttributes TEXT NOT NULL DEFAULT '', name TEXT, value TEXT,"
+                " host TEXT, path TEXT);"
+                "INSERT INTO moz_cookies(name, value, host, path) VALUES('a','1','.github.com','/'),('b','2','.ads.example','/'),"
+                "('c','3','www.github.com','/');") &&
+            Sql(ff + L"\\places.sqlite",
+                "PRAGMA journal_mode=WAL;"
+                "CREATE TABLE moz_origins(id INTEGER PRIMARY KEY, prefix TEXT NOT NULL, host TEXT NOT NULL, frecency INTEGER NOT NULL);"
+                "CREATE TABLE moz_places(id INTEGER PRIMARY KEY, url LONGVARCHAR, title LONGVARCHAR, rev_host LONGVARCHAR,"
+                " visit_count INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0 NOT NULL, typed INTEGER DEFAULT 0 NOT NULL,"
+                " frecency INTEGER DEFAULT -1 NOT NULL, last_visit_date INTEGER, guid TEXT, foreign_count INTEGER DEFAULT 0 NOT NULL,"
+                " url_hash INTEGER DEFAULT 0 NOT NULL, origin_id INTEGER, recalc_frecency INTEGER NOT NULL DEFAULT 0);"
+                "CREATE TABLE moz_historyvisits(id INTEGER PRIMARY KEY, from_visit INTEGER, place_id INTEGER, visit_date INTEGER,"
+                " visit_type INTEGER, session INTEGER);"
+                "CREATE TABLE moz_bookmarks(id INTEGER PRIMARY KEY, type INTEGER, fk INTEGER DEFAULT NULL, parent INTEGER,"
+                " position INTEGER, title LONGVARCHAR, keyword_id INTEGER, folder_type TEXT, dateAdded INTEGER, lastModified INTEGER, guid TEXT);"
+                "CREATE TABLE moz_keywords(id INTEGER PRIMARY KEY AUTOINCREMENT, keyword TEXT UNIQUE, place_id INTEGER, post_data TEXT);"
+                "CREATE TABLE moz_annos(id INTEGER PRIMARY KEY, place_id INTEGER NOT NULL, anno_attribute_id INTEGER, content LONGVARCHAR);"
+                "CREATE TABLE moz_inputhistory(place_id INTEGER NOT NULL, input LONGVARCHAR NOT NULL, use_count INTEGER,"
+                " PRIMARY KEY (place_id, input));"
+                "INSERT INTO moz_origins VALUES(1,'https://','bookmarked.example',100),(2,'https://','visited.example',100),"
+                "(3,'https://','keyword.example',100);"
+                "INSERT INTO moz_places(id, url, title, visit_count, typed, last_visit_date, foreign_count, origin_id) VALUES"
+                "(1,'https://bookmarked.example/','Bookmarked',5,1,99,1,1),(2,'https://visited.example/','Visited',7,1,99,0,2),"
+                "(3,'https://keyword.example/?q=%s','Keyword',0,0,NULL,1,3),(4,'https://visited.example/page','Page',3,0,99,0,2);"
+                "INSERT INTO moz_bookmarks(id, type, fk, parent, position, title) VALUES(1,2,NULL,0,0,'root'),(2,1,1,1,0,'My bookmark');"
+                "INSERT INTO moz_keywords(keyword, place_id) VALUES('k',3);"
+                "INSERT INTO moz_historyvisits(place_id, visit_date, visit_type) VALUES(1,1,1),(2,2,1),(4,3,1);"
+                "INSERT INTO moz_annos(place_id, anno_attribute_id, content) VALUES(1,1,'note'),(2,2,'file:///C:/Downloads/x.zip');"
+                "INSERT INTO moz_inputhistory VALUES(2,'vis',1);");
+        Check(made, L"browser fixtures made");
+        Put(chrome + L"\\Visited Links", "links");
+        Put(chrome + L"\\Top Sites", "tiles");
+        Put(chrome + L"\\Bookmarks", "{\"roots\":{}}");
+        Put(chrome + L"\\Login Data", "passwords");
+
+        Check(KeepHost({L"google.com"}, L".google.com") && KeepHost({L"google.com"}, L"accounts.google.com") &&
+                  !KeepHost({L"google.com"}, L".notgoogle.com") && !KeepHost({L"google.com"}, L"google.com.evil.example"),
+              L"keep list: a site covers its subdomains, on a label boundary only");
+        Check(SiteOf(L"mail.google.com") == L"google.com" && SiteOf(L"www.bbc.co.uk") == L"bbc.co.uk" && SiteOf(L"192.168.1.1") == L"192.168.1.1",
+              L"sites of hosts");
+        std::vector<std::wstring> top = MostVisitedSites({chrome, ff}, 15);
+        std::wstring topList;
+        for (auto& t : top) topList += t + L" ";
+        Check(topList == L"google.com github.com visited.example bbc.co.uk bookmarked.example ",
+              L"most visited sites, from Chromium and Firefox history (no IPs, no chrome://, no single visits): " + topList);
+
+        std::wstring rules = L"[cookies]\nname = Browser cookies\nkind = cookies\npath = " + root + L"\\Chrome\\User Data\\*\npath = " + root +
+                             L"\\Firefox\\Profiles\\*\n[history]\nname = Browser history\nkind = history\npath = " + root +
+                             L"\\Chrome\\User Data\\*\npath = " + root + L"\\Firefox\\Profiles\\*\n";
+        std::vector<std::wstring> errs;
+        auto cats = ParseCleaners(rules, errs);
+        Check(errs.empty() && cats.size() == 2 && cats[0].browserData == BrowserData::Cookies && cats[1].browserData == BrowserData::History,
+              L"kind = cookies / history parsed");
+        if (cats.size() == 2) {
+            CleanCategory& ck = cats[0];
+            CleanCategory& hi = cats[1];
+            // First measure: no keep list yet, so it is made from the most visited sites.
+            std::wstring before = Listing(root + L"\\Chrome") + Listing(root + L"\\Firefox");
+            MeasureCategory(ck, cancel);
+            MeasureCategory(hi, cancel);
+            Check(Listing(root + L"\\Chrome") + Listing(root + L"\\Firefox") == before, L"measuring changed no file and made none");
+            std::vector<std::wstring> made2 = LoadKeepList(keepFile);
+            Check(made2.size() == 5 && made2[0] == L"google.com" && ck.keep == made2, L"keep list made from the most visited sites");
+            Check(ck.denied && !Find(ck, other + L"\\Cookies"), L"a \"Cookies\" file that isn't a cookie database is left out");
+
+            // The user's own list.
+            Put(keepFile, "# comment\r\nhttps://www.GitHub.com/login\r\n  google.com  \r\n*.example.org\r\nnot a site\r\n");
+            std::vector<std::wstring> keep = LoadKeepList(keepFile);
+            Check(keep == std::vector<std::wstring>{L"github.com", L"google.com", L"example.org"}, L"keep list lines normalized");
+            MeasureCategory(ck, cancel);
+            CleanEntry* cc = Find(ck, chrome + L"\\Network\\Cookies");
+            CleanEntry* fc = Find(ck, ff + L"\\cookies.sqlite");
+            Check(ck.entries.size() == 2 && cc && cc->files == 2 && fc && fc->files == 1 && ck.files == 3,
+                  L"cookies measured: 2 Chrome and 1 Firefox cookie of sites not kept");
+            Check(cc && cc->note.find(L"4 kept for 2 sites") != std::wstring::npos, L"review note: " + (cc ? cc->note : L""));
+
+            // An open database is skipped and the app named; nothing in it changes.
+            HANDLE lock = CreateFileW((chrome + L"\\Network\\Cookies").c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+            CleanResult lr = CleanCategoryNow(ck, cancel, [](const std::wstring&) {});
+            CloseHandle(lock);
+            Check(lr.failed == 1 && !lr.lockedBy.empty() && lr.files == 1, L"a database in use is skipped, the app holding it named (" +
+                                                                                   (lr.lockedBy.empty() ? L"none" : lr.lockedBy[0]) + L")");
+            Check(Rows(chrome + L"\\Network\\Cookies", "SELECT COUNT(*) FROM cookies") == "6;", L"the database in use is unchanged");
+            Check(Rows(ff + L"\\cookies.sqlite", "SELECT host FROM moz_cookies ORDER BY id") == ".github.com;www.github.com;",
+                  L"Firefox: only the kept site's cookies remain");
+
+            MeasureCategory(ck, cancel);
+            CleanResult cr = CleanCategoryNow(ck, cancel, [](const std::wstring&) {});
+            Check(cr.failed == 0 && cr.files == 2 && cr.error.empty(), L"Chrome cookies cleaned: " + cr.error);
+            Check(Rows(chrome + L"\\Network\\Cookies", "SELECT host_key FROM cookies ORDER BY creation_utc") ==
+                      ".google.com;accounts.google.com;github.com;.github.com;",
+                  L"Chrome: cookies of google.com and github.com (and subdomains) remain, notgoogle.com went");
+            Check(Rows(other + L"\\Cookies", "SELECT COUNT(*) FROM foo") == "1;", L"the unknown database was not touched");
+
+            // History.
+            CleanEntry* ch = Find(hi, chrome + L"\\History");
+            CleanEntry* fh = Find(hi, ff + L"\\places.sqlite");
+            Check(hi.entries.size() == 2 && ch && ch->files == 4 && fh && fh->files == 3 && fh->note.find(L"bookmarks stay") != std::wstring::npos,
+                  L"history measured: 4 Chrome and 3 Firefox visits");
+            CleanResult hr = CleanCategoryNow(hi, cancel, [](const std::wstring&) {});
+            Check(hr.failed == 0 && hr.files == 7 && hr.error.empty(), L"history cleaned: " + hr.error);
+            Check(!PathExists(chrome + L"\\History") && !PathExists(chrome + L"\\Visited Links") && !PathExists(chrome + L"\\Top Sites"),
+                  L"Chrome: History and the files made from it are gone");
+            Check(PathExists(chrome + L"\\Bookmarks") && PathExists(chrome + L"\\Login Data") && PathExists(chrome + L"\\Network\\Cookies"),
+                  L"Chrome: bookmarks, passwords and cookies stay");
+            std::wstring p = ff + L"\\places.sqlite";
+            Check(Rows(p, "SELECT COUNT(*) FROM moz_historyvisits") == "0;", L"Firefox: visits gone");
+            Check(Rows(p, "SELECT id, url, visit_count, last_visit_date, typed, recalc_frecency FROM moz_places ORDER BY id") ==
+                      "1|https://bookmarked.example/|0|NULL|0|1;3|https://keyword.example/?q=%s|0|NULL|0|1;",
+                  W("Firefox: the bookmarked and keyword pages stay, without visits: " +
+                    Rows(p, "SELECT id, url, visit_count, last_visit_date, typed, recalc_frecency FROM moz_places ORDER BY id")));
+            Check(Rows(p, "SELECT id, fk, title FROM moz_bookmarks ORDER BY id") == "1|NULL|root;2|1|My bookmark;",
+                  L"Firefox: bookmarks untouched, still pointing at their page");
+            Check(Rows(p, "SELECT id FROM moz_origins ORDER BY id") == "1;3;" && Rows(p, "SELECT place_id FROM moz_annos") == "1;" &&
+                      Rows(p, "SELECT COUNT(*) FROM moz_inputhistory") == "0;" && Rows(p, "SELECT keyword, place_id FROM moz_keywords") == "k|3;",
+                  L"Firefox: origins, annotations and address bar entries of deleted pages went with them");
+            Check(Rows(p, "PRAGMA integrity_check") == "ok;", L"Firefox: database intact");
+            MeasureCategory(hi, cancel);
+            Check(hi.entries.empty(), L"nothing left to clean");
+        }
+        SetEnvironmentVariableW(L"WINNCDU_KEEP_SIGNED_IN", nullptr);
     }
 
     // Recycle Bin with one item kept: only the other one is removed (never the whole bin).

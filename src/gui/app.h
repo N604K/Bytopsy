@@ -93,6 +93,7 @@ enum Cmd : int {
     CMD_GAMES_REFRESH,
     CMD_GAME_UNINSTALL,
     CMD_GAMES_DELETE,
+    CMD_KEEP_SIGNED_IN,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 

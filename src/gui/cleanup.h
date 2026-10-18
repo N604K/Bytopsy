@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "browserdata.h"
+
 struct CleanTarget {
     std::wstring path;         // may contain one or more '*' segments and %ENV% variables
     std::wstring filePattern;  // if set: only files in `path` matching this pattern (';' separates several)
@@ -32,6 +34,7 @@ struct CleanEntry {
     int target = -1;                // index into CleanCategory::targets
     bool dir = false;
     bool keep = false;  // unchecked in the preview: never deleted
+    std::wstring note;  // browser databases: what cleaning removes ("1,234 cookies · 56 kept")
 };
 
 struct CleanCategory {
@@ -44,6 +47,10 @@ struct CleanCategory {
     // kind = command: measured from its paths, cleaned by running this (the tool's own clean
     // command, e.g. `conan remove "*" -c`), because deleting the files would corrupt its state.
     std::wstring command;
+    // kind = cookies / history: the paths are browser profile folders, and their cookie or history
+    // databases are cleaned with SQL (cookies of the sites in `keep` stay).
+    BrowserData browserData = BrowserData::None;
+    std::vector<std::wstring> keep;  // the "keep me signed in to" list as measured
     bool safe = true;       // preselected
     bool enabled = true;    // "enabled = false" in cleaners.ini turns a built-in category off
     bool user = false;      // from the user's cleaners.ini

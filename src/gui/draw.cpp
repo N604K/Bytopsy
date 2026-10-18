@@ -1836,6 +1836,21 @@ void App::DrawCleanup(const RectF& area) {
         if (c.guarded) badge(L"Protected items left out", P_.success);
         std::wstring tool = c.command.substr(0, c.command.find(L' '));
         if (c.toolMissing && c.bytes) badge((tool + L" not found on PATH").c_str(), P_.warning);
+        // Cookies: the "keep me signed in to" list, one click away (it opens in the text editor).
+        RectF keepLink{};
+        if (c.browserData == BrowserData::Cookies && c.measured) {
+            std::wstring t = c.keep.empty() ? L"Keep me signed in to…  ›"
+                                            : L"Keeps you signed in to " + util::FormatCount(c.keep.size()) +
+                                                  (c.keep.size() == 1 ? L" site  ›" : L" sites  ›");
+            float kw = gfx_.Measure(t, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 16;
+            if (bxx + kw <= textRight) {
+                keepLink = RWH(bxx, card.top + 16, kw, 18);
+                bool hv = Hovered(HK_BUTTON, CMD_KEEP_SIGNED_IN);
+                gfx_.FillRound(keepLink, 9, WithAlpha(P_.success, hv ? 0.3f : 0.16f));
+                gfx_.Text(t, keepLink, P_.success, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                bxx += kw + 6;
+            }
+        }
         gfx_.Text(c.desc, R(x, card.top + 37, textRight, card.top + 58), P_.textDim, Small(12.5f));
         RectF sr = R(card.right - 190, card.top, card.right - 20, card.bottom);
         RectF review{};
@@ -1855,6 +1870,8 @@ void App::DrawCleanup(const RectF& area) {
             gfx_.Text(util::FormatSizeShort(c.ToClean()), R(sr.left, card.top + 8, sr.right, card.top + 36), c.bytes ? P_.text : P_.textFaint,
                       TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
             std::wstring count = util::FormatCount(c.files) + (c.recycleBin ? (c.files == 1 ? L" item" : L" items") : (c.files == 1 ? L" file" : L" files"));
+            if (c.browserData == BrowserData::Cookies) count = util::FormatCount(c.files) + (c.files == 1 ? L" cookie" : L" cookies");
+            if (c.browserData == BrowserData::History) count = util::FormatCount(c.files) + (c.files == 1 ? L" visit" : L" visits");
             if (size_t kept = c.KeptCount()) count += L" · " + util::FormatCount(kept) + L" kept";
             // A tool cleans its own cache: there is no file list to pick from, so say what runs.
             if (!c.command.empty()) count = L"runs " + c.command;
@@ -1875,6 +1892,7 @@ void App::DrawCleanup(const RectF& area) {
         }
         if (!c.external && !c.toolMissing) AddHit(card, HK_CHECK, static_cast<int>(i));
         if (W(review) > 0) AddHit(review, HK_REVIEW, static_cast<int>(i));
+        if (W(keepLink) > 0) AddHit(keepLink, HK_BUTTON, CMD_KEEP_SIGNED_IN);
         y += 82;
     }
     gfx_.PopClip();
@@ -1892,6 +1910,13 @@ void App::DrawCleanReview(const RectF& area) {
                        L" selected  ·  " + util::FormatSizeShort(c.ToClean()) +
                        L" would be deleted permanently  ·  uncheck what you want to keep" +
                        (c.guarded ? L"  ·  " + util::FormatCount(c.guarded) + L" protected items left out" : L"");
+    if (c.browserData != BrowserData::None) {
+        uint64_t rows = 0;
+        for (auto& e : c.entries) rows += e.keep ? 0 : e.files;
+        sub = util::FormatCount(c.entries.size() - kept) + L" of " + util::FormatCount(c.entries.size()) + L" browser profiles  ·  " +
+              util::FormatCount(rows) + (c.browserData == BrowserData::Cookies ? L" cookies" : L" visits") +
+              L" would be removed for good  ·  uncheck a profile to leave it alone";
+    }
     DrawViewHeader(R(area.left + 70, top, area.right - 290, top + 46), L"Review: " + c.name, sub, c.icon);
     float bx = area.right - 24 - 130;
     Button(RWH(bx, top + 6, 130, 34), IC_CHECK, L"Select all", CMD_REVIEW_ALL, 0, kept > 0);
@@ -1929,6 +1954,11 @@ void App::DrawCleanReview(const RectF& area) {
                 float nw = std::min(gfx_.Measure(name, ts) + 4, std::max(0.0f, cr.right - x));
                 gfx_.Text(name, R(x, cr.top, x + nw, cr.bottom), textCol, ts);
                 x += nw + 10;
+                if (!e.note.empty() && x + 60 < cr.right) {
+                    float tw = std::min(gfx_.Measure(e.note, Small(12)) + 6, cr.right - x);
+                    gfx_.Text(e.note, R(x, cr.top, x + tw, cr.bottom), e.keep ? P_.textFaint : P_.textDim, Small(12));
+                    x += tw + 10;
+                }
                 if (e.keep) {
                     float kw = gfx_.Measure(L"Kept", Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
                     if (x + kw < cr.right) {
