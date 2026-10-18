@@ -30,6 +30,7 @@ add_library(bytopsy_core STATIC
   src/schedule.cpp
   src/startup.cpp
   src/apps.cpp
+  src/appupdates.cpp
   src/phash.cpp
   src/i18n.cpp
 )
@@ -247,6 +248,14 @@ if(MSVC)
   target_compile_options(bytopsy-apps-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME apps COMMAND bytopsy-apps-test)
+
+# App updates through winget (upgrade table parsing, matching to installed apps, a fake winget): build/bytopsy-appupdates-test.exe
+add_executable(bytopsy-appupdates-test tests/appupdates_test.cpp)
+target_link_libraries(bytopsy-appupdates-test PRIVATE bytopsy_core)
+if(MSVC)
+  target_compile_options(bytopsy-appupdates-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME appupdates COMMAND bytopsy-appupdates-test)
 
 # Similar photos (perceptual hashes, BK-tree, EXIF orientation, hash cache): build/bytopsy-phash-test.exe
 add_executable(bytopsy-phash-test tests/phash_test.cpp)

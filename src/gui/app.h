@@ -13,6 +13,7 @@
 
 #include "../aimodels.h"
 #include "../apps.h"
+#include "../appupdates.h"
 #include "../analysis.h"
 #include "../devjunk.h"
 #include "../diskhealth.h"
@@ -112,6 +113,11 @@ enum Cmd : int {
     CMD_APP_LEFT_DONE,
     CMD_PHOTO_FIND,
     CMD_PHOTO_MARK,
+    CMD_APP_UPDATE_ONE,    // the chosen app's update
+    CMD_APP_UPDATE_SEL,    // the checked updates
+    CMD_APP_UPD_SELALL,    // check every update (or none)
+    CMD_APP_UPD_CHECK,     // ask winget again
+    CMD_APP_GET_WINGET,    // App Installer in the Microsoft Store
     CMD_WIN_ACT = 600,  // + WinAction
     CMD_LANG = 800,     // + 0 Windows' language, 1 the pseudo-language, 2 + an index into langMenu_
 };
@@ -164,7 +170,7 @@ struct Hit {
     intptr_t b = 0;
 };
 
-enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL, RK_GAME, RK_STARTUP, RK_APP, RK_APPLEFT };
+enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL, RK_GAME, RK_STARTUP, RK_APP, RK_APPLEFT, RK_APPUPD };
 
 struct Row {
     Node* node = nullptr;
@@ -329,6 +335,13 @@ private:
     void LookForAppLeftovers(bool askIfInstalled);
     void StartAppLeftoversDelete();
     void SyncSearchBox();
+    // App updates through winget (apps_view.cpp)
+    void CheckAppUpdates();
+    void MatchAppUpdates();
+    bool AppUpdVisible(size_t i) const;
+    void OnAppUpdRow(size_t i);
+    void StartAppUpdates(std::vector<size_t> which);
+    void ShowAppUpdateResults();
     void OnSearchChanged();
     void WinToolAction(int action);
     void RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
@@ -556,6 +569,19 @@ private:
     UninstallEntry appLeftEntry_;      // its (former) entry: deleting stops if it is back
     std::vector<AppLeftover> appLeft_;
     std::set<size_t> appLeftSel_;      // checked leftovers
+    // Updates (winget): asked only when the Updates filter is first chosen.
+    std::wstring winget_;              // winget.exe, "" when App Installer is missing
+    bool appUpdChecked_ = false;       // winget was asked (or found missing)
+    bool appShowUpdates_ = false;      // the Updates filter is on
+    WingetList appUpd_;
+    std::vector<int> appUpdApp_;       // per update: index into apps_, -1 (an MSIX app, or not listed)
+    std::vector<int> appUpdOf_;        // per app: index into appUpd_.updates, -1
+    std::set<std::wstring> appUpdSel_;  // checked updates, by winget id
+    struct AppUpdResult {
+        std::wstring name, id, from, to;
+        WingetUpgradeResult r;
+    };
+    std::vector<AppUpdResult> appUpdResults_;  // the last run's, shown once the list is read again
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

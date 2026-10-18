@@ -621,6 +621,12 @@ void App::ActivateHit(const Hit& hit, bool dbl, bool ctrl, bool shift) {
                 gamesByAge_ = hit.b != 0;
                 SortGames();
             }
+            if (hit.a == 41 && appShowUpdates_ != (hit.b != 0)) {  // Apps: all apps / updates
+                appShowUpdates_ = hit.b != 0;
+                lists_[static_cast<int>(View::Apps)] = ListState{};
+                rowsDirty_ = true;
+                if (appShowUpdates_ && !appUpdChecked_) CheckAppUpdates();
+            }
             if (hit.a == 40) {  // Startup: "Show Microsoft's"
                 startupShowMs_ = !startupShowMs_;
                 lists_[static_cast<int>(View::Startup)].focus = -1;

@@ -220,7 +220,19 @@ void App::BuildRows() {
             if (left) {
                 rows_.push_back({nullptr, 0, RK_GROUP, 0});
                 for (size_t i = 0; i < appLeft_.size(); ++i) rows_.push_back({nullptr, 0, RK_APPLEFT, static_cast<int>(i)});
-                rows_.push_back({nullptr, 0, RK_GROUP, 1});
+                rows_.push_back({nullptr, 0, RK_GROUP, appShowUpdates_ ? 2 : 1});
+            }
+            if (appShowUpdates_) {
+                // Updates in the apps' order (so the column headers sort them), then the ones the
+                // Apps list doesn't have (Store/MSIX apps).
+                std::vector<int> byApp(apps_.size(), -1);
+                for (size_t u = 0; u < appUpdApp_.size(); ++u)
+                    if (appUpdApp_[u] >= 0 && appUpdApp_[u] < static_cast<int>(apps_.size())) byApp[appUpdApp_[u]] = static_cast<int>(u);
+                for (int u : byApp)
+                    if (u >= 0 && AppUpdVisible(u)) rows_.push_back({nullptr, 0, RK_APPUPD, u});
+                for (size_t u = 0; u < appUpd_.updates.size(); ++u)
+                    if ((u >= appUpdApp_.size() || appUpdApp_[u] < 0) && AppUpdVisible(u)) rows_.push_back({nullptr, 0, RK_APPUPD, static_cast<int>(u)});
+                break;
             }
             for (size_t i = 0; i < apps_.size(); ++i)
                 if (AppVisible(apps_[i])) rows_.push_back({nullptr, 0, RK_APP, static_cast<int>(i)});
@@ -2259,6 +2271,14 @@ void App::OpenRow(int row) {
             OpenWithDefault(f);
         } else if (r.kind == RK_APPLEFT && r.idx < static_cast<int>(appLeft_.size())) {
             OpenWithDefault(appLeft_[r.idx].path);
+        } else if (r.kind == RK_APPUPD && r.idx < static_cast<int>(appUpdApp_.size())) {
+            int a = appUpdApp_[r.idx];
+            if (appUpd_.updates[r.idx].Updatable()) OnAppUpdRow(static_cast<size_t>(r.idx));  // undo the double-click's first click
+            if (a < 0 || a >= static_cast<int>(apps_.size()))
+                return Toast(TrF(L"{0} isn't in Installed apps: no folder is known", appUpd_.updates[r.idx].name), 2);
+            const std::wstring& f = apps_[a].folder;
+            if (f.empty() || !PathExists(f)) return Toast(TrF(L"No install folder is known for {0}", apps_[a].e.displayName), 2);
+            OpenWithDefault(f);
         }
         return;
     }
@@ -2670,6 +2690,31 @@ void App::OnCommand(int cmd) {
             appLeft_.clear();
             appLeftSel_.clear();
             rowsDirty_ = true;
+            break;
+        case CMD_APP_UPD_CHECK: CheckAppUpdates(); break;
+        case CMD_APP_UPDATE_ONE: {
+            int u = appChosen_ >= 0 && appChosen_ < static_cast<int>(appUpdOf_.size()) ? appUpdOf_[appChosen_] : -1;
+            if (u >= 0) StartAppUpdates({static_cast<size_t>(u)});
+            break;
+        }
+        case CMD_APP_UPDATE_SEL: {
+            std::vector<size_t> which;
+            for (size_t i = 0; i < appUpd_.updates.size(); ++i)
+                if (appUpdSel_.count(appUpd_.updates[i].id)) which.push_back(i);
+            StartAppUpdates(which);
+            break;
+        }
+        case CMD_APP_UPD_SELALL: {
+            bool any = false;
+            for (auto& u : appUpd_.updates) any |= appUpdSel_.count(u.id) > 0;
+            appUpdSel_.clear();
+            if (!any)
+                for (size_t i = 0; i < appUpd_.updates.size(); ++i)
+                    if (appUpd_.updates[i].Updatable() && AppUpdVisible(i)) appUpdSel_.insert(appUpd_.updates[i].id);
+            break;
+        }
+        case CMD_APP_GET_WINGET:
+            if (!OpenWithDefault(kAppInstallerStoreLink)) Toast(Tr(L"Couldn't open the Microsoft Store"), 1);
             break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE:
