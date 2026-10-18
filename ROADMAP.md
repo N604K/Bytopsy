@@ -90,6 +90,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       were checked locally with `%TEMP%` set to an 8.3 short path like the runners'.*
 - [ ] Code signing for releases (SignPath offers free signing for open-source projects), so
       SmartScreen and antivirus don't flag a tool that deletes files.
+      *Prepared, not done: the release workflow signs through SignPath once the
+      `SIGNPATH_ORGANIZATION_ID` variable and `SIGNPATH_API_TOKEN` secret are set (docs/RELEASING.md,
+      `packaging/signpath/artifact-configuration.xml`). Left: a LICENSE, applying to SignPath
+      Foundation, and the SignPath project setup. Releases are unsigned until then.*
 - [ ] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
 - [x] CONTRIBUTING.md with a short guide "add a protected location / add a cleaner", and issue
       templates for "false alarm" and "missing protected folder".

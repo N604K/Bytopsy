@@ -129,6 +129,11 @@ Try it first without building: put the section in `%LOCALAPPDATA%\WinNCDU\cleane
 id in order; add your id to that list (and update the count, and any index-based checks after it).
 Add the app to the Cleanup paragraph of the README.
 
+## Releases
+
+Releases are built, tested and (once set up) signed by GitHub Actions; see
+[docs/RELEASING.md](docs/RELEASING.md).
+
 ## Issues
 
 - **False alarm**: WinNCDU warns about, or blocks, something that is safe to delete.

@@ -49,12 +49,52 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      # Code signing through SignPath, for tags only, once the repository variable
+      # SIGNPATH_ORGANIZATION_ID and the secret SIGNPATH_API_TOKEN are set (docs/RELEASING.md).
+      # Without them, releases are published unsigned.
+      - name: Upload unsigned programs for signing
+        id: unsigned
+        if: startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned
+          path: |
+            build/winncdu.exe
+            build/winncdu-cli.exe
+          if-no-files-found: error
+
+      - name: Sign (SignPath)
+        id: sign
+        if: steps.unsigned.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'WinNCDU' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'initial' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Check signatures
+        if: steps.sign.outcome == 'success'
+        shell: pwsh
+        run: |
+          foreach ($f in 'signed/winncdu.exe', 'signed/winncdu-cli.exe') {
+            $s = Get-AuthenticodeSignature $f
+            "$f : $($s.Status) $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { throw "$f is not validly signed" }
+          }
+
       - name: Package
         shell: pwsh
+        env:
+          BIN: ${{ steps.sign.outcome == 'success' && 'signed' || 'build' }}
         run: |
           $name = "winncdu-${{ steps.version.outputs.version }}-x64"
           New-Item -ItemType Directory -Force dist, "stage/$name" | Out-Null
-          Copy-Item build/winncdu.exe, build/winncdu-cli.exe, README.md "stage/$name"
+          Copy-Item "$env:BIN/winncdu.exe", "$env:BIN/winncdu-cli.exe", README.md "stage/$name"
           if (Test-Path LICENSE) { Copy-Item LICENSE "stage/$name" }
           Compress-Archive -Path "stage/$name/*" -DestinationPath "dist/$name.zip"
           $hash = (Get-FileHash -Algorithm SHA256 "dist/$name.zip").Hash.ToLowerInvariant()

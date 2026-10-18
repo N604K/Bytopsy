@@ -258,7 +258,8 @@ ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk
 GitHub Actions builds and runs the self-tests on every push and pull request
 ([.github/workflows/build.yml](.github/workflows/build.yml)). A tag `v*` publishes a release with
 `winncdu-<version>-x64.zip` (both programs and this README) and its SHA-256 in a `.sha256` file; see
-[docs/RELEASING.md](docs/RELEASING.md).
+[docs/RELEASING.md](docs/RELEASING.md). Releases are not code-signed yet, so SmartScreen may warn
+before the first start; the workflow is prepared for SignPath signing (same document).
 
 ## The terminal app (`winncdu-cli.exe`)
 
@@ -386,5 +387,6 @@ res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 CONTRIBUTING.md       building, testing, adding a protected location or a cleaner
 .github/ISSUE_TEMPLATE  issue forms: false alarm, missing protected folder, bug report
 .github/workflows/build.yml  CI: build and self-tests; release zips with SHA-256 on tags
-docs/RELEASING.md     how releases are built and published
+docs/RELEASING.md     how releases are built, signed (once set up) and published
+packaging/signpath/   SignPath artifact configuration for code signing
 ```
