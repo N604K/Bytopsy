@@ -12,6 +12,7 @@
 #include "fsops.h"
 #include "journal.h"
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -221,7 +222,7 @@ bool LastAccessTracked() {
 AiStore ScanHuggingFace(const std::wstring& hubDir, const std::wstring& xetDir) {
     AiStore s;
     s.kind = AiStoreKind::HuggingFace;
-    s.name = L"Hugging Face cache";
+    s.name = N_(L"Hugging Face cache");
     std::wstring hub = StripSlash(hubDir);
     s.folder = hub;
     s.roots = {hub};
@@ -292,9 +293,9 @@ AiStore ScanHuggingFace(const std::wstring& hubDir, const std::wstring& xetDir) 
         std::wstring kind = type == L"models" ? L"model" : type == L"datasets" ? L"dataset" : L"space";
         if (revs.size() == 1) {
             auto it = refsOf.find(revs[0].commit);
-            repoItem.detail = kind + (it != refsOf.end() ? L"  \u00B7  " + it->second[0] : L"");
+            repoItem.detail = kind + (it != refsOf.end() ? L"  ·  " + it->second[0] : L"");
         } else {
-            repoItem.detail = kind + L"  \u00B7  " + std::to_wstring(revs.size()) + L" revisions";
+            repoItem.detail = kind + L"  ·  " + std::to_wstring(revs.size()) + L" revisions";
         }
         int repoIndex = static_cast<int>(s.items.size());
         std::vector<AiItem> revItems;
@@ -317,7 +318,7 @@ AiStore ScanHuggingFace(const std::wstring& hubDir, const std::wstring& xetDir) 
             auto refIt = refsOf.find(r.commit);
             ri.unused = refIt == refsOf.end();
             if (ri.unused) {
-                ri.detail = L"not referenced by any branch, tag or PR";
+                ri.detail = Tr(L"not referenced by any branch, tag or PR");
             } else {
                 for (auto& n : refIt->second) ri.detail += (ri.detail.empty() ? L"" : L", ") + n;
             }
@@ -341,9 +342,9 @@ AiStore ScanHuggingFace(const std::wstring& hubDir, const std::wstring& xetDir) 
     }
     if (!xetDir.empty() && IsDir(xetDir)) {
         AiItem x;
-        x.name = L"Xet download cache";
-        x.detail = L"chunks kept to speed up later downloads";
-        x.restore = L"filled again by the next download";
+        x.name = N_(L"Xet download cache");
+        x.detail = Tr(L"chunks kept to speed up later downloads");
+        x.restore = N_(L"filled again by the next download");
         x.location = StripSlash(xetDir);
         for (auto& c : List(x.location)) x.remove.push_back(x.location + L"\\" + c.cFileName);
         x.bytes = SizeOfPath(x.location);
@@ -362,7 +363,7 @@ AiStore ScanHuggingFace(const std::wstring& hubDir, const std::wstring& xetDir) 
 AiStore ScanOllama(const std::wstring& modelsDir) {
     AiStore s;
     s.kind = AiStoreKind::Ollama;
-    s.name = L"Ollama models";
+    s.name = N_(L"Ollama models");
     std::wstring models = StripSlash(modelsDir);
     s.folder = models;
     s.roots = {models + L"\\manifests", models + L"\\blobs"};
@@ -432,10 +433,10 @@ AiStore ScanOllama(const std::wstring& modelsDir) {
         }
         for (const char* k : {"model_family", "model_type", "file_type"}) {
             std::wstring v = JsonString(m.config, k);
-            if (!v.empty()) it.detail += (it.detail.empty() ? L"" : L"  \u00B7  ") + v;
+            if (!v.empty()) it.detail += (it.detail.empty() ? L"" : L"  ·  ") + v;
         }
-        if (it.detail.empty()) it.detail = std::to_wstring(m.blobs.size()) + L" layers";
-        if (it.bytes < largest) it.detail += L"  \u00B7  shares layers with other models";
+        if (it.detail.empty()) it.detail = TrN(m.blobs.size(), L"{0} layer", L"{0} layers");
+        if (it.bytes < largest) it.detail += L"  ·  " + Tr(L"shares layers with other models");
         s.items.push_back(std::move(it));
     }
     s.bytes = SizeOfPath(models + L"\\blobs") + SizeOfPath(manifests);
@@ -449,7 +450,7 @@ AiStore ScanOllama(const std::wstring& modelsDir) {
 AiStore ScanLMStudio(const std::wstring& modelsDir) {
     AiStore s;
     s.kind = AiStoreKind::LMStudio;
-    s.name = L"LM Studio models";
+    s.name = N_(L"LM Studio models");
     std::wstring models = StripSlash(modelsDir);
     s.folder = models;
     s.roots = {models};
@@ -464,7 +465,7 @@ AiStore ScanLMStudio(const std::wstring& modelsDir) {
             it.location = pubDir + L"\\" + rep.cFileName;
             it.remove = {it.location};
             it.added = FtToI(rep.ftCreationTime);
-            it.restore = L"download it again in LM Studio (Discover)";
+            it.restore = N_(L"download it again in LM Studio (Discover)");
             size_t files = 0;
             uint64_t largest = 0;
             std::wstring largestName;
@@ -517,7 +518,7 @@ std::vector<AiStore> FindAiModels() {
     for (auto& d : lm)
         if (IsDir(d)) {
             out.push_back(ScanLMStudio(d));
-            if (out.size() > 1 && out[out.size() - 2].kind == AiStoreKind::LMStudio) out.back().name = L"LM Studio models (older folder)";
+            if (out.size() > 1 && out[out.size() - 2].kind == AiStoreKind::LMStudio) out.back().name = N_(L"LM Studio models (older folder)");
         }
     return out;
 }
@@ -549,7 +550,7 @@ AiDeleteResult DeleteAiItems(const AiStore& store, const std::vector<size_t>& ch
     std::vector<std::wstring> notes(store.items.size());
     auto remove = [&](std::wstring p, size_t item) {
         if (!Inside(store.roots, p)) {  // never anything outside the model folders
-            res.errors.push_back(L"Refused (outside the model folders): " + p);
+            res.errors.push_back(TrF(L"Refused (outside the model folders): {0}", p));
             notes[item] = L"partly deleted";
             return;
         }

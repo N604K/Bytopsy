@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "i18n.h"
 #include "util.h"
 #include "version.h"
 
@@ -116,7 +117,7 @@ void WriteNode(Out& o, const Node* n, std::atomic<uint64_t>& count, bool top = f
 FILE* OpenOut(const std::wstring& file, std::wstring& err) {
     FILE* f = nullptr;
     if (_wfopen_s(&f, file.c_str(), L"wb") != 0 || !f) {
-        err = L"Cannot create " + file + L": " + util::Win32ErrorMessage(GetLastError());
+        err = TrF(L"Cannot create {0}: {1}", file, util::Win32ErrorMessage(GetLastError()));
         return nullptr;
     }
     return f;
@@ -148,10 +149,10 @@ bool ExportNcduJson(const Node* root, const std::wstring& file, std::atomic<uint
         o.Raw("},\n");
         WriteNode(o, root, count, true);
         o.Raw("]\n");
-        if (!o.Flush()) err = L"Write error (disk full?)";
+        if (!o.Flush()) err = Tr(L"Write error (disk full?)");
     }
     bool ok = fclose(f) == 0 && err.empty();
-    if (!ok && err.empty()) err = L"Write error";
+    if (!ok && err.empty()) err = Tr(L"Write error");
     return ok;
 }
 
@@ -181,10 +182,10 @@ bool ExportCsv(const Node* root, const std::wstring& file, std::atomic<uint64_t>
             o.Raw("\r\n");
             for (auto it = n->children.rbegin(); it != n->children.rend(); ++it) stack.push_back(it->get());
         }
-        if (!o.Flush()) err = L"Write error (disk full?)";
+        if (!o.Flush()) err = Tr(L"Write error (disk full?)");
     }
     bool ok = fclose(f) == 0 && err.empty();
-    if (!ok && err.empty()) err = L"Write error";
+    if (!ok && err.empty()) err = Tr(L"Write error");
     return ok;
 }
 
@@ -512,7 +513,7 @@ std::unique_ptr<Node> ImportNcduJson(const std::wstring& file, std::atomic<uint6
     HANDLE h = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                            FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     if (h == INVALID_HANDLE_VALUE) {
-        err = L"Cannot open " + file + L": " + util::Win32ErrorMessage(GetLastError());
+        err = TrF(L"Cannot open {0}: {1}", file, util::Win32ErrorMessage(GetLastError()));
         return nullptr;
     }
     LARGE_INTEGER sz{};
@@ -522,7 +523,7 @@ std::unique_ptr<Node> ImportNcduJson(const std::wstring& file, std::atomic<uint6
         data.resize(static_cast<size_t>(sz.QuadPart));
     } catch (...) {
         CloseHandle(h);
-        err = L"File too large to load";
+        err = Tr(L"File too large to load");
         return nullptr;
     }
     size_t got = 0;
@@ -535,7 +536,7 @@ std::unique_ptr<Node> ImportNcduJson(const std::wstring& file, std::atomic<uint6
     CloseHandle(h);
     data.resize(got);
     if (data.size() >= 2 && static_cast<unsigned char>(data[0]) == 0x1F && static_cast<unsigned char>(data[1]) == 0x8B) {
-        err = L"Compressed exports are not supported; decompress the file first";
+        err = Tr(L"Compressed exports are not supported; decompress the file first");
         return nullptr;
     }
     const char* p = data.data();
@@ -543,7 +544,7 @@ std::unique_ptr<Node> ImportNcduJson(const std::wstring& file, std::atomic<uint6
     Parser parser(p, data.data() + data.size(), count);
     auto root = parser.ParseRoot();
     if (!root) {
-        err = L"Not a valid ncdu JSON export: " + parser.Error();
+        err = TrF(L"Not a valid ncdu JSON export: {0}", parser.Error());
         return nullptr;
     }
     RecomputeTotals(root.get());

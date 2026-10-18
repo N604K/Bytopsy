@@ -14,6 +14,20 @@ bool g_si = false;
 
 namespace {
 
+std::wstring g_decimal = L".", g_group = L",";
+bool g_customNumbers = false;
+thread_local int t_invariant = 0;
+
+bool Localized() { return g_customNumbers && t_invariant == 0; }
+
+// swprintf's "." to the decimal separator in use.
+std::wstring LocalDecimal(std::wstring s) {
+    if (!Localized() || g_decimal == L".") return s;
+    size_t dot = s.find(L'.');
+    if (dot != std::wstring::npos) s.replace(dot, 1, g_decimal);
+    return s;
+}
+
 // Lowercase mapping table for the whole BMP, built once with the invariant locale.
 struct LowerTable {
     wchar_t map[65536];
@@ -68,7 +82,7 @@ std::wstring FormatSize(uint64_t bytes) {
         ++i;
     }
     swprintf(buf, 32, L"%5.1f %s", v, units[i]);
-    return buf;
+    return LocalDecimal(buf);
 }
 
 std::wstring FormatSizeShort(uint64_t bytes) {
@@ -78,10 +92,11 @@ std::wstring FormatSizeShort(uint64_t bytes) {
 
 std::wstring FormatCount(uint64_t n) {
     std::wstring digits = std::to_wstring(n);
+    const std::wstring sep = Localized() ? g_group : std::wstring(L",");
     std::wstring out;
     int cnt = 0;
     for (auto it = digits.rbegin(); it != digits.rend(); ++it) {
-        if (cnt && cnt % 3 == 0) out.insert(out.begin(), L',');
+        if (cnt && cnt % 3 == 0) out.insert(0, sep);
         out.insert(out.begin(), *it);
         ++cnt;
     }
@@ -116,7 +131,7 @@ std::wstring FormatTime(int64_t ft) {
 std::wstring FormatDuration(double seconds) {
     wchar_t buf[64];
     if (seconds < 60)
-        swprintf(buf, 64, L"%.1fs", seconds);
+        return LocalDecimal((swprintf(buf, 64, L"%.1fs", seconds), buf));
     else if (seconds < 3600)
         swprintf(buf, 64, L"%dm %02ds", static_cast<int>(seconds) / 60, static_cast<int>(seconds) % 60);
     else
@@ -128,6 +143,52 @@ std::wstring FormatPercent(double pct) {
     wchar_t buf[32];
     swprintf(buf, 32, L"%5.1f%%", pct);
     return buf;
+}
+
+void SetNumberFormat(const std::wstring& decimal, const std::wstring& group) {
+    g_decimal = decimal.empty() ? L"." : decimal;
+    g_group = group;
+    g_customNumbers = true;
+}
+
+std::wstring FormatDecimal(double v, int digits) {
+    wchar_t buf[64];
+    swprintf(buf, 64, L"%.*f", digits, v);
+    return LocalDecimal(buf);
+}
+
+InvariantNumbers::InvariantNumbers() { ++t_invariant; }
+InvariantNumbers::~InvariantNumbers() { --t_invariant; }
+
+namespace {
+bool LocalSystemTime(int64_t ft, SYSTEMTIME& local) {
+    if (ft <= 0) return false;
+    FILETIME f;
+    f.dwLowDateTime = static_cast<DWORD>(ft & 0xFFFFFFFF);
+    f.dwHighDateTime = static_cast<DWORD>(static_cast<uint64_t>(ft) >> 32);
+    SYSTEMTIME utc;
+    if (!FileTimeToSystemTime(&f, &utc)) return false;
+    if (!SystemTimeToTzSpecificLocalTime(nullptr, &utc, &local)) local = utc;
+    return true;
+}
+}  // namespace
+
+std::wstring FormatDateLocal(int64_t ft) {
+    SYSTEMTIME t;
+    if (!LocalSystemTime(ft, t)) return L"";
+    if (!Localized()) return FormatTime(ft).substr(0, 10);
+    wchar_t d[96];
+    if (!GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, &t, nullptr, d, 96, nullptr)) return FormatTime(ft).substr(0, 10);
+    return d;
+}
+
+std::wstring FormatDateTimeLocal(int64_t ft) {
+    SYSTEMTIME t;
+    if (!LocalSystemTime(ft, t)) return L"";
+    if (!Localized()) return FormatTime(ft);
+    wchar_t tm[96];
+    if (!GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, &t, nullptr, tm, 96)) return FormatTime(ft);
+    return FormatDateLocal(ft) + L" " + tm;
 }
 
 std::wstring Utf8ToWide(std::string_view s) {

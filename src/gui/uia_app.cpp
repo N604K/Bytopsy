@@ -24,30 +24,30 @@ constexpr int kChoiceSlot = 1000;  // dialog keyboard focus: 1000 + choice index
 // PROPID_ACC_NAME (oleacc.h declares it, but uiautomation.h includes that header before INITGUID could define it).
 constexpr GUID kAccName = {0x608d3df8, 0x8128, 0x4aa7, {0xa4, 0x28, 0xf5, 0x5e, 0x49, 0x26, 0x72, 0x91}};
 
-const wchar_t* ViewName(View v) {
+std::wstring ViewName(View v) {
     switch (v) {
-        case View::Home: return L"Home";
-        case View::Browse: return L"Folders";
-        case View::Largest: return L"Largest files";
-        case View::Types: return L"File types";
-        case View::TypeFiles: return L"Files of one type";
-        case View::Duplicates: return L"Duplicates";
-        case View::Old: return L"Old files";
-        case View::Empty: return L"Empty folders";
-        case View::DevJunk: return L"Developer junk";
-        case View::Search: return L"Search results";
-        case View::Cleanup: return L"Cleanup";
-        case View::History: return L"History";
-        case View::Compare: return L"Compare scans";
-        case View::Deleted: return L"Recently deleted";
-        case View::AiModels: return L"AI models";
-        case View::Wsl: return L"WSL & Docker";
-        case View::WinTools: return L"Windows";
-        case View::Games: return L"Games";
-        case View::Startup: return L"Startup";
-        case View::Apps: return L"Apps";
-        case View::CleanReview: return L"Review";
-        case View::DiskHealth: return L"Disk health";
+        case View::Home: return Tr(L"Home");
+        case View::Browse: return Tr(L"Folders");
+        case View::Largest: return Tr(L"Largest files");
+        case View::Types: return Tr(L"File types");
+        case View::TypeFiles: return Tr(L"Files of one type");
+        case View::Duplicates: return Tr(L"Duplicates");
+        case View::Old: return Tr(L"Old files");
+        case View::Empty: return Tr(L"Empty folders");
+        case View::DevJunk: return Tr(L"Developer junk");
+        case View::Search: return Tr(L"Search results");
+        case View::Cleanup: return Tr(L"Cleanup");
+        case View::History: return Tr(L"History");
+        case View::Compare: return Tr(L"Compare scans");
+        case View::Deleted: return Tr(L"Recently deleted");
+        case View::AiModels: return Tr(L"AI models");
+        case View::Wsl: return Tr(L"WSL & Docker");
+        case View::WinTools: return Tr(L"Windows");
+        case View::Games: return Tr(L"Games");
+        case View::Startup: return Tr(L"Startup");
+        case View::Apps: return Tr(L"Apps");
+        case View::CleanReview: return Tr(L"Review");
+        case View::DiskHealth: return Tr(L"Disk health");
         default: return L"WinNCDU";
     }
 }
@@ -234,8 +234,8 @@ void App::AccBuild() {
         w.key = busy ? AccKey({0xB5, reinterpret_cast<uint64_t>(task_.get())}) : AccKey({0xD1A, dialogGen_});
         win = accTree_.Add(w);
     } else {
-        toolbar = add(AccRole::Toolbar, L"Toolbar", R(0, 0, sz.width, kTopH), 0, AccKey({0xA11, 1}), -1);
-        nav = add(AccRole::Navigation, L"Navigation", R(0, kTopH, kSidebarW, sz.height - kStatusH), AF_NAV | AF_SELECTION, AccKey({0xA11, 2}), -1);
+        toolbar = add(AccRole::Toolbar, Tr(L"Toolbar"), R(0, 0, sz.width, kTopH), 0, AccKey({0xA11, 1}), -1);
+        nav = add(AccRole::Navigation, Tr(L"Navigation"), R(0, kTopH, kSidebarW, sz.height - kStatusH), AF_NAV | AF_SELECTION, AccKey({0xA11, 2}), -1);
         main = add(AccRole::Pane, ViewName(view_), R(kSidebarW, kTopH, sz.width, sz.height - kStatusH), AF_MAIN,
                    AccKey({0xA11, 3, static_cast<uint64_t>(view_)}), -1);
         if (hasRows) {
@@ -243,10 +243,10 @@ void App::AccBuild() {
             headerR = R(listR.left, listR.top, listR.right, listArea_.top);
             uint32_t f = (multi || single) ? AF_SELECTION : 0;
             if (multi) f |= AF_MULTI;
-            list = add(AccRole::List, std::wstring(ViewName(view_)) + L" list", listR, f, AccKey({0xA11, 5, static_cast<uint64_t>(view_)}), main);
-            header = add(AccRole::Header, L"Columns", headerR, 0, AccKey({0xA11, 6, static_cast<uint64_t>(view_)}), list);
+            list = add(AccRole::List, TrF(L"{0} list", ViewName(view_)), listR, f, AccKey({0xA11, 5, static_cast<uint64_t>(view_)}), main);
+            header = add(AccRole::Header, Tr(L"Columns"), headerR, 0, AccKey({0xA11, 6, static_cast<uint64_t>(view_)}), list);
         }
-        status = add(AccRole::StatusBar, L"Status", R(0, sz.height - kStatusH, sz.width, sz.height), 0, AccKey({0xA11, 4}), -1);
+        status = add(AccRole::StatusBar, Tr(L"Status"), R(0, sz.height - kStatusH, sz.width, sz.height), 0, AccKey({0xA11, 4}), -1);
     }
     auto containerFor = [&](int reg, const RectF& r, bool rowOrHeader, int kind) {
         if (reg == 4) return win;
@@ -279,14 +279,14 @@ void App::AccBuild() {
         n.flags = c.disabled ? AF_DISABLED : 0;
         n.action = static_cast<int>(accActs_.size());
         n.key = AccKey({static_cast<uint64_t>(h.kind), static_cast<uint64_t>(static_cast<int64_t>(h.a)), static_cast<uint64_t>(h.b)});
-        std::wstring fallback = L"Button";
+        std::wstring fallback = Tr(L"Button");
         bool rowName = false;
         n.role = AccRole::Button;
         switch (h.kind) {
             case HK_BUTTON:
                 n.id = L"cmd." + std::to_wstring(h.a);
-                if (h.a == CMD_SEARCH_CLEAR) fallback = L"Clear search";
-                if (h.a == CMD_CANCEL_TASK) fallback = L"Cancel";
+                if (h.a == CMD_SEARCH_CLEAR) fallback = Tr(L"Clear search");
+                if (h.a == CMD_CANCEL_TASK) fallback = Tr(L"Cancel");
                 if (c.toggle >= 0)
                     n.flags |= AF_TOGGLE | (c.toggle ? AF_ON : 0);
                 else
@@ -304,7 +304,7 @@ void App::AccBuild() {
                     fallback = ViewName(v);
                 } else {
                     n.flags |= AF_INVOKE;
-                    fallback = L"Back";
+                    fallback = Tr(L"Back");
                     n.key = AccKey({n.key, 0xBAC});
                 }
                 break;
@@ -337,13 +337,13 @@ void App::AccBuild() {
                 n.id = L"sort." + std::to_wstring(h.a);
                 int key = view_ == View::Apps ? appSortKey_ : view_ == View::Browse ? sortKey_ : resSortKey_;
                 bool desc = view_ == View::Apps ? appSortDesc_ : view_ == View::Browse ? sortDesc_ : resSortDesc_;
-                if (key == h.a) c.texts.push_back(desc ? L"sorted descending" : L"sorted ascending");
+                if (key == h.a) c.texts.push_back(desc ? Tr(L"sorted descending") : Tr(L"sorted ascending"));
                 break;
             }
             case HK_TREEMAP:
                 n.role = AccRole::Image;
-                c.name = L"Treemap";
-                c.texts = {L"the open folder's contents as rectangles sized by the space they use; the list shows the same items"};
+                c.name = Tr(L"Treemap");
+                c.texts = {Tr(L"the open folder's contents as rectangles sized by the space they use; the list shows the same items")};
                 break;
             case HK_CHIP:
                 n.flags |= AF_TOGGLE | (c.toggle == 1 ? AF_ON : 0);
@@ -357,7 +357,7 @@ void App::AccBuild() {
                 break;
             case HK_SWITCH:
                 n.flags |= AF_TOGGLE;
-                c.name = L"Start with Windows";
+                c.name = Tr(L"Start with Windows");
                 if (h.a >= 0 && h.a < static_cast<int>(startup_.entries.size())) {
                     const StartupEntry& e = startup_.entries[h.a];
                     if (e.enabled) n.flags |= AF_ON;
@@ -370,7 +370,7 @@ void App::AccBuild() {
                 break;
             case HK_SNAPSHOT:
                 n.flags |= AF_INVOKE;
-                if (h.b == 1) fallback = L"Delete this scan from history";
+                if (h.b == 1) fallback = Tr(L"Delete this scan from history");
                 break;
             case HK_DIALOG:
                 n.key = AccKey({n.key, dlgSeed});
@@ -391,8 +391,8 @@ void App::AccBuild() {
                     std::wstring now = ch.value >= 0 && ch.value < static_cast<int>(ch.options.size()) ? ch.options[ch.value] : L"";
                     if (ch.stepper) {
                         bool next = h.b > ch.value;
-                        c.name = (next ? L"Next " : L"Previous ") + util::ToLower(ch.label);
-                        c.texts = {L"now " + now};
+                        c.name = next ? TrF(L"Next {0}", util::ToLower(ch.label)) : TrF(L"Previous {0}", util::ToLower(ch.label));
+                        c.texts = {TrF(L"now {0}", now)};
                         n.flags |= AF_INVOKE | AF_FOCUSABLE;
                         n.key = AccKey({static_cast<uint64_t>(HK_DIALOG_CHOICE), static_cast<uint64_t>(h.a), next ? 1u : 0u, dlgSeed});
                         if (next && dlgFocus == kChoiceSlot + h.a) n.flags |= AF_FOCUSED;
@@ -638,7 +638,7 @@ void App::AccNameSearchBox(bool set) {
     IAccPropServices* ps = nullptr;
     if (FAILED(CoCreateInstance(__uuidof(CAccPropServices), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&ps))) || !ps) return;
     if (set) {
-        ps->SetHwndPropStr(search_, static_cast<DWORD>(OBJID_CLIENT), CHILDID_SELF, kAccName, L"Search files and folders");
+        ps->SetHwndPropStr(search_, static_cast<DWORD>(OBJID_CLIENT), CHILDID_SELF, kAccName, Tr(L"Search files and folders").c_str());
     } else {
         MSAAPROPID props[] = {kAccName};
         ps->ClearHwndProps(search_, static_cast<DWORD>(OBJID_CLIENT), CHILDID_SELF, props, 1);

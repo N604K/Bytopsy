@@ -9,6 +9,7 @@
 #include <mutex>
 
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -213,9 +214,9 @@ public:
 
     // Chromium browsers: the profile has passwords, cookies, history and extension data (wallets!).
     void Chromium(const std::wstring& userData, const wchar_t* name) {
-        Tree(userData, P::Important, L"Browser", name,
-             L"Browser profile: saved passwords, cookies, bookmarks, history and extension data (including crypto "
-             L"wallet extensions). Use Cleanup \u2192 Browser caches to free space safely.");
+        Tree(userData, P::Important, N_(L"Browser"), name,
+             N_(L"Browser profile: saved passwords, cookies, bookmarks, history and extension data (including crypto "
+             L"wallet extensions). Use Cleanup → Browser caches to free space safely."));
         for (const wchar_t* c : {L"*\\Cache", L"*\\Code Cache", L"*\\GPUCache", L"*\\Service Worker\\CacheStorage",
                                  L"*\\Service Worker\\ScriptCache", L"*\\DawnCache", L"*\\DawnGraphiteCache",
                                  L"*\\DawnWebGPUCache", L"*\\GrShaderCache", L"*\\ShaderCache", L"GrShaderCache",
@@ -236,273 +237,273 @@ void BuiltinRules(std::vector<Rule>& v) {
     Builder b(v);
 
     // ---- Windows and boot ------------------------------------------------------------------
-    const wchar_t* kSys = L"System";
-    b.Tree(L"%SystemRoot%", P::Blocked, kSys, L"Windows folder",
-           L"Deleting files here can stop Windows from starting. Use Cleanup or Windows Disk Cleanup instead.");
-    b.Tree(L"%SystemRoot%\\WinSxS", P::Blocked, kSys, L"Windows component store",
-           L"Shared system components (mostly hard links). Shrink it with: DISM /Online /Cleanup-Image /StartComponentCleanup");
-    b.Tree(L"%SystemRoot%\\Installer", P::Blocked, kSys, L"Windows Installer cache",
-           L"Needed to update, repair and uninstall programs. Deleting it breaks uninstallers.");
-    b.Allow(L"%SystemRoot%\\Temp", P::Caution, L"Windows temp folder. Cleanup \u2192 Windows temporary files skips files in use.");
-    b.Allow(L"%SystemRoot%\\SoftwareDistribution\\Download", P::Caution, L"Windows Update downloads; Windows fetches them again if needed.");
+    const wchar_t* kSys = N_(L"System");
+    b.Tree(L"%SystemRoot%", P::Blocked, kSys, N_(L"Windows folder"),
+           N_(L"Deleting files here can stop Windows from starting. Use Cleanup or Windows Disk Cleanup instead."));
+    b.Tree(L"%SystemRoot%\\WinSxS", P::Blocked, kSys, N_(L"Windows component store"),
+           N_(L"Shared system components (mostly hard links). Shrink it with: DISM /Online /Cleanup-Image /StartComponentCleanup"));
+    b.Tree(L"%SystemRoot%\\Installer", P::Blocked, kSys, N_(L"Windows Installer cache"),
+           N_(L"Needed to update, repair and uninstall programs. Deleting it breaks uninstallers."));
+    b.Allow(L"%SystemRoot%\\Temp", P::Caution, N_(L"Windows temp folder. Cleanup → Windows temporary files skips files in use."));
+    b.Allow(L"%SystemRoot%\\SoftwareDistribution\\Download", P::Caution, N_(L"Windows Update downloads; Windows fetches them again if needed."));
     b.Allow(L"%SystemRoot%\\Minidump");
     b.Allow(L"%SystemRoot%\\LiveKernelReports");
     b.Allow(L"%SystemRoot%\\MEMORY.DMP");
     b.Allow(L"%SystemRoot%\\Logs\\CBS\\*.cab");
     b.Allow(L"%SystemRoot%\\ServiceProfiles\\NetworkService\\AppData\\Local\\Microsoft\\Windows\\DeliveryOptimization\\Cache");
-    b.Tree(L"*:\\System Volume Information", P::Blocked, kSys, L"System Restore and shadow copies",
-           L"Manage restore points in System Properties \u2192 System Protection.");
-    b.Tree(L"*:\\$Recycle.Bin", P::Blocked, kSys, L"Recycle Bin storage", L"Empty the bin with Cleanup \u2192 Recycle Bin instead.");
-    b.Tree(L"*:\\Recovery", P::Blocked, kSys, L"Windows recovery environment", L"Needed to repair or reset Windows.");
-    b.Tree(L"*:\\$WinREAgent", P::Blocked, kSys, L"Windows recovery update", L"Used by Windows Update for the recovery environment.");
-    b.Tree(L"*:\\Boot", P::Blocked, kSys, L"Boot files", L"Needed to start the PC.");
-    b.Tree(L"*:\\EFI", P::Blocked, kSys, L"Boot files", L"Needed to start the PC.");
-    b.Tree(L"*:\\Config.Msi", P::Blocked, kSys, L"Installer rollback data", L"Used while programs are being installed.");
+    b.Tree(L"*:\\System Volume Information", P::Blocked, kSys, N_(L"System Restore and shadow copies"),
+           N_(L"Manage restore points in System Properties → System Protection."));
+    b.Tree(L"*:\\$Recycle.Bin", P::Blocked, kSys, N_(L"Recycle Bin storage"), N_(L"Empty the bin with Cleanup → Recycle Bin instead."));
+    b.Tree(L"*:\\Recovery", P::Blocked, kSys, N_(L"Windows recovery environment"), N_(L"Needed to repair or reset Windows."));
+    b.Tree(L"*:\\$WinREAgent", P::Blocked, kSys, N_(L"Windows recovery update"), N_(L"Used by Windows Update for the recovery environment."));
+    b.Tree(L"*:\\Boot", P::Blocked, kSys, N_(L"Boot files"), N_(L"Needed to start the PC."));
+    b.Tree(L"*:\\EFI", P::Blocked, kSys, N_(L"Boot files"), N_(L"Needed to start the PC."));
+    b.Tree(L"*:\\Config.Msi", P::Blocked, kSys, N_(L"Installer rollback data"), N_(L"Used while programs are being installed."));
     for (const wchar_t* f : {L"bootmgr", L"BOOTNXT", L"BOOTSECT.BAK"})
-        b.Self(std::wstring(L"*:\\") + f, P::Blocked, kSys, L"Boot file", L"Needed to start the PC.");
-    b.Self(L"*:\\pagefile.sys", P::Blocked, kSys, L"Page file",
-           L"Windows virtual memory. Resize it in System Properties \u2192 Advanced \u2192 Performance.");
-    b.Self(L"*:\\swapfile.sys", P::Blocked, kSys, L"Swap file", L"Windows virtual memory for Store apps.");
-    b.Self(L"*:\\hiberfil.sys", P::Blocked, kSys, L"Hibernation file",
-           L"Turn hibernation off to remove it: powercfg /hibernate off (as administrator).");
-    b.Path(L"*:\\Windows.old", P::Important, P::Important, kSys, L"Previous Windows installation",
-           L"Needed to roll back an upgrade. Remove it with Cleanup \u2192 Previous Windows installation.");
-    b.Tree(L"*:\\$Windows.~BT", P::Important, kSys, L"Windows upgrade files", L"Used by an upgrade in progress or for rollback.");
-    b.Tree(L"*:\\$Windows.~WS", P::Important, kSys, L"Windows upgrade files", L"Used by an upgrade in progress or for rollback.");
+        b.Self(std::wstring(L"*:\\") + f, P::Blocked, kSys, N_(L"Boot file"), N_(L"Needed to start the PC."));
+    b.Self(L"*:\\pagefile.sys", P::Blocked, kSys, N_(L"Page file"),
+           N_(L"Windows virtual memory. Resize it in System Properties → Advanced → Performance."));
+    b.Self(L"*:\\swapfile.sys", P::Blocked, kSys, N_(L"Swap file"), N_(L"Windows virtual memory for Store apps."));
+    b.Self(L"*:\\hiberfil.sys", P::Blocked, kSys, N_(L"Hibernation file"),
+           N_(L"Turn hibernation off to remove it: powercfg /hibernate off (as administrator)."));
+    b.Path(L"*:\\Windows.old", P::Important, P::Important, kSys, N_(L"Previous Windows installation"),
+           N_(L"Needed to roll back an upgrade. Remove it with Cleanup → Previous Windows installation."));
+    b.Tree(L"*:\\$Windows.~BT", P::Important, kSys, N_(L"Windows upgrade files"), N_(L"Used by an upgrade in progress or for rollback."));
+    b.Tree(L"*:\\$Windows.~WS", P::Important, kSys, N_(L"Windows upgrade files"), N_(L"Used by an upgrade in progress or for rollback."));
 
     // ---- Program folders -------------------------------------------------------------------
-    const wchar_t* kProg = L"Programs";
-    const wchar_t* kUninstall = L"Installed program. Uninstall it in Settings \u2192 Apps; deleting the folder leaves a "
-                                L"broken entry, services and drivers behind.";
+    const wchar_t* kProg = N_(L"Programs");
+    const wchar_t* kUninstall = N_(L"Installed program. Uninstall it in Settings → Apps; deleting the folder leaves a "
+                                L"broken entry, services and drivers behind.");
     for (const wchar_t* pf : {L"%ProgramFiles%", L"%ProgramFiles(x86)%", L"%ProgramW6432%"}) {
-        b.Path(pf, P::Blocked, P::Important, kProg, L"Program Files", kUninstall, P::Blocked, true);
-        b.Tree(std::wstring(pf) + L"\\WindowsApps", P::Blocked, kProg, L"Microsoft Store apps",
-               L"Managed by Windows. Uninstall Store apps in Settings \u2192 Apps.");
-        b.Tree(std::wstring(pf) + L"\\Common Files", P::Blocked, kProg, L"Shared program components",
-               L"Shared by many programs.");
+        b.Path(pf, P::Blocked, P::Important, kProg, N_(L"Program Files"), kUninstall, P::Blocked, true);
+        b.Tree(std::wstring(pf) + L"\\WindowsApps", P::Blocked, kProg, N_(L"Microsoft Store apps"),
+               N_(L"Managed by Windows. Uninstall Store apps in Settings → Apps."));
+        b.Tree(std::wstring(pf) + L"\\Common Files", P::Blocked, kProg, N_(L"Shared program components"),
+               N_(L"Shared by many programs."));
     }
-    b.Path(L"%ProgramData%", P::Blocked, P::Caution, kProg, L"ProgramData",
-           L"Settings and data shared by all users. Programs may stop working without it.", P::Blocked, true);
-    b.Tree(L"%ProgramData%\\Microsoft\\Windows Defender", P::Blocked, kSys, L"Microsoft Defender", L"Antivirus definitions and quarantine.");
-    b.Tree(L"%ProgramData%\\Microsoft\\Crypto", P::Important, L"Keys", L"Machine keys and certificates", L"Removing it breaks certificates and encryption.");
-    b.Tree(L"%ProgramData%\\Package Cache", P::Important, kProg, L"Installer package cache",
-           L"Needed to repair, update or uninstall Visual Studio, .NET, VC++ runtimes and others.");
+    b.Path(L"%ProgramData%", P::Blocked, P::Caution, kProg, N_(L"ProgramData"),
+           N_(L"Settings and data shared by all users. Programs may stop working without it."), P::Blocked, true);
+    b.Tree(L"%ProgramData%\\Microsoft\\Windows Defender", P::Blocked, kSys, N_(L"Microsoft Defender"), N_(L"Antivirus definitions and quarantine."));
+    b.Tree(L"%ProgramData%\\Microsoft\\Crypto", P::Important, N_(L"Keys"), N_(L"Machine keys and certificates"), N_(L"Removing it breaks certificates and encryption."));
+    b.Tree(L"%ProgramData%\\Package Cache", P::Important, kProg, N_(L"Installer package cache"),
+           N_(L"Needed to repair, update or uninstall Visual Studio, .NET, VC++ runtimes and others."));
     b.Allow(L"%ProgramData%\\Microsoft\\Windows\\WER");
 
     // ---- User profiles -----------------------------------------------------------------------
-    const wchar_t* kUser = L"User";
-    b.Self(L"%SystemDrive%\\Users", P::Blocked, kUser, L"All user profiles", L"Contains every account's files and settings.");
-    b.Self(L"%SystemDrive%\\Users\\*", P::Blocked, kUser, L"A user profile",
-           L"A whole account. Remove accounts in Settings \u2192 Accounts.");
-    b.Self(L"%USERPROFILE%", P::Blocked, kUser, L"Your user profile", L"Your whole account: files, settings and app data.");
-    b.Tree(L"%SystemDrive%\\Users\\Default", P::Blocked, kUser, L"Default profile", L"Template for new accounts.");
-    b.Self(L"{HOME}\\AppData", P::Blocked, kUser, L"AppData", L"Settings and data of every app you use.");
-    b.Self(L"{ROAMING}", P::Blocked, kUser, L"AppData\\Roaming", L"Settings and data of every app you use.");
-    b.Self(L"{LOCAL}", P::Blocked, kUser, L"AppData\\Local", L"Settings and data of every app you use.");
-    b.Self(L"{LOCALLOW}", P::Important, kUser, L"AppData\\LocalLow", L"Often holds game saves and app settings.");
-    b.Self(L"{HOME}\\NTUSER.DAT*", P::Blocked, kSys, L"Your registry", L"Your personal registry hive; Windows can't sign you in without it.");
-    b.Self(L"{LOCAL}\\Microsoft\\Windows\\UsrClass.dat*", P::Blocked, kSys, L"Your registry", L"Part of your personal registry.");
-    b.Self(L"{LOCAL}\\Microsoft", P::Important, kUser, L"Microsoft app data", L"Settings of Windows and Microsoft apps.");
-    b.Self(L"{LOCAL}\\Microsoft\\Windows", P::Important, kUser, L"Windows user data", L"Settings of Windows and Explorer.");
-    b.Self(L"{LOCAL}\\Packages", P::Blocked, kUser, L"Store app data", L"Data of every Microsoft Store app.");
-    b.Self(L"{LOCAL}\\Programs", P::Important, kProg, L"Per-user programs", L"Apps installed just for you. Uninstall them in Settings \u2192 Apps.");
-    b.Tree(L"{ROAMING}\\Microsoft\\Protect", P::Blocked, L"Keys", L"Windows data protection keys",
-           L"Without these keys Windows can't decrypt your saved passwords, Wi-Fi keys and certificates.");
-    b.Tree(L"{ROAMING}\\Microsoft\\Credentials", P::Important, L"Keys", L"Windows Credential Manager", L"Saved sign-ins for apps and network shares.");
-    b.Tree(L"{LOCAL}\\Microsoft\\Credentials", P::Important, L"Keys", L"Windows Credential Manager", L"Saved sign-ins for apps and network shares.");
-    b.Tree(L"{ROAMING}\\Microsoft\\SystemCertificates", P::Important, L"Keys", L"Your certificates", L"Personal certificates and their keys.");
-    b.Tree(L"{ROAMING}\\Microsoft\\Crypto", P::Important, L"Keys", L"Your encryption keys", L"Private keys of your certificates.");
-    b.Tree(L"{LOCAL}\\Microsoft\\Vault", P::Important, L"Keys", L"Windows Vault", L"Saved web and app credentials.");
+    const wchar_t* kUser = N_(L"User");
+    b.Self(L"%SystemDrive%\\Users", P::Blocked, kUser, N_(L"All user profiles"), N_(L"Contains every account's files and settings."));
+    b.Self(L"%SystemDrive%\\Users\\*", P::Blocked, kUser, N_(L"A user profile"),
+           N_(L"A whole account. Remove accounts in Settings → Accounts."));
+    b.Self(L"%USERPROFILE%", P::Blocked, kUser, N_(L"Your user profile"), N_(L"Your whole account: files, settings and app data."));
+    b.Tree(L"%SystemDrive%\\Users\\Default", P::Blocked, kUser, N_(L"Default profile"), N_(L"Template for new accounts."));
+    b.Self(L"{HOME}\\AppData", P::Blocked, kUser, N_(L"AppData"), N_(L"Settings and data of every app you use."));
+    b.Self(L"{ROAMING}", P::Blocked, kUser, L"AppData\\Roaming", N_(L"Settings and data of every app you use."));
+    b.Self(L"{LOCAL}", P::Blocked, kUser, L"AppData\\Local", N_(L"Settings and data of every app you use."));
+    b.Self(L"{LOCALLOW}", P::Important, kUser, L"AppData\\LocalLow", N_(L"Often holds game saves and app settings."));
+    b.Self(L"{HOME}\\NTUSER.DAT*", P::Blocked, kSys, N_(L"Your registry"), N_(L"Your personal registry hive; Windows can't sign you in without it."));
+    b.Self(L"{LOCAL}\\Microsoft\\Windows\\UsrClass.dat*", P::Blocked, kSys, N_(L"Your registry"), N_(L"Part of your personal registry."));
+    b.Self(L"{LOCAL}\\Microsoft", P::Important, kUser, N_(L"Microsoft app data"), N_(L"Settings of Windows and Microsoft apps."));
+    b.Self(L"{LOCAL}\\Microsoft\\Windows", P::Important, kUser, N_(L"Windows user data"), N_(L"Settings of Windows and Explorer."));
+    b.Self(L"{LOCAL}\\Packages", P::Blocked, kUser, N_(L"Store app data"), N_(L"Data of every Microsoft Store app."));
+    b.Self(L"{LOCAL}\\Programs", P::Important, kProg, N_(L"Per-user programs"), N_(L"Apps installed just for you. Uninstall them in Settings → Apps."));
+    b.Tree(L"{ROAMING}\\Microsoft\\Protect", P::Blocked, N_(L"Keys"), N_(L"Windows data protection keys"),
+           N_(L"Without these keys Windows can't decrypt your saved passwords, Wi-Fi keys and certificates."));
+    b.Tree(L"{ROAMING}\\Microsoft\\Credentials", P::Important, N_(L"Keys"), N_(L"Windows Credential Manager"), N_(L"Saved sign-ins for apps and network shares."));
+    b.Tree(L"{LOCAL}\\Microsoft\\Credentials", P::Important, N_(L"Keys"), N_(L"Windows Credential Manager"), N_(L"Saved sign-ins for apps and network shares."));
+    b.Tree(L"{ROAMING}\\Microsoft\\SystemCertificates", P::Important, N_(L"Keys"), N_(L"Your certificates"), N_(L"Personal certificates and their keys."));
+    b.Tree(L"{ROAMING}\\Microsoft\\Crypto", P::Important, N_(L"Keys"), N_(L"Your encryption keys"), N_(L"Private keys of your certificates."));
+    b.Tree(L"{LOCAL}\\Microsoft\\Vault", P::Important, N_(L"Keys"), N_(L"Windows Vault"), N_(L"Saved web and app credentials."));
 
     // ---- Personal folders (the folder itself; files inside are yours to manage) ---------------
-    const wchar_t* kPers = L"Personal";
-    const wchar_t* kPersR = L"One of your personal library folders. Delete files inside it, not the folder itself.";
+    const wchar_t* kPers = N_(L"Personal");
+    const wchar_t* kPersR = N_(L"One of your personal library folders. Delete files inside it, not the folder itself.");
     struct KF {
         const KNOWNFOLDERID* id;
         const wchar_t* name;
         P level;
     };
-    const KF kfs[] = {{&FOLDERID_Desktop, L"Desktop", P::Important},     {&FOLDERID_Documents, L"Documents", P::Important},
-                      {&FOLDERID_Pictures, L"Pictures", P::Important},   {&FOLDERID_Videos, L"Videos", P::Important},
-                      {&FOLDERID_Music, L"Music", P::Important},         {&FOLDERID_Downloads, L"Downloads", P::Caution},
-                      {&FOLDERID_Favorites, L"Favorites", P::Caution},   {&FOLDERID_Contacts, L"Contacts", P::Important}};
+    const KF kfs[] = {{&FOLDERID_Desktop, N_(L"Desktop"), P::Important},     {&FOLDERID_Documents, N_(L"Documents"), P::Important},
+                      {&FOLDERID_Pictures, N_(L"Pictures"), P::Important},   {&FOLDERID_Videos, N_(L"Videos"), P::Important},
+                      {&FOLDERID_Music, N_(L"Music"), P::Important},         {&FOLDERID_Downloads, N_(L"Downloads"), P::Caution},
+                      {&FOLDERID_Favorites, N_(L"Favorites"), P::Caution},   {&FOLDERID_Contacts, N_(L"Contacts"), P::Important}};
     for (auto& kf : kfs) {
         std::wstring p = KnownFolder(*kf.id);
         if (!p.empty()) b.Self(p, kf.level, kPers, kf.name, kPersR);
     }
     std::wstring saved = KnownFolder(FOLDERID_SavedGames);
     if (!saved.empty())
-        b.Tree(saved, P::Important, L"Games", L"Saved Games", L"Game progress. Many games don't sync saves to the cloud.");
-    b.Tree(L"{HOME}\\Documents\\My Games", P::Important, L"Games", L"Game saves and settings", L"Game progress and configuration.");
+        b.Tree(saved, P::Important, N_(L"Games"), N_(L"Saved Games"), N_(L"Game progress. Many games don't sync saves to the cloud."));
+    b.Tree(L"{HOME}\\Documents\\My Games", P::Important, N_(L"Games"), N_(L"Game saves and settings"), N_(L"Game progress and configuration."));
 
     // ---- Cloud sync roots: deleting here deletes on every device -------------------------------
-    const wchar_t* kCloud = L"Cloud";
-    const wchar_t* kCloudR = L"Synced folder: deleting here also deletes it from the cloud and from your other devices.";
+    const wchar_t* kCloud = N_(L"Cloud");
+    const wchar_t* kCloudR = N_(L"Synced folder: deleting here also deletes it from the cloud and from your other devices.");
     for (const wchar_t* c : {L"%OneDrive%", L"%OneDriveConsumer%", L"%OneDriveCommercial%", L"{HOME}\\OneDrive*"})
-        b.Path(c, P::Important, P::Caution, kCloud, L"OneDrive", kCloudR, P::Important, true);
-    b.Path(L"{HOME}\\Dropbox*", P::Important, P::Caution, kCloud, L"Dropbox", kCloudR);
-    b.Path(L"{HOME}\\Google Drive*", P::Important, P::Caution, kCloud, L"Google Drive", kCloudR);
-    b.Path(L"{HOME}\\iCloudDrive", P::Important, P::Caution, kCloud, L"iCloud Drive", kCloudR);
-    b.Path(L"{HOME}\\iCloud Photos", P::Important, P::Caution, kCloud, L"iCloud Photos", kCloudR);
-    b.Path(L"{HOME}\\Box", P::Important, P::Caution, kCloud, L"Box", kCloudR);
-    b.Path(L"{HOME}\\MEGA", P::Important, P::Caution, kCloud, L"MEGA", kCloudR);
-    b.Path(L"{HOME}\\pCloud Drive", P::Important, P::Caution, kCloud, L"pCloud", kCloudR);
-    b.Path(L"{HOME}\\Nextcloud", P::Important, P::Caution, kCloud, L"Nextcloud", kCloudR);
-    b.Path(L"{HOME}\\Sync", P::Important, P::Caution, kCloud, L"Sync folder", kCloudR);
+        b.Path(c, P::Important, P::Caution, kCloud, N_(L"OneDrive"), kCloudR, P::Important, true);
+    b.Path(L"{HOME}\\Dropbox*", P::Important, P::Caution, kCloud, N_(L"Dropbox"), kCloudR);
+    b.Path(L"{HOME}\\Google Drive*", P::Important, P::Caution, kCloud, N_(L"Google Drive"), kCloudR);
+    b.Path(L"{HOME}\\iCloudDrive", P::Important, P::Caution, kCloud, N_(L"iCloud Drive"), kCloudR);
+    b.Path(L"{HOME}\\iCloud Photos", P::Important, P::Caution, kCloud, N_(L"iCloud Photos"), kCloudR);
+    b.Path(L"{HOME}\\Box", P::Important, P::Caution, kCloud, N_(L"Box"), kCloudR);
+    b.Path(L"{HOME}\\MEGA", P::Important, P::Caution, kCloud, N_(L"MEGA"), kCloudR);
+    b.Path(L"{HOME}\\pCloud Drive", P::Important, P::Caution, kCloud, N_(L"pCloud"), kCloudR);
+    b.Path(L"{HOME}\\Nextcloud", P::Important, P::Caution, kCloud, N_(L"Nextcloud"), kCloudR);
+    b.Path(L"{HOME}\\Sync", P::Important, P::Caution, kCloud, N_(L"Sync folder"), kCloudR);
 
     // ---- AI assistants: sessions, memory, settings and tokens ---------------------------------
-    const wchar_t* kAI = L"AI";
-    const wchar_t* kAIR = L"AI assistant data: conversation history, sessions, project memory, settings and sign-in. "
-                          L"It can't be downloaded again.";
-    b.Tree(L"{HOME}\\.claude", P::Important, kAI, L"Claude Code (sessions, memory, settings)",
+    const wchar_t* kAI = N_(L"AI");
+    const wchar_t* kAIR = N_(L"AI assistant data: conversation history, sessions, project memory, settings and sign-in. "
+                          L"It can't be downloaded again.");
+    b.Tree(L"{HOME}\\.claude", P::Important, kAI, N_(L"Claude Code (sessions, memory, settings)"),
            L"Claude Code conversation history (projects\\*.jsonl), CLAUDE.md memory, agents, commands, plugins, settings "
-           L"and sign-in.");
-    b.Self(L"{HOME}\\.claude.json", P::Important, kAI, L"Claude Code configuration", L"Claude Code account, MCP servers and per-project state.");
-    b.Tree(L"{ROAMING}\\Claude", P::Important, kAI, L"Claude desktop app", L"Claude desktop settings, MCP server config and local data.");
+           N_(L"and sign-in."));
+    b.Self(L"{HOME}\\.claude.json", P::Important, kAI, N_(L"Claude Code configuration"), N_(L"Claude Code account, MCP servers and per-project state."));
+    b.Tree(L"{ROAMING}\\Claude", P::Important, kAI, N_(L"Claude desktop app"), N_(L"Claude desktop settings, MCP server config and local data."));
     for (const wchar_t* c : {L"Cache", L"Code Cache", L"GPUCache", L"DawnCache", L"DawnGraphiteCache", L"DawnWebGPUCache",
                              L"Crashpad", L"logs", L"Service Worker\\CacheStorage"})
         b.Allow(std::wstring(L"{ROAMING}\\Claude\\") + c);
-    b.Tree(L"{LOCAL}\\AnthropicClaude", P::Caution, kAI, L"Claude desktop app (program)", L"The installed app. Uninstall it in Settings \u2192 Apps.");
-    b.Tree(L"{LOCAL}\\Packages\\Claude_*", P::Important, kAI, L"Claude (Store app)", kAIR);
-    b.Tree(L"{LOCAL}\\Packages\\AnthropicPBC*", P::Important, kAI, L"Claude (Store app)", kAIR);
-    b.Tree(L"{HOME}\\.codex", P::Important, kAI, L"OpenAI Codex CLI (sessions, settings)",
-           L"Codex sessions and history, AGENTS.md, config.toml and sign-in (auth.json).");
-    b.Tree(L"{LOCAL}\\Packages\\OpenAI.ChatGPT*", P::Important, kAI, L"ChatGPT desktop app", kAIR);
-    b.Tree(L"{ROAMING}\\ChatGPT", P::Important, kAI, L"ChatGPT desktop app", kAIR);
-    b.Tree(L"{LOCAL}\\OpenAI", P::Important, kAI, L"OpenAI apps", kAIR);
-    b.EditorFamily(L"Cursor", kAI, L"Cursor (chat & composer history, settings)",
-                   L"Cursor chat and composer history (state.vscdb), workspace history and settings.");
-    b.Tree(L"{HOME}\\.cursor", P::Important, kAI, L"Cursor (rules, MCP, extensions)", L"Global Cursor rules, mcp.json and extensions.");
-    b.Tree(L"{LOCAL}\\Programs\\cursor", P::Caution, kAI, L"Cursor (program)", L"The installed app. Uninstall it in Settings \u2192 Apps.");
-    b.EditorFamily(L"Windsurf", kAI, L"Windsurf (Cascade history, settings)", kAIR);
-    b.EditorFamily(L"Windsurf - Next", kAI, L"Windsurf Next", kAIR);
-    b.Tree(L"{HOME}\\.codeium", P::Important, kAI, L"Codeium / Windsurf (memories, rules)", L"Cascade memories, global rules and sign-in.");
-    b.Tree(L"{HOME}\\.windsurf", P::Important, kAI, L"Windsurf", kAIR);
-    b.EditorFamily(L"Code", L"AI", L"VS Code (Copilot Chat, Cline, Roo, settings)",
-                   L"VS Code settings plus AI extension data: Copilot Chat sessions, Cline/Roo task history, Continue.");
-    b.EditorFamily(L"Code - Insiders", L"AI", L"VS Code Insiders (AI chats, settings)", kAIR);
-    b.EditorFamily(L"VSCodium", L"AI", L"VSCodium (AI chats, settings)", kAIR);
-    b.EditorFamily(L"Kiro", kAI, L"Kiro (specs, chat history)", kAIR);
-    b.EditorFamily(L"Trae", kAI, L"Trae (chat history, settings)", kAIR);
-    b.EditorFamily(L"Void", kAI, L"Void editor (chats, settings)", kAIR);
-    b.Tree(L"{HOME}\\.kiro", P::Important, kAI, L"Kiro (steering, settings)", kAIR);
-    b.Tree(L"{HOME}\\.trae", P::Important, kAI, L"Trae", kAIR);
-    b.Tree(L"{LOCAL}\\github-copilot", P::Important, kAI, L"GitHub Copilot (sign-in)", L"Copilot sign-in tokens for all editors.");
-    b.Tree(L"{HOME}\\.copilot", P::Important, kAI, L"GitHub Copilot CLI (sessions)", kAIR);
-    b.Tree(L"{HOME}\\.gemini", P::Important, kAI, L"Gemini CLI (chats, GEMINI.md, sign-in)", kAIR);
-    b.Tree(L"{HOME}\\.continue", P::Important, kAI, L"Continue (sessions, config)", kAIR);
-    b.Tree(L"{HOME}\\Documents\\Cline", P::Important, kAI, L"Cline (rules, workflows, MCP)", kAIR);
-    b.Tree(L"{HOME}\\.aider", P::Caution, kAI, L"Aider", L"Aider caches and settings.");
-    b.Tree(L"{HOME}\\.augment", P::Important, kAI, L"Augment", kAIR);
-    b.Tree(L"{HOME}\\.qwen", P::Important, kAI, L"Qwen Code", kAIR);
-    b.Tree(L"{HOME}\\.local\\share\\opencode", P::Important, kAI, L"opencode (sessions)", kAIR);
-    b.Tree(L"{HOME}\\.config\\opencode", P::Important, kAI, L"opencode (config)", kAIR);
-    b.Tree(L"{HOME}\\.local\\share\\amp", P::Important, kAI, L"Amp (threads)", kAIR);
-    b.Tree(L"{HOME}\\.config\\amp", P::Important, kAI, L"Amp (config)", kAIR);
-    b.Tree(L"{LOCAL}\\crush", P::Important, kAI, L"Crush (sessions)", kAIR);
-    b.Tree(L"{ROAMING}\\Block\\goose", P::Important, kAI, L"Goose (sessions, config)", kAIR);
-    b.Tree(L"{HOME}\\.config\\goose", P::Important, kAI, L"Goose (config)", kAIR);
-    b.Tree(L"{ROAMING}\\Zed", P::Important, kAI, L"Zed (settings)", kAIR);
-    b.Tree(L"{LOCAL}\\Zed", P::Important, kAI, L"Zed (AI threads, history)", kAIR);
-    b.Tree(L"{ROAMING}\\Jan", P::Important, kAI, L"Jan (chats, models)", kAIR);
-    b.Tree(L"{ROAMING}\\Msty", P::Important, kAI, L"Msty (chats)", kAIR);
-    b.Tree(L"{ROAMING}\\LM Studio", P::Important, kAI, L"LM Studio (chats, settings)", kAIR);
-    b.Tree(L"{ROAMING}\\Perplexity", P::Important, kAI, L"Perplexity desktop app", kAIR);
-    b.Tree(L"{HOME}\\.specstory", P::Important, kAI, L"SpecStory (saved AI chats)", kAIR);
+    b.Tree(L"{LOCAL}\\AnthropicClaude", P::Caution, kAI, N_(L"Claude desktop app (program)"), N_(L"The installed app. Uninstall it in Settings → Apps."));
+    b.Tree(L"{LOCAL}\\Packages\\Claude_*", P::Important, kAI, N_(L"Claude (Store app)"), kAIR);
+    b.Tree(L"{LOCAL}\\Packages\\AnthropicPBC*", P::Important, kAI, N_(L"Claude (Store app)"), kAIR);
+    b.Tree(L"{HOME}\\.codex", P::Important, kAI, N_(L"OpenAI Codex CLI (sessions, settings)"),
+           N_(L"Codex sessions and history, AGENTS.md, config.toml and sign-in (auth.json)."));
+    b.Tree(L"{LOCAL}\\Packages\\OpenAI.ChatGPT*", P::Important, kAI, N_(L"ChatGPT desktop app"), kAIR);
+    b.Tree(L"{ROAMING}\\ChatGPT", P::Important, kAI, N_(L"ChatGPT desktop app"), kAIR);
+    b.Tree(L"{LOCAL}\\OpenAI", P::Important, kAI, N_(L"OpenAI apps"), kAIR);
+    b.EditorFamily(L"Cursor", kAI, N_(L"Cursor (chat & composer history, settings)"),
+                   N_(L"Cursor chat and composer history (state.vscdb), workspace history and settings."));
+    b.Tree(L"{HOME}\\.cursor", P::Important, kAI, N_(L"Cursor (rules, MCP, extensions)"), N_(L"Global Cursor rules, mcp.json and extensions."));
+    b.Tree(L"{LOCAL}\\Programs\\cursor", P::Caution, kAI, N_(L"Cursor (program)"), N_(L"The installed app. Uninstall it in Settings → Apps."));
+    b.EditorFamily(L"Windsurf", kAI, N_(L"Windsurf (Cascade history, settings)"), kAIR);
+    b.EditorFamily(L"Windsurf - Next", kAI, N_(L"Windsurf Next"), kAIR);
+    b.Tree(L"{HOME}\\.codeium", P::Important, kAI, N_(L"Codeium / Windsurf (memories, rules)"), N_(L"Cascade memories, global rules and sign-in."));
+    b.Tree(L"{HOME}\\.windsurf", P::Important, kAI, N_(L"Windsurf"), kAIR);
+    b.EditorFamily(L"Code", N_(L"AI"), N_(L"VS Code (Copilot Chat, Cline, Roo, settings)"),
+                   N_(L"VS Code settings plus AI extension data: Copilot Chat sessions, Cline/Roo task history, Continue."));
+    b.EditorFamily(L"Code - Insiders", N_(L"AI"), N_(L"VS Code Insiders (AI chats, settings)"), kAIR);
+    b.EditorFamily(L"VSCodium", N_(L"AI"), N_(L"VSCodium (AI chats, settings)"), kAIR);
+    b.EditorFamily(L"Kiro", kAI, N_(L"Kiro (specs, chat history)"), kAIR);
+    b.EditorFamily(L"Trae", kAI, N_(L"Trae (chat history, settings)"), kAIR);
+    b.EditorFamily(L"Void", kAI, N_(L"Void editor (chats, settings)"), kAIR);
+    b.Tree(L"{HOME}\\.kiro", P::Important, kAI, N_(L"Kiro (steering, settings)"), kAIR);
+    b.Tree(L"{HOME}\\.trae", P::Important, kAI, N_(L"Trae"), kAIR);
+    b.Tree(L"{LOCAL}\\github-copilot", P::Important, kAI, N_(L"GitHub Copilot (sign-in)"), N_(L"Copilot sign-in tokens for all editors."));
+    b.Tree(L"{HOME}\\.copilot", P::Important, kAI, N_(L"GitHub Copilot CLI (sessions)"), kAIR);
+    b.Tree(L"{HOME}\\.gemini", P::Important, kAI, N_(L"Gemini CLI (chats, GEMINI.md, sign-in)"), kAIR);
+    b.Tree(L"{HOME}\\.continue", P::Important, kAI, N_(L"Continue (sessions, config)"), kAIR);
+    b.Tree(L"{HOME}\\Documents\\Cline", P::Important, kAI, N_(L"Cline (rules, workflows, MCP)"), kAIR);
+    b.Tree(L"{HOME}\\.aider", P::Caution, kAI, N_(L"Aider"), N_(L"Aider caches and settings."));
+    b.Tree(L"{HOME}\\.augment", P::Important, kAI, N_(L"Augment"), kAIR);
+    b.Tree(L"{HOME}\\.qwen", P::Important, kAI, N_(L"Qwen Code"), kAIR);
+    b.Tree(L"{HOME}\\.local\\share\\opencode", P::Important, kAI, N_(L"opencode (sessions)"), kAIR);
+    b.Tree(L"{HOME}\\.config\\opencode", P::Important, kAI, N_(L"opencode (config)"), kAIR);
+    b.Tree(L"{HOME}\\.local\\share\\amp", P::Important, kAI, N_(L"Amp (threads)"), kAIR);
+    b.Tree(L"{HOME}\\.config\\amp", P::Important, kAI, N_(L"Amp (config)"), kAIR);
+    b.Tree(L"{LOCAL}\\crush", P::Important, kAI, N_(L"Crush (sessions)"), kAIR);
+    b.Tree(L"{ROAMING}\\Block\\goose", P::Important, kAI, N_(L"Goose (sessions, config)"), kAIR);
+    b.Tree(L"{HOME}\\.config\\goose", P::Important, kAI, N_(L"Goose (config)"), kAIR);
+    b.Tree(L"{ROAMING}\\Zed", P::Important, kAI, N_(L"Zed (settings)"), kAIR);
+    b.Tree(L"{LOCAL}\\Zed", P::Important, kAI, N_(L"Zed (AI threads, history)"), kAIR);
+    b.Tree(L"{ROAMING}\\Jan", P::Important, kAI, N_(L"Jan (chats, models)"), kAIR);
+    b.Tree(L"{ROAMING}\\Msty", P::Important, kAI, N_(L"Msty (chats)"), kAIR);
+    b.Tree(L"{ROAMING}\\LM Studio", P::Important, kAI, N_(L"LM Studio (chats, settings)"), kAIR);
+    b.Tree(L"{ROAMING}\\Perplexity", P::Important, kAI, N_(L"Perplexity desktop app"), kAIR);
+    b.Tree(L"{HOME}\\.specstory", P::Important, kAI, N_(L"SpecStory (saved AI chats)"), kAIR);
     // Model stores: re-downloadable, but often tens of gigabytes.
-    const wchar_t* kModels = L"AI models";
-    const wchar_t* kModelsR = L"Local AI models. They can be downloaded again, but that can take a long time.";
-    b.Tree(L"{HOME}\\.ollama", P::Caution, kModels, L"Ollama (models, identity key)",
-           L"Ollama models (re-downloadable) and its identity key (id_ed25519). Use `ollama rm <model>` to remove one model.");
-    b.Tree(L"{HOME}\\.lmstudio", P::Caution, kModels, L"LM Studio (models, chats)",
-           L"LM Studio models and conversations. Delete single models from inside LM Studio.");
-    b.Tree(L"{HOME}\\.cache\\lm-studio", P::Caution, kModels, L"LM Studio (models)", kModelsR);
-    b.Tree(L"{HOME}\\.cache\\huggingface", P::Caution, kModels, L"Hugging Face cache", kModelsR);
-    b.Tree(L"{LOCAL}\\nomic.ai", P::Caution, kModels, L"GPT4All", kModelsR);
+    const wchar_t* kModels = N_(L"AI models");
+    const wchar_t* kModelsR = N_(L"Local AI models. They can be downloaded again, but that can take a long time.");
+    b.Tree(L"{HOME}\\.ollama", P::Caution, kModels, N_(L"Ollama (models, identity key)"),
+           N_(L"Ollama models (re-downloadable) and its identity key (id_ed25519). Use `ollama rm <model>` to remove one model."));
+    b.Tree(L"{HOME}\\.lmstudio", P::Caution, kModels, N_(L"LM Studio (models, chats)"),
+           N_(L"LM Studio models and conversations. Delete single models from inside LM Studio."));
+    b.Tree(L"{HOME}\\.cache\\lm-studio", P::Caution, kModels, N_(L"LM Studio (models)"), kModelsR);
+    b.Tree(L"{HOME}\\.cache\\huggingface", P::Caution, kModels, N_(L"Hugging Face cache"), kModelsR);
+    b.Tree(L"{LOCAL}\\nomic.ai", P::Caution, kModels, N_(L"GPT4All"), kModelsR);
 
     // ---- Keys and credentials ----------------------------------------------------------------
-    const wchar_t* kKeys = L"Keys";
-    b.Tree(L"{HOME}\\.ssh", P::Important, kKeys, L"SSH keys", L"Private keys and known hosts. Lost keys lock you out of servers and Git hosts.");
-    b.Tree(L"{HOME}\\.gnupg", P::Important, kKeys, L"GnuPG keys", L"Private PGP keys used for signing and decryption.");
-    b.Tree(L"{ROAMING}\\gnupg", P::Important, kKeys, L"GnuPG keys", L"Private PGP keys used for signing and decryption.");
-    b.Tree(L"{HOME}\\.aws", P::Important, kKeys, L"AWS credentials", L"AWS access keys, profiles and SSO config.");
-    b.Tree(L"{HOME}\\.azure", P::Important, kKeys, L"Azure CLI sign-in", L"Azure CLI profiles and tokens.");
-    b.Tree(L"{HOME}\\.kube", P::Important, kKeys, L"Kubernetes config", L"kubeconfig with cluster endpoints and credentials.");
-    b.Tree(L"{ROAMING}\\gcloud", P::Important, kKeys, L"Google Cloud SDK", L"gcloud credentials and configurations.");
-    b.Tree(L"{HOME}\\.config\\gcloud", P::Important, kKeys, L"Google Cloud SDK", L"gcloud credentials and configurations.");
-    b.Self(L"{HOME}\\.git-credentials", P::Important, kKeys, L"Git credentials", L"Stored Git passwords and tokens.");
-    b.Tree(L"{ROAMING}\\GitHub CLI", P::Important, kKeys, L"GitHub CLI", L"gh sign-in and settings.");
-    b.Self(L"{HOME}\\.gitconfig", P::Caution, L"Dev", L"Git configuration", L"Your Git name, email, aliases and signing setup.");
-    b.Self(L"{HOME}\\.npmrc", P::Caution, kKeys, L"npm configuration", L"May contain registry tokens.");
-    b.Self(L"{HOME}\\.pypirc", P::Caution, kKeys, L"PyPI configuration", L"May contain upload tokens.");
-    b.Tree(L"{HOME}\\.docker", P::Caution, L"Dev", L"Docker CLI config", L"Registry sign-ins and contexts.");
-    b.Tree(L"{HOME}\\.terraform.d", P::Caution, kKeys, L"Terraform", L"Terraform Cloud tokens and plugins.");
-    b.Tree(L"{ROAMING}\\KeePass", P::Caution, kKeys, L"KeePass settings", L"KeePass configuration (your .kdbx database may be elsewhere).");
-    b.Tree(L"{ROAMING}\\Bitwarden", P::Caution, kKeys, L"Bitwarden", L"Bitwarden local vault cache and settings.");
-    b.Tree(L"{LOCAL}\\1Password", P::Caution, kKeys, L"1Password", L"1Password local data.");
+    const wchar_t* kKeys = N_(L"Keys");
+    b.Tree(L"{HOME}\\.ssh", P::Important, kKeys, N_(L"SSH keys"), N_(L"Private keys and known hosts. Lost keys lock you out of servers and Git hosts."));
+    b.Tree(L"{HOME}\\.gnupg", P::Important, kKeys, N_(L"GnuPG keys"), N_(L"Private PGP keys used for signing and decryption."));
+    b.Tree(L"{ROAMING}\\gnupg", P::Important, kKeys, N_(L"GnuPG keys"), N_(L"Private PGP keys used for signing and decryption."));
+    b.Tree(L"{HOME}\\.aws", P::Important, kKeys, N_(L"AWS credentials"), N_(L"AWS access keys, profiles and SSO config."));
+    b.Tree(L"{HOME}\\.azure", P::Important, kKeys, N_(L"Azure CLI sign-in"), N_(L"Azure CLI profiles and tokens."));
+    b.Tree(L"{HOME}\\.kube", P::Important, kKeys, N_(L"Kubernetes config"), N_(L"kubeconfig with cluster endpoints and credentials."));
+    b.Tree(L"{ROAMING}\\gcloud", P::Important, kKeys, N_(L"Google Cloud SDK"), N_(L"gcloud credentials and configurations."));
+    b.Tree(L"{HOME}\\.config\\gcloud", P::Important, kKeys, N_(L"Google Cloud SDK"), N_(L"gcloud credentials and configurations."));
+    b.Self(L"{HOME}\\.git-credentials", P::Important, kKeys, N_(L"Git credentials"), N_(L"Stored Git passwords and tokens."));
+    b.Tree(L"{ROAMING}\\GitHub CLI", P::Important, kKeys, N_(L"GitHub CLI"), N_(L"gh sign-in and settings."));
+    b.Self(L"{HOME}\\.gitconfig", P::Caution, N_(L"Dev"), N_(L"Git configuration"), N_(L"Your Git name, email, aliases and signing setup."));
+    b.Self(L"{HOME}\\.npmrc", P::Caution, kKeys, N_(L"npm configuration"), N_(L"May contain registry tokens."));
+    b.Self(L"{HOME}\\.pypirc", P::Caution, kKeys, N_(L"PyPI configuration"), N_(L"May contain upload tokens."));
+    b.Tree(L"{HOME}\\.docker", P::Caution, N_(L"Dev"), N_(L"Docker CLI config"), N_(L"Registry sign-ins and contexts."));
+    b.Tree(L"{HOME}\\.terraform.d", P::Caution, kKeys, N_(L"Terraform"), N_(L"Terraform Cloud tokens and plugins."));
+    b.Tree(L"{ROAMING}\\KeePass", P::Caution, kKeys, N_(L"KeePass settings"), N_(L"KeePass configuration (your .kdbx database may be elsewhere)."));
+    b.Tree(L"{ROAMING}\\Bitwarden", P::Caution, kKeys, N_(L"Bitwarden"), N_(L"Bitwarden local vault cache and settings."));
+    b.Tree(L"{LOCAL}\\1Password", P::Caution, kKeys, N_(L"1Password"), N_(L"1Password local data."));
 
     // ---- Crypto wallets -----------------------------------------------------------------------
-    const wchar_t* kWal = L"Wallet";
-    const wchar_t* kWalR = L"Cryptocurrency wallet. Without its keys or seed phrase the funds are lost for good.";
+    const wchar_t* kWal = N_(L"Wallet");
+    const wchar_t* kWalR = N_(L"Cryptocurrency wallet. Without its keys or seed phrase the funds are lost for good.");
     for (const wchar_t* w : {L"Bitcoin", L"Ethereum", L"Electrum", L"Exodus", L"atomic", L"Litecoin", L"Dogecoin",
                              L"Zcash", L"Ledger Live", L"Guarda", L"Wasabi"})
         b.Tree(std::wstring(L"{ROAMING}\\") + w, P::Important, kWal, w, kWalR);
-    b.Tree(L"{HOME}\\Documents\\Monero", P::Important, kWal, L"Monero", kWalR);
+    b.Tree(L"{HOME}\\Documents\\Monero", P::Important, kWal, N_(L"Monero"), kWalR);
 
     // ---- Browsers, mail and messengers -----------------------------------------------------
-    b.Chromium(L"{LOCAL}\\Google\\Chrome\\User Data", L"Google Chrome profile");
-    b.Chromium(L"{LOCAL}\\Google\\Chrome Beta\\User Data", L"Chrome Beta profile");
-    b.Chromium(L"{LOCAL}\\Microsoft\\Edge\\User Data", L"Microsoft Edge profile");
-    b.Chromium(L"{LOCAL}\\BraveSoftware\\Brave-Browser\\User Data", L"Brave profile");
-    b.Chromium(L"{LOCAL}\\Vivaldi\\User Data", L"Vivaldi profile");
-    b.Chromium(L"{LOCAL}\\Chromium\\User Data", L"Chromium profile");
-    b.Tree(L"{ROAMING}\\Opera Software", P::Important, L"Browser", L"Opera profile", L"Saved passwords, cookies, bookmarks and history.");
-    b.Tree(L"{ROAMING}\\Mozilla\\Firefox", P::Important, L"Browser", L"Firefox profile", L"Saved passwords, cookies, bookmarks and history.");
-    b.Tree(L"{ROAMING}\\Thunderbird", P::Important, L"Email", L"Thunderbird mail", L"Your local mail, accounts and address book.");
-    b.Tree(L"{LOCAL}\\Microsoft\\Outlook", P::Important, L"Email", L"Outlook data files", L"Outlook mailbox data (.pst/.ost).");
-    b.Tree(L"{HOME}\\Documents\\Outlook Files", P::Important, L"Email", L"Outlook data files", L"Outlook archives (.pst) may exist only here.");
-    b.Tree(L"{ROAMING}\\Signal", P::Important, L"Messages", L"Signal Desktop", L"Message history that can't be restored from the server.");
-    b.Tree(L"{ROAMING}\\Telegram Desktop", P::Caution, L"Messages", L"Telegram Desktop", L"Your Telegram session; you'll need to sign in again.");
-    b.Tree(L"{LOCAL}\\Packages\\5319275A.WhatsAppDesktop_*", P::Important, L"Messages", L"WhatsApp Desktop", L"Local chat history and media.");
+    b.Chromium(L"{LOCAL}\\Google\\Chrome\\User Data", N_(L"Google Chrome profile"));
+    b.Chromium(L"{LOCAL}\\Google\\Chrome Beta\\User Data", N_(L"Chrome Beta profile"));
+    b.Chromium(L"{LOCAL}\\Microsoft\\Edge\\User Data", N_(L"Microsoft Edge profile"));
+    b.Chromium(L"{LOCAL}\\BraveSoftware\\Brave-Browser\\User Data", N_(L"Brave profile"));
+    b.Chromium(L"{LOCAL}\\Vivaldi\\User Data", N_(L"Vivaldi profile"));
+    b.Chromium(L"{LOCAL}\\Chromium\\User Data", N_(L"Chromium profile"));
+    b.Tree(L"{ROAMING}\\Opera Software", P::Important, N_(L"Browser"), N_(L"Opera profile"), N_(L"Saved passwords, cookies, bookmarks and history."));
+    b.Tree(L"{ROAMING}\\Mozilla\\Firefox", P::Important, N_(L"Browser"), N_(L"Firefox profile"), N_(L"Saved passwords, cookies, bookmarks and history."));
+    b.Tree(L"{ROAMING}\\Thunderbird", P::Important, N_(L"Email"), N_(L"Thunderbird mail"), N_(L"Your local mail, accounts and address book."));
+    b.Tree(L"{LOCAL}\\Microsoft\\Outlook", P::Important, N_(L"Email"), N_(L"Outlook data files"), N_(L"Outlook mailbox data (.pst/.ost)."));
+    b.Tree(L"{HOME}\\Documents\\Outlook Files", P::Important, N_(L"Email"), N_(L"Outlook data files"), N_(L"Outlook archives (.pst) may exist only here."));
+    b.Tree(L"{ROAMING}\\Signal", P::Important, N_(L"Messages"), N_(L"Signal Desktop"), N_(L"Message history that can't be restored from the server."));
+    b.Tree(L"{ROAMING}\\Telegram Desktop", P::Caution, N_(L"Messages"), N_(L"Telegram Desktop"), N_(L"Your Telegram session; you'll need to sign in again."));
+    b.Tree(L"{LOCAL}\\Packages\\5319275A.WhatsAppDesktop_*", P::Important, N_(L"Messages"), N_(L"WhatsApp Desktop"), N_(L"Local chat history and media."));
     // Received photos, videos and files (Cleanup → WhatsApp & Telegram media, never preselected).
     b.Allow(L"{LOCAL}\\Packages\\5319275A.WhatsAppDesktop_*\\LocalState\\shared\\transfers", P::Caution,
-            L"Photos, videos and files WhatsApp received. Deleted here, they are gone from this PC; your phone may still have them.");
+            N_(L"Photos, videos and files WhatsApp received. Deleted here, they are gone from this PC; your phone may still have them."));
 
     // ---- Virtual machines, WSL, containers -------------------------------------------------
-    const wchar_t* kVM = L"VM";
-    b.Tree(L"{LOCAL}\\Packages\\CanonicalGroupLimited.*", P::Important, kVM, L"WSL Linux distribution",
-           L"A whole Linux system (ext4.vhdx). Remove it with: wsl --unregister <name>");
-    b.Tree(L"{LOCAL}\\Packages\\TheDebianProject.*", P::Important, kVM, L"WSL Linux distribution",
-           L"A whole Linux system (ext4.vhdx). Remove it with: wsl --unregister <name>");
-    b.Tree(L"{LOCAL}\\wsl", P::Important, kVM, L"WSL Linux distributions", L"Linux systems installed with WSL. Remove with: wsl --unregister <name>");
-    b.Tree(L"{LOCAL}\\Docker\\wsl", P::Important, kVM, L"Docker Desktop data",
-           L"Images, containers and volumes. Free space with: docker system prune");
-    b.Tree(L"{HOME}\\VirtualBox VMs", P::Important, kVM, L"VirtualBox VMs", L"Virtual machines and their disks.");
-    b.Tree(L"%PUBLIC%\\Documents\\Hyper-V", P::Important, kVM, L"Hyper-V disks", L"Virtual machine disks. Remove VMs in Hyper-V Manager.");
-    b.Tree(L"%ProgramData%\\Microsoft\\Windows\\Hyper-V", P::Important, kVM, L"Hyper-V", L"Virtual machine configuration.");
+    const wchar_t* kVM = N_(L"VM");
+    b.Tree(L"{LOCAL}\\Packages\\CanonicalGroupLimited.*", P::Important, kVM, N_(L"WSL Linux distribution"),
+           N_(L"A whole Linux system (ext4.vhdx). Remove it with: wsl --unregister <name>"));
+    b.Tree(L"{LOCAL}\\Packages\\TheDebianProject.*", P::Important, kVM, N_(L"WSL Linux distribution"),
+           N_(L"A whole Linux system (ext4.vhdx). Remove it with: wsl --unregister <name>"));
+    b.Tree(L"{LOCAL}\\wsl", P::Important, kVM, N_(L"WSL Linux distributions"), N_(L"Linux systems installed with WSL. Remove with: wsl --unregister <name>"));
+    b.Tree(L"{LOCAL}\\Docker\\wsl", P::Important, kVM, N_(L"Docker Desktop data"),
+           N_(L"Images, containers and volumes. Free space with: docker system prune"));
+    b.Tree(L"{HOME}\\VirtualBox VMs", P::Important, kVM, N_(L"VirtualBox VMs"), N_(L"Virtual machines and their disks."));
+    b.Tree(L"%PUBLIC%\\Documents\\Hyper-V", P::Important, kVM, N_(L"Hyper-V disks"), N_(L"Virtual machine disks. Remove VMs in Hyper-V Manager."));
+    b.Tree(L"%ProgramData%\\Microsoft\\Windows\\Hyper-V", P::Important, kVM, N_(L"Hyper-V"), N_(L"Virtual machine configuration."));
 
     // ---- Anywhere: by name --------------------------------------------------------------------
-    const wchar_t* kVcs = L"Version control database: history, branches, stashes and unpushed commits.";
-    b.Name(L".git", P::Important, P::Important, P::Caution, L"Git", L"Git repository", kVcs);
-    b.Name(L".svn", P::Important, P::Important, P::Caution, L"Git", L"Subversion working copy", kVcs);
-    b.Name(L".hg", P::Important, P::Important, P::Caution, L"Git", L"Mercurial repository", kVcs);
-    b.Name(L"*.kdbx", P::Important, P::None, P::Important, kKeys, L"KeePass database", L"Password database.", true);
-    b.Name(L"*.kdb", P::Important, P::None, P::Important, kKeys, L"KeePass database", L"Password database.", true);
-    b.Name(L"*.1pux", P::Important, P::None, P::Important, kKeys, L"1Password export", L"Password export.", true);
-    b.Name(L"wallet.dat", P::Important, P::None, P::Important, kWal, L"Crypto wallet file", kWalR, true);
-    b.Name(L"*.wallet", P::Important, P::None, P::Important, kWal, L"Crypto wallet file", kWalR, true);
-    b.Name(L"*.pst", P::Important, P::None, P::Important, L"Email", L"Outlook archive (.pst)", L"Mail archive that often exists nowhere else.", true);
+    const wchar_t* kVcs = N_(L"Version control database: history, branches, stashes and unpushed commits.");
+    b.Name(L".git", P::Important, P::Important, P::Caution, N_(L"Git"), N_(L"Git repository"), kVcs);
+    b.Name(L".svn", P::Important, P::Important, P::Caution, N_(L"Git"), N_(L"Subversion working copy"), kVcs);
+    b.Name(L".hg", P::Important, P::Important, P::Caution, N_(L"Git"), N_(L"Mercurial repository"), kVcs);
+    b.Name(L"*.kdbx", P::Important, P::None, P::Important, kKeys, N_(L"KeePass database"), N_(L"Password database."), true);
+    b.Name(L"*.kdb", P::Important, P::None, P::Important, kKeys, N_(L"KeePass database"), N_(L"Password database."), true);
+    b.Name(L"*.1pux", P::Important, P::None, P::Important, kKeys, N_(L"1Password export"), N_(L"Password export."), true);
+    b.Name(L"wallet.dat", P::Important, P::None, P::Important, kWal, N_(L"Crypto wallet file"), kWalR, true);
+    b.Name(L"*.wallet", P::Important, P::None, P::Important, kWal, N_(L"Crypto wallet file"), kWalR, true);
+    b.Name(L"*.pst", P::Important, P::None, P::Important, N_(L"Email"), N_(L"Outlook archive (.pst)"), N_(L"Mail archive that often exists nowhere else."), true);
     for (const wchar_t* k : {L"*.pfx", L"*.p12", L"*.ppk", L"id_rsa", L"id_ed25519", L"id_ecdsa", L"id_dsa"})
-        b.Name(k, P::Important, P::None, P::Important, kKeys, L"Private key", L"A private key or certificate; it can't be recreated.", true);
-    b.Name(L"*.pem", P::Caution, P::None, P::Caution, kKeys, L"Key or certificate (.pem)", L"May be a private key.", true);
-    b.Name(L".env", P::Caution, P::None, P::None, kKeys, L"Environment secrets (.env)", L"Usually holds API keys and passwords.", true);
+        b.Name(k, P::Important, P::None, P::Important, kKeys, N_(L"Private key"), N_(L"A private key or certificate; it can't be recreated."), true);
+    b.Name(L"*.pem", P::Caution, P::None, P::Caution, kKeys, N_(L"Key or certificate (.pem)"), N_(L"May be a private key."), true);
+    b.Name(L".env", P::Caution, P::None, P::None, kKeys, N_(L"Environment secrets (.env)"), N_(L"Usually holds API keys and passwords."), true);
     for (const wchar_t* d : {L"*.vhdx", L"*.vhd", L"*.vmdk", L"*.vdi", L"*.qcow2"})
-        b.Name(d, P::Caution, P::None, P::Caution, kVM, L"Virtual disk", L"A whole virtual machine or WSL disk.", true);
-    b.Name(L".claude", P::Caution, P::Caution, P::None, kAI, L"Claude Code project settings", L"Project agents, commands, hooks and settings.");
-    b.Name(L".cursor", P::Caution, P::Caution, P::None, kAI, L"Cursor project rules", L"Project rules and MCP config.");
-    b.Name(L".specstory", P::Important, P::Important, P::Caution, kAI, L"SpecStory chat history", L"Saved AI conversations for this project.");
-    b.Name(L".kiro", P::Caution, P::Caution, P::None, kAI, L"Kiro specs", L"Project specs, steering and hooks.");
-    b.Name(L"*.aider.chat.history.md", P::Caution, P::None, P::None, kAI, L"Aider chat history", L"Aider conversation log.", true);
+        b.Name(d, P::Caution, P::None, P::Caution, kVM, N_(L"Virtual disk"), N_(L"A whole virtual machine or WSL disk."), true);
+    b.Name(L".claude", P::Caution, P::Caution, P::None, kAI, N_(L"Claude Code project settings"), N_(L"Project agents, commands, hooks and settings."));
+    b.Name(L".cursor", P::Caution, P::Caution, P::None, kAI, N_(L"Cursor project rules"), N_(L"Project rules and MCP config."));
+    b.Name(L".specstory", P::Important, P::Important, P::Caution, kAI, N_(L"SpecStory chat history"), N_(L"Saved AI conversations for this project."));
+    b.Name(L".kiro", P::Caution, P::Caution, P::None, kAI, N_(L"Kiro specs"), N_(L"Project specs, steering and hooks."));
+    b.Name(L"*.aider.chat.history.md", P::Caution, P::None, P::None, kAI, N_(L"Aider chat history"), N_(L"Aider conversation log."), true);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -562,7 +563,7 @@ void UserRules(std::vector<Rule>& v) {
         if (sp == std::wstring::npos) continue;
         std::wstring level = util::ToLower(line.substr(0, sp));
         std::wstring rest = line.substr(line.find_first_not_of(L" \t", sp));
-        std::wstring reason = L"Protected by your rule in protect.txt.";
+        std::wstring reason = N_(L"Protected by your rule in protect.txt.");
         size_t semi = rest.find(L';');
         if (semi != std::wstring::npos) {
             std::wstring r = rest.substr(semi + 1);
@@ -765,9 +766,9 @@ ProtectReport CheckLocked(const State& s, const std::wstring& path, const Node* 
     // Whole drives (and network share roots) are never deleted.
     if (t.size() == 1 || (path.rfind(L"\\\\", 0) == 0 && t.size() <= 2)) {
         Rule r;
-        r.group = L"System";
-        r.name = L"Drive root";
-        r.reason = L"A whole drive. Delete the folders you don't need instead.";
+        r.group = N_(L"System");
+        r.name = N_(L"Drive root");
+        r.reason = N_(L"A whole drive. Delete the folders you don't need instead.");
         c.Add(r, P::Blocked, ProtectRel::Self, path);
     }
 
@@ -928,7 +929,7 @@ const ProtectHit& ProtectBadges::For(const Node* n) {
             hit.level = b.level;
             hit.rel = ProtectRel::Contains;
             hit.group = r.group;
-            hit.name = b.mixed ? r.name + L" and other protected items" : r.name;
+            hit.name = b.mixed ? TrF(L"{0} and other protected items", Tr(r.name)) : r.name;
             hit.reason = r.reason;
             hit.path = NodePath(b.first);
             hit.count = b.count;
@@ -1023,20 +1024,21 @@ std::vector<ProtectHit> ProtectedLocationsOnThisPC() {
 
 const wchar_t* ProtectLevelName(Protect p) {
     switch (p) {
-        case Protect::Blocked: return L"Blocked";
-        case Protect::Important: return L"Important";
-        case Protect::Caution: return L"Caution";
+        case Protect::Blocked: return N_(L"Blocked");
+        case Protect::Important: return N_(L"Important");
+        case Protect::Caution: return N_(L"Caution");
         default: return L"";
     }
 }
 
+// Built-in groups, names and reasons are English (N_ above); they are translated here, for display.
 std::wstring DescribeHit(const ProtectHit& h) {
-    std::wstring s = h.group.empty() ? h.name : h.group + L" \u00B7 " + h.name;
+    std::wstring s = h.group.empty() ? Tr(h.name) : Tr(h.group) + L" · " + Tr(h.name);
     switch (h.rel) {
         case ProtectRel::Self: break;
-        case ProtectRel::Inside: s += L" \u00B7 inside " + h.path; break;
+        case ProtectRel::Inside: s += L" · " + TrF(L"inside {0}", h.path); break;
         case ProtectRel::Contains:
-            s += h.count > 1 ? L" \u00B7 " + std::to_wstring(h.count) + L" inside, e.g. " + h.path : L" \u00B7 contains " + h.path;
+            s += L" · " + (h.count > 1 ? TrN(h.count, L"{0} inside, e.g. {1}", L"{0} inside, e.g. {1}", h.path) : TrF(L"contains {0}", h.path));
             break;
     }
     return s;

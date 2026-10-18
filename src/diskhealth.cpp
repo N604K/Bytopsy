@@ -11,6 +11,7 @@
 #include <cwctype>
 
 #include "runtool.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -247,11 +248,9 @@ std::string ReadSmallFile(const std::wstring& path) {
 }
 
 std::wstring DaysText(double days) {
-    if (days < 60) return std::to_wstring(std::max<long long>(1, std::llround(days))) + L" days";
-    if (days < 730) return std::to_wstring(std::llround(days / 30.4)) + L" months";
-    wchar_t b[32];
-    swprintf(b, 32, L"%.1f years", days / 365.25);
-    return b;
+    if (days < 60) return TrN(static_cast<uint64_t>(std::max<long long>(1, std::llround(days))), L"{0} day", L"{0} days");
+    if (days < 730) return TrN(static_cast<uint64_t>(std::llround(days / 30.4)), L"{0} month", L"{0} months");
+    return TrF(L"{0} years", util::FormatDecimal(days / 365.25, 1));
 }
 
 }  // namespace
@@ -271,11 +270,11 @@ std::wstring BusName(int busType) {
         case 9: return L"iSCSI";
         case 10: return L"SAS";
         case 11: return L"SATA";
-        case 12: return L"SD card";
+        case 12: return Tr(L"SD card");
         case 13: return L"MMC";
         case 14:
-        case 15: return L"Virtual";
-        case 16: return L"Storage Spaces";
+        case 15: return Tr(L"Virtual");
+        case 16: return Tr(L"Storage Spaces");
         case 17: return L"NVMe";
         case 18: return L"SCM";
         case 19: return L"UFS";
@@ -286,47 +285,47 @@ std::wstring BusName(int busType) {
 std::wstring MediaName(const PhysicalDisk& d) {
     std::wstring bus = BusName(d.busType);
     if (d.busType == 17) return L"NVMe SSD";
-    if (d.mediaType == 3) return bus == L"USB" ? L"USB hard disk" : L"Hard disk";
-    if (d.mediaType == 4) return bus.empty() ? L"SSD" : bus + L" SSD";
-    if (d.mediaType == 5) return L"Storage-class memory";
-    return bus.empty() ? L"Disk" : bus + L" disk";
+    if (d.mediaType == 3) return d.busType == 7 ? Tr(L"USB hard disk") : Tr(L"Hard disk");
+    if (d.mediaType == 4) return bus.empty() ? L"SSD" : TrF(L"{0} SSD", bus);
+    if (d.mediaType == 5) return Tr(L"Storage-class memory");
+    return bus.empty() ? Tr(L"Disk") : TrF(L"{0} disk", bus);
 }
 
 std::wstring OpStatusName(int code) {
     switch (code) {
-        case 0: return L"Unknown";
-        case 1: return L"Other";
-        case 2: return L"OK";
-        case 3: return L"Degraded";
-        case 4: return L"Stressed";
-        case 5: return L"Predictive Failure";
-        case 6: return L"Error";
-        case 7: return L"Non-Recoverable Error";
-        case 8: return L"Starting";
-        case 9: return L"Stopping";
-        case 10: return L"Stopped";
-        case 11: return L"In Service";
-        case 12: return L"No Contact";
-        case 13: return L"Lost Communication";
-        case 14: return L"Aborted";
-        case 15: return L"Dormant";
-        case 16: return L"Supporting Entity in Error";
-        case 17: return L"Completed";
-        case 18: return L"Power Mode";
-        case 0xD010: return L"In Maintenance";
-        case 0xD011: return L"Not Usable";
-        case 0xD012: return L"Transient Error";
-        case 0xD013: return L"Failed Media";
-        default: return L"status " + std::to_wstring(code);
+        case 0: return Tr(L"Unknown");
+        case 1: return Tr(L"Other");
+        case 2: return Tr(L"OK");
+        case 3: return Tr(L"Degraded");
+        case 4: return Tr(L"Stressed");
+        case 5: return Tr(L"Predictive Failure");
+        case 6: return Tr(L"Error");
+        case 7: return Tr(L"Non-Recoverable Error");
+        case 8: return Tr(L"Starting");
+        case 9: return Tr(L"Stopping");
+        case 10: return Tr(L"Stopped");
+        case 11: return Tr(L"In Service");
+        case 12: return Tr(L"No Contact");
+        case 13: return Tr(L"Lost Communication");
+        case 14: return Tr(L"Aborted");
+        case 15: return Tr(L"Dormant");
+        case 16: return Tr(L"Supporting Entity in Error");
+        case 17: return Tr(L"Completed");
+        case 18: return Tr(L"Power Mode");
+        case 0xD010: return Tr(L"In Maintenance");
+        case 0xD011: return Tr(L"Not Usable");
+        case 0xD012: return Tr(L"Transient Error");
+        case 0xD013: return Tr(L"Failed Media");
+        default: return TrF(L"status {0}", code);
     }
 }
 
 const wchar_t* HealthLevelName(DiskHealthLevel l) {
     switch (l) {
-        case DiskHealthLevel::Healthy: return L"Healthy";
-        case DiskHealthLevel::Warning: return L"Warning";
-        case DiskHealthLevel::Unhealthy: return L"Unhealthy";
-        default: return L"Unknown";
+        case DiskHealthLevel::Healthy: return N_(L"Healthy");
+        case DiskHealthLevel::Warning: return N_(L"Warning");
+        case DiskHealthLevel::Unhealthy: return N_(L"Unhealthy");
+        default: return N_(L"Unknown");
     }
 }
 
@@ -338,55 +337,54 @@ DiskVerdict AssessDisk(const PhysicalDisk& d) {
     };
     switch (d.healthStatus) {
         case 0: raise(DiskHealthLevel::Healthy, L""); break;
-        case 1: raise(DiskHealthLevel::Warning, L"Windows reports a warning for this disk"); break;
-        case 2: raise(DiskHealthLevel::Unhealthy, L"Windows reports this disk as unhealthy: back up what is on it now"); break;
+        case 1: raise(DiskHealthLevel::Warning, Tr(L"Windows reports a warning for this disk")); break;
+        case 2: raise(DiskHealthLevel::Unhealthy, Tr(L"Windows reports this disk as unhealthy: back up what is on it now")); break;
         default: break;
     }
     for (int s : d.opStatus) {
         switch (s) {
-            case 5: raise(DiskHealthLevel::Warning, L"Windows predicts this disk will fail (Predictive Failure): back it up now"); break;
-            case 3: raise(DiskHealthLevel::Warning, L"Windows reports it as degraded"); break;
+            case 5: raise(DiskHealthLevel::Warning, Tr(L"Windows predicts this disk will fail (Predictive Failure): back it up now")); break;
+            case 3: raise(DiskHealthLevel::Warning, Tr(L"Windows reports it as degraded")); break;
             case 12:
             case 13:
-            case 0xD012: raise(DiskHealthLevel::Warning, L"Windows reports: " + OpStatusName(s)); break;
+            case 0xD012: raise(DiskHealthLevel::Warning, TrF(L"Windows reports: {0}", OpStatusName(s))); break;
             case 6:
             case 7:
             case 0xD011:
-            case 0xD013: raise(DiskHealthLevel::Unhealthy, L"Windows reports: " + OpStatusName(s)); break;
+            case 0xD013: raise(DiskHealthLevel::Unhealthy, TrF(L"Windows reports: {0}", OpStatusName(s))); break;
             default: break;
         }
     }
     if (d.criticalWarning > 0) {
         int c = d.criticalWarning;
         if (c & 0x01)
-            raise(DiskHealthLevel::Warning, L"The drive's spare blocks are below its threshold (" + std::to_wstring(d.availableSpare) + L"% left)");
-        if (c & 0x02) raise(DiskHealthLevel::Warning, L"The drive reports a temperature over its limit");
-        if (c & 0x04) raise(DiskHealthLevel::Unhealthy, L"The drive reports degraded reliability: back up what is on it now");
-        if (c & 0x08) raise(DiskHealthLevel::Unhealthy, L"The drive has switched itself to read-only");
-        if (c & 0x10) raise(DiskHealthLevel::Warning, L"The drive's backup power failed");
+            raise(DiskHealthLevel::Warning, TrF(L"The drive's spare blocks are below its threshold ({0}% left)", d.availableSpare));
+        if (c & 0x02) raise(DiskHealthLevel::Warning, Tr(L"The drive reports a temperature over its limit"));
+        if (c & 0x04) raise(DiskHealthLevel::Unhealthy, Tr(L"The drive reports degraded reliability: back up what is on it now"));
+        if (c & 0x08) raise(DiskHealthLevel::Unhealthy, Tr(L"The drive has switched itself to read-only"));
+        if (c & 0x10) raise(DiskHealthLevel::Warning, Tr(L"The drive's backup power failed"));
     }
     if (d.wear >= 100)
-        raise(DiskHealthLevel::Warning, L"It has used up its rated endurance (" + std::to_wstring(d.wear) +
-                                            L"%): it may keep working, but plan to replace it");
+        raise(DiskHealthLevel::Warning, TrF(L"It has used up its rated endurance ({0}%): it may keep working, but plan to replace it", d.wear));
     else if (d.wear >= 90)
-        v.notes.push_back(std::to_wstring(d.wear) + L"% of its rated endurance is used up");
+        v.notes.push_back(TrF(L"{0}% of its rated endurance is used up", d.wear));
     if (d.temperature > 0 && d.temperatureMax > 0 && d.temperature >= d.temperatureMax)
-        raise(DiskHealthLevel::Warning, L"It is running hot: " + std::to_wstring(d.temperature) + L" °C (rated for " +
-                                            std::to_wstring(d.temperatureMax) + L" °C)");
+        raise(DiskHealthLevel::Warning, TrF(L"It is running hot: {0} °C (rated for {1} °C)", d.temperature, d.temperatureMax));
     else if (d.temperature >= 70 && d.temperatureMax <= 0)
-        v.notes.push_back(L"It is warm: " + std::to_wstring(d.temperature) + L" °C");
+        v.notes.push_back(TrF(L"It is warm: {0} °C", d.temperature));
     int64_t uncorrected = std::max<int64_t>(0, d.readErrorsUncorrected) + std::max<int64_t>(0, d.writeErrorsUncorrected);
-    std::wstring rated = v.level == DiskHealthLevel::Healthy ? L"Windows still rates it healthy; " : L"";
+    bool healthy = v.level == DiskHealthLevel::Healthy;
     if (d.mediaErrors > 0)
-        v.notes.push_back(Count(d.mediaErrors) + (d.mediaErrors == 1 ? L" media error" : L" media errors") +
-                          L" logged over its life (data the drive couldn't read back). " + rated + L"keep backups current");
+        v.notes.push_back(TrN(static_cast<uint64_t>(d.mediaErrors), L"{0} media error logged over its life (data the drive couldn't read back).",
+                              L"{0} media errors logged over its life (data the drive couldn't read back).") +
+                          L" " + (healthy ? Tr(L"Windows still rates it healthy; keep backups current") : Tr(L"Keep backups current")));
     else if (uncorrected > 0)
-        v.notes.push_back(Count(uncorrected) + (uncorrected == 1 ? L" read/write error" : L" read/write errors") +
-                          L" the drive couldn't correct. " + rated + L"keep backups current");
+        v.notes.push_back(TrN(static_cast<uint64_t>(uncorrected), L"{0} read/write error the drive couldn't correct.",
+                              L"{0} read/write errors the drive couldn't correct.") +
+                          L" " + (healthy ? Tr(L"Windows still rates it healthy; keep backups current") : Tr(L"Keep backups current")));
     if (d.availableSpare >= 0 && d.spareThreshold > 0 && !(d.criticalWarning > 0 && (d.criticalWarning & 1)) &&
         d.availableSpare < 100 && d.availableSpare <= d.spareThreshold + 10)
-        v.notes.push_back(L"Only " + std::to_wstring(d.availableSpare) + L"% spare blocks left (the drive warns at " +
-                          std::to_wstring(d.spareThreshold) + L"%)");
+        v.notes.push_back(TrF(L"Only {0}% spare blocks left (the drive warns at {1}%)", d.availableSpare, d.spareThreshold));
     return v;
 }
 
@@ -533,7 +531,7 @@ TrimStatus ParseFsutilTrim(const std::wstring& out) {
         std::wstring last = Trim(out);
         size_t nl = last.find_last_of(L"\r\n");
         t.error = nl == std::wstring::npos ? last : Trim(last.substr(nl + 1));
-        if (t.error.empty()) t.error = L"fsutil printed nothing";
+        if (t.error.empty()) t.error = Tr(L"fsutil printed nothing");
     }
     return t;
 }
@@ -582,16 +580,19 @@ UsageTrend ComputeTrend(std::vector<UsagePoint> pts, int64_t now, uint64_t freeN
     return t;
 }
 
+// `what` is "Used space" or "Scanned size" (translated here).
 std::wstring TrendText(const UsageTrend& t, const std::wstring& what, uint64_t total) {
     if (!t.ok) return L"";
-    std::wstring span = t.recent ? L"in the last " + DaysText(t.days) : L"over " + DaysText(t.days) + L" (up to " +
-                                                                             util::FormatTime(t.points.back().time).substr(0, 10) + L")";
-    if (t.days >= 0.5 && t.days < 1.5) span = t.recent ? L"in the last day" : L"in one day";
+    std::wstring span = t.recent ? TrF(L"in the last {0}", DaysText(t.days))
+                                 : TrF(L"over {0} (up to {1})", DaysText(t.days), util::FormatTime(t.points.back().time).substr(0, 10));
+    if (t.days >= 0.5 && t.days < 1.5) span = t.recent ? Tr(L"in the last day") : Tr(L"in one day");
     uint64_t mag = static_cast<uint64_t>(std::llabs(t.delta));
     uint64_t steady = std::max<uint64_t>(256ull << 20, total / 1000);
-    if (mag < steady) return what + L" stayed about the same " + span;
-    std::wstring s = what + (t.delta > 0 ? L" grew " : L" shrank ") + util::FormatSizeShort(mag) + L" " + span;
-    if (t.daysToFull >= 0 && t.daysToFull < 3 * 365) s += L"; at this rate the drive is full in about " + DaysText(static_cast<double>(t.daysToFull));
+    if (mag < steady) return TrF(L"{0} stayed about the same {1}", Tr(what), span);
+    std::wstring s = t.delta > 0 ? TrF(L"{0} grew {1} {2}", Tr(what), util::FormatSizeShort(mag), span)
+                                 : TrF(L"{0} shrank {1} {2}", Tr(what), util::FormatSizeShort(mag), span);
+    if (t.daysToFull >= 0 && t.daysToFull < 3 * 365)
+        s += L"; " + TrF(L"at this rate the drive is full in about {0}", DaysText(static_cast<double>(t.daysToFull)));
     return s;
 }
 
@@ -715,7 +716,7 @@ DriveTrend BuildDriveTrend(const DriveInfo& d, uint32_t serial, const std::vecto
     r.trend = ComputeTrend(pts, now, d.free);
     r.samples = pts.size();
     if (r.trend.ok) {
-        r.text = TrendText(r.trend, L"Used space", d.total);
+        r.text = TrendText(r.trend, N_(L"Used space"), d.total);
         return r;
     }
     if (scans.size() >= 2) {
@@ -724,11 +725,11 @@ DriveTrend BuildDriveTrend(const DriveInfo& d, uint32_t serial, const std::vecto
             r.trend = s;
             r.fromScans = true;
             r.samples = scans.size();
-            r.text = TrendText(s, L"Scanned size", d.total);
+            r.text = TrendText(s, N_(L"Scanned size"), d.total);
             return r;
         }
     }
-    r.text = L"Scan this drive a few times to see a trend";
+    r.text = Tr(L"Scan this drive a few times to see a trend");
     return r;
 }
 
@@ -790,15 +791,15 @@ DiskHealthReport QueryDiskHealth() {
             }
             r.disks.push_back(std::move(d));
         }
-        if (FAILED(hr) && objs.empty()) r.error = L"Windows' storage provider didn't answer (WMI error 0x" + [&] {
+        if (FAILED(hr) && objs.empty()) {
             wchar_t b[16];
             swprintf(b, 16, L"%08lX", static_cast<unsigned long>(hr));
-            return std::wstring(b);
-        }() + L")";
+            r.error = TrF(L"Windows' storage provider didn't answer (WMI error 0x{0})", std::wstring(b));
+        }
     } else {
-        wchar_t b[96];
-        swprintf(b, 96, L"Couldn't connect to Windows' storage provider (WMI error 0x%08lX)", static_cast<unsigned long>(hr));
-        r.error = b;
+        wchar_t b[16];
+        swprintf(b, 16, L"%08lX", static_cast<unsigned long>(hr));
+        r.error = TrF(L"Couldn't connect to Windows' storage provider (WMI error 0x{0})", std::wstring(b));
     }
     if (svc) svc->Release();
     if (loc) loc->Release();

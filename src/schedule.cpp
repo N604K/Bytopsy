@@ -11,6 +11,7 @@
 #include <mutex>
 
 #include "journal.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -200,7 +201,8 @@ bool ParseCleanArguments(const std::wstring& args, std::vector<std::wstring>& id
 }
 
 const wchar_t* WeekdayName(int d) {
-    static const wchar_t* const kNames[] = {L"Sunday", L"Monday", L"Tuesday", L"Wednesday", L"Thursday", L"Friday", L"Saturday"};
+    static const wchar_t* const kNames[] = {N_(L"Sunday"),   N_(L"Monday"), N_(L"Tuesday"), N_(L"Wednesday"),
+                                            N_(L"Thursday"), N_(L"Friday"), N_(L"Saturday")};
     return d >= 0 && d < 7 ? kNames[d] : L"?";
 }
 
@@ -208,10 +210,10 @@ std::wstring DescribeSchedule(const ScheduleSpec& s) {
     wchar_t t[16];
     swprintf(t, 16, L"%02d:%02d", s.hour, s.minute);
     switch (s.freq) {
-        case ScheduleFreq::Daily: return L"Daily at " + std::wstring(t);
-        case ScheduleFreq::Weekly: return L"Weekly on " + std::wstring(WeekdayName(s.weekday)) + L" at " + t;
-        case ScheduleFreq::Monthly: return L"Monthly on day " + std::to_wstring(s.monthDay) + L" at " + t;
-        case ScheduleFreq::Logon: return L"At logon";
+        case ScheduleFreq::Daily: return TrF(L"Daily at {0}", std::wstring(t));
+        case ScheduleFreq::Weekly: return TrF(L"Weekly on {0} at {1}", Tr(WeekdayName(s.weekday)), std::wstring(t));
+        case ScheduleFreq::Monthly: return TrF(L"Monthly on day {0} at {1}", s.monthDay, std::wstring(t));
+        case ScheduleFreq::Logon: return Tr(L"At logon");
     }
     return L"";
 }
@@ -269,20 +271,20 @@ int MonthDayFromMask(unsigned mask) {
 
 std::wstring DescribeTaskResult(int64_t code) {
     switch (static_cast<uint32_t>(code)) {
-        case kCleanOk: return L"OK";
-        case kCleanPartial: return L"some items were in use, or a tool's command failed";
-        case kCleanUsage: return L"failed: bad arguments or unknown category ids";
-        case kCleanSkipped: return L"nothing ran: the categories need administrator rights";
-        case 0x00041303: return L"not run yet";                      // SCHED_S_TASK_HAS_NOT_RUN
-        case 0x00041301: return L"running now";                      // SCHED_S_TASK_RUNNING
-        case 0x00041306: return L"stopped before it finished";       // SCHED_S_TASK_TERMINATED
-        case 0x800710E0: return L"didn't start (on battery, or not signed in)";
-        case 0xC000013A: return L"stopped before it finished";
-        case 0x80070002: return L"failed: winncdu-cli.exe was not found";
+        case kCleanOk: return Tr(L"OK");
+        case kCleanPartial: return Tr(L"some items were in use, or a tool's command failed");
+        case kCleanUsage: return Tr(L"failed: bad arguments or unknown category ids");
+        case kCleanSkipped: return Tr(L"nothing ran: the categories need administrator rights");
+        case 0x00041303: return Tr(L"not run yet");                      // SCHED_S_TASK_HAS_NOT_RUN
+        case 0x00041301: return Tr(L"running now");                      // SCHED_S_TASK_RUNNING
+        case 0x00041306: return Tr(L"stopped before it finished");       // SCHED_S_TASK_TERMINATED
+        case 0x800710E0: return Tr(L"didn't start (on battery, or not signed in)");
+        case 0xC000013A: return Tr(L"stopped before it finished");
+        case 0x80070002: return Tr(L"failed: winncdu-cli.exe was not found");
     }
-    wchar_t b[48];
-    swprintf(b, 48, L"failed (0x%08X)", static_cast<uint32_t>(code));
-    return b;
+    wchar_t b[16];
+    swprintf(b, 16, L"%08X", static_cast<uint32_t>(code));
+    return TrF(L"failed (0x{0})", std::wstring(b));
 }
 
 // =============================================================================================
@@ -338,21 +340,21 @@ bool NotFound(HRESULT hr) {
 }
 
 std::wstring HrText(HRESULT hr) {
-    if (hr == E_ACCESSDENIED) return L"access denied";
+    if (hr == E_ACCESSDENIED) return Tr(L"access denied");
     std::wstring m = util::Win32ErrorMessage(static_cast<unsigned long>(hr));
     return m;
 }
 
 bool Fail(const wchar_t* what, HRESULT hr, std::wstring& err) {
-    err = std::wstring(what) + L": " + HrText(hr);
+    err = Tr(what) + L": " + HrText(hr);  // `what` is marked N_ at the callers
     return false;
 }
 
 bool Connect(Com<ITaskService>& svc, std::wstring& err) {
     HRESULT hr = CoCreateInstance(CLSID_TaskScheduler, nullptr, CLSCTX_INPROC_SERVER, IID_ITaskService, reinterpret_cast<void**>(&svc));
-    if (FAILED(hr)) return Fail(L"Task Scheduler isn't available", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Task Scheduler isn't available"), hr, err);
     hr = svc->Connect(Empty(), Empty(), Empty(), Empty());
-    if (FAILED(hr)) return Fail(L"Couldn't connect to Task Scheduler", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't connect to Task Scheduler"), hr, err);
     return true;
 }
 
@@ -392,14 +394,14 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
     if (NotFound(hr)) {
         Com<ITaskFolder> root;
         hr = svc->GetFolder(Bstr(L"\\"), &root);
-        if (FAILED(hr)) return Fail(L"Couldn't open Task Scheduler", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't open Task Scheduler"), hr, err);
         hr = root->CreateFolder(Bstr(FolderLeaf(folderPath)), Empty(), &folder);
     }
-    if (FAILED(hr)) return Fail(L"Couldn't open the task folder", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't open the task folder"), hr, err);
 
     Com<ITaskDefinition> def;
     hr = svc->NewTask(0, &def);
-    if (FAILED(hr)) return Fail(L"Couldn't create the task", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't create the task"), hr, err);
     std::wstring user = CurrentUser();
     {
         Com<IRegistrationInfo> ri;
@@ -411,7 +413,7 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
     {
         Com<IPrincipal> pr;
         hr = def->get_Principal(&pr);
-        if (FAILED(hr)) return Fail(L"Couldn't set up the task", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
         pr->put_LogonType(TASK_LOGON_INTERACTIVE_TOKEN);  // as you, only while you're signed in
         pr->put_RunLevel(TASK_RUNLEVEL_LUA);              // never elevated
         if (!user.empty()) pr->put_UserId(Bstr(user));
@@ -419,7 +421,7 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
     {
         Com<ITaskSettings> st;
         hr = def->get_Settings(&st);
-        if (FAILED(hr)) return Fail(L"Couldn't set up the task", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
         st->put_StartWhenAvailable(VARIANT_TRUE);  // a missed start runs as soon as possible
         st->put_DisallowStartIfOnBatteries(VARIANT_TRUE);
         st->put_StopIfGoingOnBatteries(VARIANT_TRUE);
@@ -434,14 +436,14 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
     {
         Com<ITriggerCollection> tc;
         hr = def->get_Triggers(&tc);
-        if (FAILED(hr)) return Fail(L"Couldn't set up the task", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
         TASK_TRIGGER_TYPE2 type = when.freq == ScheduleFreq::Daily    ? TASK_TRIGGER_DAILY
                                   : when.freq == ScheduleFreq::Weekly ? TASK_TRIGGER_WEEKLY
                                   : when.freq == ScheduleFreq::Monthly ? TASK_TRIGGER_MONTHLY
                                                                        : TASK_TRIGGER_LOGON;
         Com<ITrigger> tr;
         hr = tc->Create(type, &tr);
-        if (FAILED(hr)) return Fail(L"Couldn't set up the trigger", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the trigger"), hr, err);
         SYSTEMTIME now;
         GetLocalTime(&now);
         tr->put_StartBoundary(Bstr(ScheduleStartBoundary(when, now.wYear, now.wMonth, now.wDay, now.wDayOfWeek, now.wHour, now.wMinute)));
@@ -472,13 +474,13 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
     {
         Com<IActionCollection> ac;
         hr = def->get_Actions(&ac);
-        if (FAILED(hr)) return Fail(L"Couldn't set up the task", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
         Com<IAction> a;
         hr = ac->Create(TASK_ACTION_EXEC, &a);
-        if (FAILED(hr)) return Fail(L"Couldn't set up the action", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the action"), hr, err);
         Com<IExecAction> ex;
         hr = a->QueryInterface(IID_IExecAction, reinterpret_cast<void**>(&ex));
-        if (FAILED(hr)) return Fail(L"Couldn't set up the action", hr, err);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the action"), hr, err);
         ex->put_Path(Bstr(exe));
         ex->put_Arguments(Bstr(args));
         size_t slash = exe.find_last_of(L"\\/");
@@ -487,7 +489,7 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
     Com<IRegisteredTask> reg;
     hr = folder->RegisterTaskDefinition(Bstr(name), def.p, TASK_CREATE_OR_UPDATE, Empty(), Empty(), TASK_LOGON_INTERACTIVE_TOKEN,
                                         Empty(), &reg);
-    if (FAILED(hr)) return Fail(L"Couldn't save the task", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't save the task"), hr, err);
     return true;
 }
 
@@ -498,11 +500,11 @@ bool TaskQuery(const std::wstring& folderPath, const std::wstring& name, TaskInf
     Com<ITaskFolder> folder;
     HRESULT hr = svc->GetFolder(Bstr(folderPath), &folder);
     if (NotFound(hr)) return true;
-    if (FAILED(hr)) return Fail(L"Couldn't open the task folder", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't open the task folder"), hr, err);
     Com<IRegisteredTask> task;
     hr = folder->GetTask(Bstr(name), &task);
     if (NotFound(hr)) return true;
-    if (FAILED(hr)) return Fail(L"Couldn't read the task", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't read the task"), hr, err);
     info.exists = true;
     VARIANT_BOOL en = VARIANT_FALSE;
     if (SUCCEEDED(task->get_Enabled(&en))) info.enabled = en != VARIANT_FALSE;
@@ -571,9 +573,9 @@ bool TaskRemove(const std::wstring& folderPath, const std::wstring& name, std::w
     Com<ITaskFolder> folder;
     HRESULT hr = svc->GetFolder(Bstr(folderPath), &folder);
     if (NotFound(hr)) return true;
-    if (FAILED(hr)) return Fail(L"Couldn't open the task folder", hr, err);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't open the task folder"), hr, err);
     hr = folder->DeleteTask(Bstr(name), 0);
-    if (FAILED(hr) && !NotFound(hr)) return Fail(L"Couldn't remove the task", hr, err);
+    if (FAILED(hr) && !NotFound(hr)) return Fail(N_(L"Couldn't remove the task"), hr, err);
     // The folder goes too once nothing else is in it (hidden tasks counted).
     Com<IRegisteredTaskCollection> tasks;
     Com<ITaskFolderCollection> sub;

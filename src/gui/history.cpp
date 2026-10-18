@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "../i18n.h"
 #include "../util.h"
 
 namespace {
@@ -126,7 +127,7 @@ bool SaveSnapshot(const Node* root, std::wstring& err) {
     std::wstring file = HistoryDir() + name;
     FILE* f = nullptr;
     if (_wfopen_s(&f, file.c_str(), L"wb") != 0 || !f) {
-        err = L"Cannot write " + file;
+        err = TrF(L"Cannot write {0}", file);
         return false;
     }
     bool ok;
@@ -156,7 +157,7 @@ bool SaveSnapshot(const Node* root, std::wstring& err) {
     fclose(f);
     if (!ok) {
         DeleteFileW(file.c_str());
-        err = L"Write error";
+        err = Tr(L"Write error");
         return false;
     }
     // Keep the 12 most recent snapshots per root.

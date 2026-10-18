@@ -49,6 +49,11 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      # res/lang/template.lang must list exactly the strings in the code (Tr, TrF, TrN, N_ and
+      # res/cleaners.ini), with matching {0} placeholders; regenerate it with the same script.
+      - name: Translation template up to date
+        run: python -I tools/extract_strings.py --check
+
       # Code signing through SignPath, for tags only, once the repository variable
       # SIGNPATH_ORGANIZATION_ID and the secret SIGNPATH_API_TOKEN are set (docs/RELEASING.md).
       # Without them, releases are published unsigned.

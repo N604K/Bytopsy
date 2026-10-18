@@ -25,6 +25,23 @@ std::wstring FormatTime(int64_t filetime);
 std::wstring FormatDuration(double seconds);
 std::wstring FormatPercent(double pct);  // fixed width 6: " 45.2%"
 
+// The decimal and digit-group separators used by FormatSize*, FormatCount, FormatDuration and
+// FormatDecimal: "." and "," unless set (winncdu.exe sets the Windows regional format; the
+// terminal app and files keep the defaults). Not while an InvariantNumbers lives on the thread.
+void SetNumberFormat(const std::wstring& decimal, const std::wstring& group);
+std::wstring FormatDecimal(double v, int digits);  // "1.5" / "1,5"
+// Default separators on this thread while it lives (journal and log text).
+struct InvariantNumbers {
+    InvariantNumbers();
+    ~InvariantNumbers();
+    InvariantNumbers(const InvariantNumbers&) = delete;
+    InvariantNumbers& operator=(const InvariantNumbers&) = delete;
+};
+// Date ("10/18/2026") and date with time ("10/18/2026 2:05 PM") in the Windows regional format,
+// from FILETIME ticks; empty for 0. For the windowed app (FormatTime stays fixed-width ISO).
+std::wstring FormatDateLocal(int64_t filetime);
+std::wstring FormatDateTimeLocal(int64_t filetime);
+
 std::wstring Utf8ToWide(std::string_view s);
 std::string WideToUtf8(std::wstring_view s);
 

@@ -9,6 +9,7 @@
 #include <set>
 
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -111,7 +112,7 @@ std::wstring Join(const std::vector<std::wstring>& w, size_t n) {
 bool NoiseWord(std::wstring w) {
     while (!w.empty() && (w.back() == L',' || w.back() == L')' || w.back() == L';')) w.pop_back();
     while (!w.empty() && w[0] == L'(') w.erase(0, 1);
-    if (w.empty() || w == L"-" || w == L"\u2013") return true;
+    if (w.empty() || w == L"-" || w == L"–") return true;
     if (iswdigit(w[0]) || (w.size() > 1 && w[0] == L'v' && iswdigit(w[1]))) return true;
     static const wchar_t* words[] = {L"x64", L"x86", L"amd64", L"arm64", L"win64", L"win32", L"64-bit", L"32-bit", L"version", L"build"};
     for (auto* x : words)
@@ -412,7 +413,7 @@ bool LaunchCommand(const std::wstring& command, HANDLE* process, std::wstring& e
     if (IsUriCommand(command)) {
         exe = command;
     } else if (!SplitCommand(command, exe, args)) {
-        err = L"Can't read the uninstall command: " + command;
+        err = TrF(L"Can't read the uninstall command: {0}", command);
         return false;
     }
     SHELLEXECUTEINFOW sei{sizeof(sei)};
@@ -423,7 +424,7 @@ bool LaunchCommand(const std::wstring& command, HANDLE* process, std::wstring& e
     sei.nShow = SW_SHOWNORMAL;
     if (!ShellExecuteExW(&sei)) {
         DWORD e = GetLastError();
-        err = e == ERROR_CANCELLED ? L"Cancelled" : L"Couldn't start the uninstaller: " + util::Win32ErrorMessage(e);
+        err = e == ERROR_CANCELLED ? N_(L"Cancelled") : TrF(L"Couldn't start the uninstaller: {0}", util::Win32ErrorMessage(e));
         return false;
     }
     if (process) *process = sei.hProcess;
@@ -614,7 +615,7 @@ std::vector<AppLeftover> FindAppLeftovers(const UninstallEntry& gone, const std:
         // by the same name (another version or build may share the folder).
         bool registered = IsAbsolute(CleanPath(gone.installLocation));
         bool nameTaken = std::any_of(appV.begin(), appV.end(), [&](const std::wstring& n) { return takenByOther(n); });
-        add(folder, registered ? L"Its install folder" : L"The folder its uninstaller was in", registered && !nameTaken, false);
+        add(folder, registered ? Tr(L"Its install folder") : Tr(L"The folder its uninstaller was in"), registered && !nameTaken, false);
     }
     // 2. Folders named after it in the usual places, directly or in its publisher's folder.
     for (auto& root : roots.roots) {
@@ -625,7 +626,7 @@ std::vector<AppLeftover> FindAppLeftovers(const UninstallEntry& gone, const std:
             if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) continue;
             if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..")) continue;
             std::wstring n = Norm(fd.cFileName), dir = root + L"\\" + fd.cFileName;
-            if (has(appV, n) && !takenByOther(n)) add(dir, L"Named after the app, in " + root, false, false);
+            if (has(appV, n) && !takenByOther(n)) add(dir, TrF(L"Named after the app, in {0}", root), false, false);
             if (!has(pubV, n)) continue;
             std::vector<std::wstring> matched;
             bool other = false;
@@ -645,9 +646,9 @@ std::vector<AppLeftover> FindAppLeftovers(const UninstallEntry& gone, const std:
             // The publisher's folder itself only when it holds nothing but this app, and no other
             // installed app has this publisher or a name starting with it.
             if (!other && !matched.empty() && !Generic(n) && !takenByOther(n)) {
-                add(dir, L"Its publisher's folder, holding only this app", false, true);
+                add(dir, Tr(L"Its publisher's folder, holding only this app"), false, true);
             } else {
-                for (auto& m : matched) add(m, L"Named after the app, in " + dir, false, false);
+                for (auto& m : matched) add(m, TrF(L"Named after the app, in {0}", dir), false, false);
             }
         } while (FindNextFileW(h, &fd));
         FindClose(h);
@@ -678,11 +679,11 @@ std::vector<AppLeftover> FindAppLeftovers(const UninstallEntry& gone, const std:
         l.items = w.items + 1;
         if (w.level > l.level) {
             l.level = w.level;
-            l.protectNote = L"Holds a protected item: " + (w.found.size() > l.path.size() ? w.found.substr(l.path.size() + 1) : w.found);
+            l.protectNote = TrF(L"Holds a protected item: {0}", w.found.size() > l.path.size() ? w.found.substr(l.path.size() + 1) : w.found);
         }
         if (w.truncated && l.level < Protect::Caution) {
             l.level = Protect::Caution;
-            l.protectNote = L"Too large to check everything inside";
+            l.protectNote = Tr(L"Too large to check everything inside");
         }
         if (l.level != Protect::None) l.preselect = false;  // anything protected inside: the user decides
         out.push_back(std::move(l));

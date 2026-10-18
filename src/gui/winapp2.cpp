@@ -5,6 +5,7 @@
 
 #include <algorithm>
 
+#include "../i18n.h"
 #include "../util.h"
 #include "cleanup.h"
 
@@ -251,12 +252,12 @@ bool ImportWinapp2(const std::wstring& source, Winapp2Stats& st, std::wstring& e
     if (data.size() >= 3 && static_cast<unsigned char>(data[0]) == 0xEF) data.erase(0, 3);
     ParseWinapp2(util::Utf8ToWide(data), st);
     if (st.entries == 0) {
-        err = L"This doesn't look like a winapp2.ini: it has no [entries].";
+        err = Tr(L"This doesn't look like a winapp2.ini: it has no [entries].");
         return false;
     }
     std::wstring dest = Winapp2File();
     if (dest.empty()) {
-        err = L"Can't find the local app data folder.";
+        err = Tr(L"Can't find the local app data folder.");
         return false;
     }
     if (_wcsicmp(dest.c_str(), source.c_str()) == 0) return true;

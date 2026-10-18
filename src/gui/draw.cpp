@@ -27,14 +27,16 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_CALENDAR = 0xE787, IC_POWER = 0xE7E8, IC_PHOTO = 0xE91B;
 
 std::wstring Pct(double v) {
-    wchar_t b[32];
-    if (v >= 99.95)
-        swprintf(b, 32, L"100%%");
-    else if (v >= 10)
-        swprintf(b, 32, L"%.0f%%", v);
-    else
-        swprintf(b, 32, L"%.1f%%", v);
-    return b;
+    if (v >= 99.95) return L"100%";
+    return util::FormatDecimal(v, v >= 10 ? 0 : 1) + L"%";
+}
+
+// Independent phrases of a subtitle or status line, joined by a middle dot.
+std::wstring Dots(const std::vector<std::wstring>& parts, const wchar_t* sep = L"  ·  ") {
+    std::wstring s;
+    for (auto& p : parts)
+        if (!p.empty()) s += (s.empty() ? L"" : sep) + p;
+    return s;
 }
 
 std::wstring SignedSize(int64_t d) {
@@ -44,23 +46,51 @@ std::wstring SignedSize(int64_t d) {
 
 std::wstring RelativeTime(int64_t ft) {
     int64_t diff = (util::NowFileTime() - ft) / 10000000LL;
-    if (diff < 60) return L"just now";
-    if (diff < 3600) return std::to_wstring(diff / 60) + L" min ago";
-    if (diff < 86400) return std::to_wstring(diff / 3600) + L" h ago";
-    if (diff < 86400 * 2) return L"yesterday";
-    if (diff < 86400 * 30) return std::to_wstring(diff / 86400) + L" days ago";
-    return util::FormatTime(ft).substr(0, 10);
+    if (diff < 60) return Tr(L"just now");
+    if (diff < 3600) return TrN(diff / 60, L"{0} min ago", L"{0} min ago");
+    if (diff < 86400) return TrN(diff / 3600, L"{0} h ago", L"{0} h ago");
+    if (diff < 86400 * 2) return Tr(L"yesterday");
+    if (diff < 86400 * 30) return TrN(diff / 86400, L"{0} day ago", L"{0} days ago");
+    return util::FormatDateLocal(ft);
 }
 
 // "today", "3 days ago", "8 months ago", "2 years ago": how long a project has been left alone.
 std::wstring AgeText(int64_t ft) {
-    if (!ft) return L"never";
+    if (!ft) return Tr(L"never");
     int64_t days = (util::NowFileTime() - ft) / 864000000000LL;
-    if (days < 1) return L"today";
-    if (days < 2) return L"yesterday";
-    if (days < 60) return std::to_wstring(days) + L" days ago";
-    if (days < 730) return std::to_wstring(days / 30) + L" months ago";
-    return std::to_wstring(days / 365) + L" years ago";
+    if (days < 1) return Tr(L"today");
+    if (days < 2) return Tr(L"yesterday");
+    if (days < 60) return TrN(days, L"{0} day ago", L"{0} days ago");
+    if (days < 730) return TrN(days / 30, L"{0} month ago", L"{0} months ago");
+    return TrN(days / 365, L"{0} year ago", L"{0} years ago");
+}
+
+// "Local disk", "Removable disk", ...: a drive without a label.
+std::wstring DriveKind(unsigned type) {
+    switch (type) {
+        case DRIVE_REMOVABLE: return Tr(L"Removable disk");
+        case DRIVE_FIXED: return Tr(L"Local disk");
+        case DRIVE_REMOTE: return Tr(L"Network drive");
+        case DRIVE_CDROM: return Tr(L"Optical drive");
+        case DRIVE_RAMDISK: return Tr(L"RAM disk");
+        default: return Tr(L"Unknown drive");
+    }
+}
+
+// A model's name as shown: "revision 1a2b3c4" and the fixed names ("Xet download cache") translated,
+// a model's own name ("facebook/musicgen") as it is.
+std::wstring AiItemName(const std::wstring& name) {
+    if (name.rfind(L"revision ", 0) == 0) return TrF(L"revision {0}", name.substr(9));
+    return name == L"Xet download cache" ? Tr(name) : name;
+}
+
+// A virtual disk's name: Docker Desktop's own disks have fixed names, a distro's name stays.
+std::wstring VDiskName(const VDisk& d) { return d.distro.rfind(L"docker-desktop", 0) == 0 || d.distro.empty() ? Tr(d.name) : d.name; }
+
+std::wstring DriveLabel(const DriveInfo& d) {
+    if (d.label.empty()) return DriveKind(d.type);
+    if (d.label == L"(not responding)") return Tr(L"(not responding)");
+    return d.label;
 }
 
 TextStyle Small(float size = 12.0f, DWRITE_FONT_WEIGHT w = DWRITE_FONT_WEIGHT_NORMAL, Align a = Align::Left) {
@@ -74,12 +104,12 @@ const std::wstring& App::TypeName(const std::wstring& ext) {
     if (it != typeNames_.end()) return it->second;
     std::wstring name;
     if (ext.empty()) {
-        name = L"Files without extension";
+        name = Tr(L"Files without extension");
     } else {
         SHFILEINFOW sfi{};
         if (SHGetFileInfoW((L"x." + ext).c_str(), FILE_ATTRIBUTE_NORMAL, &sfi, sizeof(sfi), SHGFI_USEFILEATTRIBUTES | SHGFI_TYPENAME))
             name = sfi.szTypeName;
-        if (name.empty()) name = L"." + ext + L" file";
+        if (name.empty()) name = TrF(L".{0} file", ext);
     }
     return typeNames_[ext] = name;
 }
@@ -135,15 +165,23 @@ float App::Button(const RectF& r, wchar_t icon, const std::wstring& text, int cm
     if (style == 0) gfx_.StrokeRound(r, 7, P_.border);
     float tw = gfx_.Measure(text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     float iw = icon ? 22.0f : 0.0f;
-    float x = r.left + (W(r) - tw - iw) / 2;
+    // Centered; text too long for the button starts at its left edge and ends in "…".
+    float x = std::max(r.left + 10, r.left + (W(r) - tw - iw) / 2);
     if (icon) gfx_.Icon(icon, RWH(x, r.top, 16, H(r)), fg, 14);
-    gfx_.Text(text, R(x + iw, r.top, r.right, r.bottom), fg, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(text, R(x + iw, r.top, std::max(x + iw, r.right - 6), r.bottom), fg, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     if (enabled)
         AddHit(r, HK_BUTTON, cmd);
     else
         AccDisabled(r, HK_BUTTON, cmd);
     return W(r);
 }
+
+float App::ButtonWidth(const std::wstring& text, wchar_t icon, float minW) {
+    return std::max(minW, std::ceil(gfx_.Measure(text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD))) + (icon ? 54.0f : 36.0f));
+}
+
+std::wstring App::CatName(const CleanCategory& c) { return c.imported || c.user ? c.name : Tr(c.name); }
+std::wstring App::CatDesc(const CleanCategory& c) { return c.imported || c.user ? c.desc : Tr(c.desc); }
 
 float App::IconButton(float x, float y, wchar_t icon, int cmd, const std::wstring& tip, bool active) {
     RectF r = RWH(x, y, 36, 36);
@@ -323,7 +361,7 @@ void App::DrawTopBar() {
         int n = GetWindowTextLengthW(search_);
         std::wstring text(n, L' ');
         if (n) GetWindowTextW(search_, text.data(), n + 1);
-        gfx_.Text(n ? text : (searchForApps_ ? L"Filter apps by name or publisher" : L"Search files & folders"), R(left + 40, 10, box.right - 40, 46),
+        gfx_.Text(n ? text : (searchForApps_ ? Tr(L"Filter apps by name or publisher") : Tr(L"Search files & folders")), R(left + 40, 10, box.right - 40, 46),
                   n ? P_.text : P_.textFaint, TS(14));
     }
     if (search_ && GetWindowTextLengthW(search_) > 0) {
@@ -334,16 +372,16 @@ void App::DrawTopBar() {
     }
 
     float x = sz.width - 12 - 36;
-    IconButton(x, 10, IC_MORE, CMD_MORE, L"Menu");
+    IconButton(x, 10, IC_MORE, CMD_MORE, Tr(L"Menu"));
     x -= 40;
-    IconButton(x, 10, P_.dark ? IC_SUN : IC_MOON, CMD_THEME_TOGGLE, P_.dark ? L"Light theme" : L"Dark theme");
+    IconButton(x, 10, P_.dark ? IC_SUN : IC_MOON, CMD_THEME_TOGGLE, P_.dark ? Tr(L"Light theme") : Tr(L"Dark theme"));
     if (root_ && !readOnly_) {
         x -= 40;
-        IconButton(x, 10, IC_REFRESH, CMD_RESCAN, L"Rescan (F5)");
+        IconButton(x, 10, IC_REFRESH, CMD_RESCAN, Tr(L"Rescan (F5)"));
     }
     if (!elevated_) {
         x -= 40;
-        IconButton(x, 10, IC_SHIELD, CMD_ADMIN, L"Restart as administrator");
+        IconButton(x, 10, IC_SHIELD, CMD_ADMIN, Tr(L"Restart as administrator"));
     }
 }
 
@@ -366,15 +404,16 @@ void App::DrawSidebar() {
         RectF card = R(12, y, kSidebarW - 12, y + 76);
         gfx_.FillRound(card, 10, P_.surface2);
         std::wstring name = root_->name;
-        gfx_.Text(readOnly_ ? L"SAVED SCAN" : L"CURRENT SCAN", R(card.left + 14, card.top + 8, card.right - 10, card.top + 24),
+        gfx_.Text(readOnly_ ? Tr(L"SAVED SCAN") : Tr(L"CURRENT SCAN"), R(card.left + 14, card.top + 8, card.right - 10, card.top + 24),
                   readOnly_ ? P_.warning : P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         gfx_.Text(FitPath(name, W(card) - 28, 12.5f, true), R(card.left + 14, card.top + 24, card.right - 10, card.top + 42), P_.text,
                   Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         TextStyle big = TS(17, DWRITE_FONT_WEIGHT_SEMI_BOLD);
         big.font = FontKind::Display;
-        gfx_.Text(util::FormatSizeShort(Val(root_.get())), R(card.left + 14, card.top + 44, card.right - 10, card.top + 68),
-                  P_.accent, big);
-        gfx_.Text(util::FormatCount(root_->items) + L" items", R(card.left + 14, card.top + 44, card.right - 12, card.top + 68),
+        std::wstring size = util::FormatSizeShort(Val(root_.get()));
+        gfx_.Text(size, R(card.left + 14, card.top + 44, card.right - 10, card.top + 68), P_.accent, big);
+        float sw = gfx_.Measure(size, big) + 10;
+        gfx_.Text(TrN(root_->items, L"{0} item", L"{0} items"), R(card.left + 14 + sw, card.top + 44, card.right - 12, card.top + 68),
                   P_.textDim, Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
         y = card.bottom + 14;
     }
@@ -382,7 +421,7 @@ void App::DrawSidebar() {
     struct NavItem {
         View v;
         wchar_t icon;
-        const wchar_t* label;
+        std::wstring label;
         bool needsScan;
         std::wstring badge;
     };
@@ -394,16 +433,16 @@ void App::DrawSidebar() {
     uint64_t devJunkTotal = 0;
     for (auto& p : devJunk_) devJunkTotal += DevProjectSize(p, !settings_.apparent);
     std::vector<NavItem> items = {
-        {View::Home, IC_HOME, L"Home", false, L""},
-        {View::Browse, IC_FOLDER, L"Folders", true, L""},
-        {View::Largest, IC_LARGEST, L"Largest files", true, L""},
-        {View::Types, IC_TYPES, L"File types", true, L""},
-        {View::Duplicates, IC_COPY, L"Duplicates", true, dupsDone_ && dupWaste ? util::FormatSizeShort(dupWaste) : L""},
-        {View::Old, IC_CLOCK, L"Old files", true, L""},
-        {View::Empty, IC_EMPTY, L"Empty folders", true, L""},
-        {View::DevJunk, IC_CODE, L"Developer junk", true, devJunkTotal ? util::FormatSizeShort(devJunkTotal) : L""},
+        {View::Home, IC_HOME, Tr(L"Home"), false, L""},
+        {View::Browse, IC_FOLDER, Tr(L"Folders"), true, L""},
+        {View::Largest, IC_LARGEST, Tr(L"Largest files"), true, L""},
+        {View::Types, IC_TYPES, Tr(L"File types"), true, L""},
+        {View::Duplicates, IC_COPY, Tr(L"Duplicates"), true, dupsDone_ && dupWaste ? util::FormatSizeShort(dupWaste) : L""},
+        {View::Old, IC_CLOCK, Tr(L"Old files"), true, L""},
+        {View::Empty, IC_EMPTY, Tr(L"Empty folders"), true, L""},
+        {View::DevJunk, IC_CODE, Tr(L"Developer junk"), true, devJunkTotal ? util::FormatSizeShort(devJunkTotal) : L""},
     };
-    if (!searchQuery_.empty()) items.push_back({View::Search, IC_SEARCH, L"Search results", true, util::FormatCount(searchRes_.size())});
+    if (!searchQuery_.empty()) items.push_back({View::Search, IC_SEARCH, Tr(L"Search results"), true, util::FormatCount(searchRes_.size())});
     auto drawItem = [&](const NavItem& it) {
         RectF r = R(10, y, kSidebarW - 10, y + step - 2);
         bool active = view_ == it.v || (it.v == View::Types && view_ == View::TypeFiles) ||
@@ -418,7 +457,9 @@ void App::DrawSidebar() {
         }
         D2D1_COLOR_F c = !enabled ? P_.textFaint : (active ? P_.text : P_.textDim);
         gfx_.Icon(it.icon, RWH(r.left + 10, r.top, 24, H(r)), active ? P_.accent : c, 15);
-        gfx_.Text(it.label, R(r.left + 42, r.top, r.right - 8, r.bottom), active ? P_.text : (enabled ? P_.text : P_.textFaint),
+        // The badge (a size, a count) keeps its room; a long label ends in "…" before it.
+        float bw = it.badge.empty() ? 0.0f : gfx_.Measure(it.badge, Small(11.5f)) + 16;
+        gfx_.Text(it.label, R(r.left + 42, r.top, r.right - 8 - bw, r.bottom), active ? P_.text : (enabled ? P_.text : P_.textFaint),
                   TS(13.5f, active ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL));
         if (!it.badge.empty())
             gfx_.Text(it.badge, R(r.left, r.top, r.right - 10, r.bottom), P_.textFaint, Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
@@ -432,46 +473,45 @@ void App::DrawSidebar() {
     };
     for (auto& it : items) drawItem(it);
     y += 10;
-    gfx_.Text(L"MAINTENANCE", R(22, y, kSidebarW, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(Tr(L"MAINTENANCE"), R(22, y, kSidebarW, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     y += 24;
-    drawItem({View::Cleanup, IC_CLEAN, L"Cleanup", false, reclaim ? util::FormatSizeShort(reclaim) : L""});
+    drawItem({View::Cleanup, IC_CLEAN, Tr(L"Cleanup"), false, reclaim ? util::FormatSizeShort(reclaim) : L""});
     uint64_t aiTotal = 0;
     for (auto& st : ai_) aiTotal += st.bytes;
-    drawItem({View::AiModels, IC_AI, L"AI models", false, aiTotal ? util::FormatSizeShort(aiTotal) : L""});
+    drawItem({View::AiModels, IC_AI, Tr(L"AI models"), false, aiTotal ? util::FormatSizeShort(aiTotal) : L""});
     uint64_t wslTotal = 0;
     for (auto& d : vdisks_) wslTotal += d.Reclaimable();
-    drawItem({View::Wsl, IC_TERMINAL, L"WSL & Docker", false, wslTotal ? util::FormatSizeShort(wslTotal) : L""});
+    drawItem({View::Wsl, IC_TERMINAL, Tr(L"WSL & Docker"), false, wslTotal ? util::FormatSizeShort(wslTotal) : L""});
     uint64_t oldDrivers = 0;
     for (auto& p : win_.drivers)
         if (p.old) oldDrivers += p.bytes;
-    drawItem({View::WinTools, IC_SYSTEM, L"Windows", false, oldDrivers ? util::FormatSizeShort(oldDrivers) : L""});
+    drawItem({View::WinTools, IC_SYSTEM, Tr(L"Windows"), false, oldDrivers ? util::FormatSizeShort(oldDrivers) : L""});
     uint64_t gamesTotal = 0;
     for (auto& g : games_) gamesTotal += g.bytes;
-    drawItem({View::Games, IC_GAME, L"Games", false, gamesTotal ? util::FormatSizeShort(gamesTotal) : L""});
+    drawItem({View::Games, IC_GAME, Tr(L"Games"), false, gamesTotal ? util::FormatSizeShort(gamesTotal) : L""});
     size_t diskIssues = 0;
     for (auto& d : disk_.disks)
         if (AssessDisk(d).level >= DiskHealthLevel::Warning) ++diskIssues;
-    drawItem({View::DiskHealth, IC_DRIVE, L"Disk health", false,
-              diskIssues ? util::FormatCount(diskIssues) + (diskIssues == 1 ? L" warning" : L" warnings") : L""});
+    drawItem({View::DiskHealth, IC_DRIVE, Tr(L"Disk health"), false, diskIssues ? TrN(diskIssues, L"{0} warning", L"{0} warnings") : L""});
     size_t startupOn = 0;
     for (auto& e : startup_.entries)
         if (e.enabled && StartupVisible(e)) ++startupOn;
-    drawItem({View::Startup, IC_POWER, L"Startup", false, startupOn ? util::FormatCount(startupOn) : L""});
-    drawItem({View::Apps, 0xE71D, L"Apps", false, appsLoaded_ ? util::FormatCount(apps_.size()) : L""});
-    drawItem({View::History, IC_HISTORY, L"History", false, L""});
-    drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
+    drawItem({View::Startup, IC_POWER, Tr(L"Startup"), false, startupOn ? util::FormatCount(startupOn) : L""});
+    drawItem({View::Apps, 0xE71D, Tr(L"Apps"), false, appsLoaded_ ? util::FormatCount(apps_.size()) : L""});
+    drawItem({View::History, IC_HISTORY, Tr(L"History"), false, L""});
+    drawItem({View::Deleted, IC_UNDO, Tr(L"Recently deleted"), false, L""});
 
     // Drives
     y += 10;
     if (y + 24 + 46 < sb.bottom && !drives_.empty()) {
-        gfx_.Text(L"DRIVES", R(22, y, kSidebarW, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(Tr(L"DRIVES"), R(22, y, kSidebarW, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         y += 24;
         for (size_t i = 0; i < drives_.size() && y + 46 < sb.bottom; ++i) {
             const DriveInfo& d = drives_[i];
             RectF r = R(10, y, kSidebarW - 10, y + 46);
             if (Hovered(HK_DRIVE, static_cast<int>(i))) gfx_.FillRound(r, 8, P_.hover);
             gfx_.Bitmap(icons_.ForPath(gfx_, d.root), RWH(r.left + 10, r.top + 11, 20, 20));
-            std::wstring label = d.root.substr(0, 2) + L"  " + (d.label.empty() ? std::wstring(DriveTypeName(d.type)) + L" disk" : d.label);
+            std::wstring label = d.root.substr(0, 2) + L"  " + DriveLabel(d);
             gfx_.Text(label, R(r.left + 40, r.top + 4, r.right - 8, r.top + 24), P_.text, TS(12.5f));
             if (d.ready && d.total) {
                 double used = 1.0 - static_cast<double>(d.free) / d.total;
@@ -496,25 +536,26 @@ void App::DrawStatusBar() {
     gfx_.Fill(R(0, r.top, sz.width, r.top + 1), P_.border);
     std::wstring left;
     if (root_) {
-        left = util::FormatCount(root_->items) + L" items  ·  " + util::FormatSizeShort(root_->disk) + L" on disk  ·  " +
-               util::FormatSizeShort(root_->size) + L" apparent";
-        if (scanSeconds_ > 0 && !readOnly_) left += L"  ·  scanned in " + util::FormatDuration(scanSeconds_);
-        if (incomplete_) left += L"  ·  incomplete";
-        if (scanErrors_) left += L"  ·  " + util::FormatCount(scanErrors_) + L" folders unreadable";
+        left = Dots({TrN(root_->items, L"{0} item", L"{0} items"), TrF(L"{0} on disk", util::FormatSizeShort(root_->disk)),
+                     TrF(L"{0} apparent", util::FormatSizeShort(root_->size)),
+                     scanSeconds_ > 0 && !readOnly_ ? TrF(L"scanned in {0}", util::FormatDuration(scanSeconds_)) : L"",
+                     incomplete_ ? Tr(L"incomplete") : L"",
+                     scanErrors_ ? TrN(scanErrors_, L"{0} folder unreadable", L"{0} folders unreadable") : L""});
     } else {
-        left = L"Ready";
+        left = Tr(L"Ready");
     }
     gfx_.Text(left, R(14, r.top, sz.width * 0.55f, r.bottom), P_.textDim, Small(12));
     float x = sz.width - 14;
     if (elevated_) {
-        float w = gfx_.Measure(L"Administrator", Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 16;
+        std::wstring admin = Tr(L"Administrator");
+        float w = gfx_.Measure(admin, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 16;
         RectF b = R(x - w, r.top + 6, x, r.bottom - 6);
         gfx_.FillRound(b, 9, WithAlpha(P_.warning, 0.18f));
-        gfx_.Text(L"Administrator", b, P_.warning, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+        gfx_.Text(admin, b, P_.warning, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
         x -= w + 12;
     }
     if (haveVol_ && volTotal_) {
-        std::wstring t = util::FormatSizeShort(volFree_) + L" free of " + util::FormatSizeShort(volTotal_);
+        std::wstring t = TrF(L"{0} free of {1}", util::FormatSizeShort(volFree_), util::FormatSizeShort(volTotal_));
         float tw = gfx_.Measure(t, Small(12)) + 4;
         gfx_.Text(t, R(x - tw, r.top, x, r.bottom), P_.textDim, Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
         x -= tw + 8;
@@ -529,7 +570,7 @@ void App::DrawStatusBar() {
         uint64_t total = 0;
         auto targets = NormalizeTargets(SelectedNodes());
         for (Node* n : targets) total += Val(n);
-        std::wstring t = util::FormatCount(sel_.size()) + L" selected  ·  " + util::FormatSizeShort(total);
+        std::wstring t = TrN(sel_.size(), L"{0} selected", L"{0} selected") + L"  ·  " + util::FormatSizeShort(total);
         float tw = gfx_.Measure(t, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 4;
         gfx_.Text(t, R(x - tw, r.top, x, r.bottom), P_.accent, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
     }
@@ -558,7 +599,8 @@ void App::DrawTable(const RectF& area, std::vector<Column>& cols, int sortKey, b
         bool active = c.sortKey >= 0 && c.sortKey == sortKey;
         bool hover = c.sortKey >= 0 && Hovered(HK_HEADER, c.sortKey);
         D2D1_COLOR_F col = active ? P_.accent : (hover ? P_.text : P_.textFaint);
-        float tw = gfx_.Measure(c.title, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        // A title longer than its column ends in "…" (translations can be longer than English).
+        float tw = std::min(gfx_.Measure(c.title, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD)), std::max(8.0f, c.w - (active ? 16.0f : 2.0f)));
         float tx = c.align == Align::Right ? hr.right - tw : hr.left;
         if (c.align == Align::Right && active) tx -= 14;
         gfx_.Text(c.title, R(tx, hr.top, tx + tw + 2, hr.bottom), col, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD));
@@ -652,14 +694,14 @@ void App::DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, boo
     std::vector<Badge> badges;
     const ProtectHit* shield = Shield(n);
     if (shield)
-        badges.push_back({shield->rel == ProtectRel::Contains ? shield->group + L" inside" : shield->group,
+        badges.push_back({shield->rel == ProtectRel::Contains ? TrF(L"{0} inside", Tr(shield->group)) : Tr(shield->group),
                           ShieldColor(shield->level), IC_SHIELD, shield->rel == ProtectRel::Contains});
-    if (n->Has(NF_ERROR)) badges.push_back({L"No access", P_.danger});
-    else if (n->Has(NF_SUBERR)) badges.push_back({L"Partial", P_.warning});
-    if (n->Has(NF_LINK)) badges.push_back({L"Link", P_.accent2});
-    if (n->Has(NF_HARDLINK)) badges.push_back({L"Hard link", P_.accent2});
-    if (n->Has(NF_CLOUD)) badges.push_back({L"Cloud", P_.accent});
-    if (n->Has(NF_EXCLUDED)) badges.push_back({L"Excluded", P_.textFaint});
+    if (n->Has(NF_ERROR)) badges.push_back({Tr(L"No access"), P_.danger});
+    else if (n->Has(NF_SUBERR)) badges.push_back({Tr(L"Partial"), P_.warning});
+    if (n->Has(NF_LINK)) badges.push_back({Tr(L"Link"), P_.accent2});
+    if (n->Has(NF_HARDLINK)) badges.push_back({Tr(L"Hard link"), P_.accent2});
+    if (n->Has(NF_CLOUD)) badges.push_back({Tr(L"Cloud"), P_.accent});
+    if (n->Has(NF_EXCLUDED)) badges.push_back({Tr(L"Excluded"), P_.textFaint});
     float bw = 0;
     for (auto& b : badges) bw += gfx_.Measure(b.text, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + (b.icon ? 32 : 18);
     float nameW = std::min(gfx_.Measure(n->name, ts) + 2, cell.right - x - bw);
@@ -679,7 +721,7 @@ void App::DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, boo
         if (b.icon) {
             AddHit(br, HK_BADGE, row);
             if (Hovered(HK_BADGE, row)) {
-                tipText_ = std::wstring(ProtectLevelName(shield->level)) + L": " + DescribeHit(*shield);
+                tipText_ = TrF(L"{0}: {1}", Tr(ProtectLevelName(shield->level)), DescribeHit(*shield));
                 tipAnchor_ = br;
             }
         }
@@ -709,20 +751,20 @@ const ProtectHit* App::Shield(Node* n) {
 void App::DrawBrowse(const RectF& area) {
     if (!root_ || !browseDir_) return;
     float x = area.left + 16, y = area.top + 12;
-    IconButton(x, y, IC_BACK, CMD_BACK, L"Back (Alt+←)");
+    IconButton(x, y, IC_BACK, CMD_BACK, Tr(L"Back (Alt+←)"));
     x += 38;
-    IconButton(x, y, IC_FWD, CMD_FORWARD, L"Forward (Alt+→)");
+    IconButton(x, y, IC_FWD, CMD_FORWARD, Tr(L"Forward (Alt+→)"));
     x += 38;
-    IconButton(x, y, IC_UP, CMD_UP, L"Up one level (Backspace)");
+    IconButton(x, y, IC_UP, CMD_UP, Tr(L"Up one level (Backspace)"));
     x += 46;
 
     // Right-side controls: size mode segmented control + treemap toggle.
     float rx = area.right - 16;
     {
         rx -= 36;
-        IconButton(rx, y, IC_GRID, CMD_TOGGLE_TREEMAP, settings_.treemap ? L"Hide treemap" : L"Show treemap", settings_.treemap);
+        IconButton(rx, y, IC_GRID, CMD_TOGGLE_TREEMAP, settings_.treemap ? Tr(L"Hide treemap") : Tr(L"Show treemap"), settings_.treemap);
         rx -= 10;
-        const wchar_t* labels[2] = {L"Disk usage", L"Size"};
+        std::wstring labels[2] = {Tr(L"Disk usage"), Tr(L"Size")};
         int cmds[2] = {CMD_MODE_DISK, CMD_MODE_APPARENT};
         float w0 = gfx_.Measure(labels[0], Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 24;
         float w1 = gfx_.Measure(labels[1], Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 24;
@@ -786,16 +828,17 @@ void App::DrawBrowse(const RectF& area) {
     float sy = area.top + 56;
     uint64_t files = 0, dirs = 0;
     for (auto& c : browseDir_->children) (c->IsDir() ? dirs : files)++;
-    std::wstring summary = util::FormatSizeShort(Val(browseDir_)) + L"   ·   " + util::FormatCount(browseDir_->items) +
-                           L" items inside   ·   " + util::FormatCount(dirs) + (dirs == 1 ? L" folder, " : L" folders, ") +
-                           util::FormatCount(files) + (files == 1 ? L" file here" : L" files here");
-    if (browseDir_->parent && Val(browseDir_->parent))
-        summary += L"   ·   " + Pct(100.0 * Val(browseDir_) / Val(browseDir_->parent)) + L" of parent";
+    std::wstring summary = Dots({util::FormatSizeShort(Val(browseDir_)), TrN(browseDir_->items, L"{0} item inside", L"{0} items inside"),
+                                 TrF(L"{0}, {1}", TrN(dirs, L"{0} folder", L"{0} folders"), TrN(files, L"{0} file here", L"{0} files here")),
+                                 browseDir_->parent && Val(browseDir_->parent)
+                                     ? TrF(L"{0} of parent", Pct(100.0 * Val(browseDir_) / Val(browseDir_->parent)))
+                                     : L""},
+                                L"   ·   ");
     // The open folder's protection, when it covers the items listed here (their rows stay unmarked).
     float summaryRight = area.right - 20;
     if (const ProtectHit* here = badges_.ForContents(browseDir_)) {
-        std::wstring t = std::wstring(ProtectLevelName(here->level)) + L": " +
-                         (here->group.empty() ? here->name : here->group + L" · " + here->name);
+        std::wstring t = TrF(L"{0}: {1}", Tr(ProtectLevelName(here->level)),
+                             here->group.empty() ? Tr(here->name) : Tr(here->group) + L" · " + Tr(here->name));
         TextStyle ts = Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
         float w = std::min(gfx_.Measure(t, ts) + 34, std::max(120.0f, (area.right - area.left) * 0.5f));
         RectF pr = R(summaryRight - w, sy, summaryRight, sy + 22);
@@ -805,7 +848,7 @@ void App::DrawBrowse(const RectF& area) {
         gfx_.Text(t, R(pr.left + 26, pr.top, pr.right - 8, pr.bottom), col, ts);
         AddHit(pr, HK_BADGE, -1);
         if (Hovered(HK_BADGE, -1)) {
-            tipText_ = here->reason.empty() ? DescribeHit(*here) : here->reason;
+            tipText_ = here->reason.empty() ? DescribeHit(*here) : Tr(here->reason);
             tipAnchor_ = pr;
         }
         summaryRight = pr.left - 12;
@@ -827,17 +870,17 @@ void App::DrawBrowse(const RectF& area) {
         tmR = R(body.left + 16, splitY + 6, body.right - 16, body.bottom - 12);
     }
 
-    std::vector<Column> cols = {{L"Name", -1.0f, Align::Left, SK_NAME},
-                                {settings_.apparent ? L"Size" : L"Disk usage", 96, Align::Right, SK_SIZE},
-                                {L"Share of folder", 170, Align::Left, -1},
-                                {L"Items", 80, Align::Right, SK_ITEMS},
-                                {L"Modified", 128, Align::Left, SK_MTIME}};
+    std::vector<Column> cols = {{Tr(L"Name"), -1.0f, Align::Left, SK_NAME},
+                                {settings_.apparent ? Tr(L"Size") : Tr(L"Disk usage"), 96, Align::Right, SK_SIZE},
+                                {Tr(L"Share of folder"), 170, Align::Left, -1},
+                                {Tr(L"Items"), 80, Align::Right, SK_ITEMS},
+                                {Tr(L"Modified"), 128, Align::Left, SK_MTIME}};
     if (W(listR) < 760) {
         cols.erase(cols.begin() + 4);
         if (W(listR) < 640) cols.erase(cols.begin() + 3);
     }
     if (rows_.empty()) {
-        DrawEmptyState(listR, IC_FOLDER, L"This folder is empty", L"There's nothing inside it, or everything is hidden.");
+        DrawEmptyState(listR, IC_FOLDER, Tr(L"This folder is empty"), Tr(L"There's nothing inside it, or everything is hidden."));
     } else {
         DrawTable(listR, cols, sortKey_, sortDesc_, [&](int i, const Column& c, int, const RectF& cr, bool sel) {
             const Row& row = rows_[i];
@@ -851,7 +894,7 @@ void App::DrawBrowse(const RectF& area) {
                 case SK_ITEMS:
                     gfx_.Text(n->IsDir() ? util::FormatCount(n->items) : L"—", cr, P_.textDim, Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
                     break;
-                case SK_MTIME: gfx_.Text(util::FormatTime(n->mtime), cr, P_.textDim, Small(12.5f)); break;
+                case SK_MTIME: gfx_.Text(util::FormatDateTimeLocal(n->mtime), cr, P_.textDim, Small(12.5f)); break;
                 default: {
                     uint64_t pv = n->parent ? Val(n->parent) : 0;
                     double frac = pv ? static_cast<double>(Val(n)) / pv : 0;
@@ -871,9 +914,11 @@ void App::DrawTreemap(const RectF& area) {
     gfx_.StrokeRound(area, 12, P_.border);
     // Legend
     float lx = area.left + 16;
-    gfx_.Text(L"Treemap", R(lx, area.top + 8, lx + 80, area.top + 30), P_.text, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-    lx += 74;
-    const wchar_t* hint = L"click to select · double-click to zoom";
+    std::wstring title = Tr(L"Treemap");
+    float titleW = gfx_.Measure(title, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(title, R(lx, area.top + 8, lx + titleW + 6, area.top + 30), P_.text, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    lx += std::max(74.0f, titleW + 20);
+    std::wstring hint = Tr(L"click to select · double-click to zoom");
     float hintW = gfx_.Measure(hint, Small(11)) + 24;
     float legendRight = area.right - 16;
     float legendW = 0;
@@ -1023,27 +1068,26 @@ void App::DrawResults(const RectF& area) {
     uint64_t total = 0;
     for (auto& r : rows_)
         if (r.node) total += Val(r.node);
-    std::wstring countText = util::FormatCount(rows_.size()) + (rows_.size() == 1 ? L" item" : L" items") + L"  ·  " +
-                             util::FormatSizeShort(total);
+    std::wstring countText = TrN(rows_.size(), L"{0} item", L"{0} items") + L"  ·  " + util::FormatSizeShort(total);
     float top = area.top + 18;
     switch (view_) {
         case View::Largest:
-            title = L"Largest files";
-            sub = L"The 1,000 biggest files of the scan  ·  " + countText;
+            title = Tr(L"Largest files");
+            sub = Dots({TrF(L"The {0} biggest files of the scan", util::FormatCount(1000)), countText});
             break;
         case View::Search:
-            title = L"Search results";
-            sub = L"“" + searchQuery_ + L"”  ·  " + countText;
+            title = Tr(L"Search results");
+            sub = Dots({TrF(L"“{0}”", searchQuery_), countText});
             icon = IC_SEARCH;
             break;
         case View::Old:
-            title = L"Old files";
-            sub = L"Files not modified for a long time  ·  " + countText;
+            title = Tr(L"Old files");
+            sub = Dots({Tr(L"Files not modified for a long time"), countText});
             icon = IC_CLOCK;
             break;
         case View::Empty:
-            title = L"Empty folders";
-            sub = L"Folders without a single file inside  ·  " + util::FormatCount(rows_.size()) + L" folders";
+            title = Tr(L"Empty folders");
+            sub = Dots({Tr(L"Folders without a single file inside"), TrN(rows_.size(), L"{0} folder", L"{0} folders")});
             icon = IC_EMPTY;
             break;
         case View::TypeFiles:
@@ -1055,42 +1099,52 @@ void App::DrawResults(const RectF& area) {
     }
     float hx = area.left + 24;
     if (view_ == View::TypeFiles) {
-        IconButton(hx, top + 4, IC_BACK, CMD_BACK_TO_TYPES, L"Back to file types");
+        IconButton(hx, top + 4, IC_BACK, CMD_BACK_TO_TYPES, Tr(L"Back to file types"));
         hx += 46;
     }
     DrawViewHeader(R(hx, top, area.right - 24, top + 46), title, sub, icon);
     float y = top + 58;
     if (view_ == View::Old) {
         float x = area.left + 24;
-        gfx_.Text(L"Not modified for", R(x, y, x + 120, y + 30), P_.textDim, Small(12.5f));
-        x += 112;
-        std::pair<const wchar_t*, int> ages[] = {{L"3 months", 90}, {L"6 months", 182}, {L"1 year", 365}, {L"2 years", 730}, {L"5 years", 1826}};
+        TextStyle ls = Small(12.5f);
+        std::wstring label = Tr(L"Not modified for");
+        gfx_.Text(label, R(x, y, x + gfx_.Measure(label, ls) + 8, y + 30), P_.textDim, ls);
+        x += std::max(112.0f, gfx_.Measure(label, ls) + 12);
+        std::pair<std::wstring, int> ages[] = {{TrN(3, L"{0} month", L"{0} months"), 90},
+                                               {TrN(6, L"{0} month", L"{0} months"), 182},
+                                               {TrN(1, L"{0} year", L"{0} years"), 365},
+                                               {TrN(2, L"{0} year", L"{0} years"), 730},
+                                               {TrN(5, L"{0} year", L"{0} years"), 1826}};
         for (auto& a : ages) x += Chip(x, y, a.first, oldAgeDays_ == a.second, 2, a.second) + 6;
         x += 18;
-        if (x + 82 + 4 * 80 > area.right - 24) {
+        std::wstring label2 = Tr(L"Larger than");
+        std::pair<std::wstring, uint64_t> sizes[] = {{Tr(L"Any"), 0}, {L"1 MB", 1ull << 20}, {L"10 MB", 10ull << 20}, {L"100 MB", 100ull << 20}};
+        float groupW = std::max(82.0f, gfx_.Measure(label2, ls) + 12);
+        for (auto& s : sizes) groupW += gfx_.Measure(s.first, TS(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 32;
+        if (x + groupW > area.right - 24) {
             x = area.left + 24;
             y += 40;
         }
-        gfx_.Text(L"Larger than", R(x, y, x + 90, y + 30), P_.textDim, Small(12.5f));
-        x += 82;
-        std::pair<const wchar_t*, uint64_t> sizes[] = {{L"Any", 0}, {L"1 MB", 1ull << 20}, {L"10 MB", 10ull << 20}, {L"100 MB", 100ull << 20}};
+        gfx_.Text(label2, R(x, y, x + gfx_.Measure(label2, ls) + 8, y + 30), P_.textDim, ls);
+        x += std::max(82.0f, gfx_.Measure(label2, ls) + 12);
         for (auto& s : sizes) x += Chip(x, y, s.first, oldMinSize_ == s.second, 3, static_cast<intptr_t>(s.second)) + 6;
         y += 44;
     }
     if (view_ == View::Search) {
-        gfx_.Text(L"Tip: combine terms like   *.mp4 >500M older:1y   or   type:d node_modules", R(area.left + 24, y, area.right - 24, y + 22),
+        gfx_.Text(Tr(L"Tip: combine terms like   *.mp4 >500M older:1y   or   type:d node_modules"), R(area.left + 24, y, area.right - 24, y + 22),
                   P_.textFaint, Small(12));
         y += 28;
     }
     RectF tr = R(area.left, y, area.right, area.bottom);
     if (rows_.empty()) {
-        DrawEmptyState(tr, icon, L"Nothing found", view_ == View::Search ? L"No files or folders match your search." : L"There are no items for this view.");
+        DrawEmptyState(tr, icon, Tr(L"Nothing found"),
+                       view_ == View::Search ? Tr(L"No files or folders match your search.") : Tr(L"There are no items for this view."));
         return;
     }
-    std::vector<Column> cols = {{L"Name", -1.0f, Align::Left, SK_NAME},
-                                {L"Folder", -1.25f, Align::Left, SK_FOLDER},
-                                {settings_.apparent ? L"Size" : L"Disk usage", 100, Align::Right, SK_SIZE},
-                                {L"Modified", 128, Align::Left, SK_MTIME}};
+    std::vector<Column> cols = {{Tr(L"Name"), -1.0f, Align::Left, SK_NAME},
+                                {Tr(L"Folder"), -1.25f, Align::Left, SK_FOLDER},
+                                {settings_.apparent ? Tr(L"Size") : Tr(L"Disk usage"), 100, Align::Right, SK_SIZE},
+                                {Tr(L"Modified"), 128, Align::Left, SK_MTIME}};
     DrawTable(tr, cols, resSortKey_, resSortDesc_, [&](int i, const Column& c, int, const RectF& cr, bool sel) {
         Node* n = rows_[i].node;
         if (!n) return;
@@ -1098,7 +1152,7 @@ void App::DrawResults(const RectF& area) {
             case SK_NAME: DrawNameCell(cr, n, 0, false, false, i, sel); break;
             case SK_FOLDER: gfx_.Text(FitPath(RelFolder(n), c.w, 12.5f), cr, P_.textDim, Small(12.5f)); break;
             case SK_SIZE: gfx_.Text(util::FormatSizeShort(Val(n)), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
-            case SK_MTIME: gfx_.Text(util::FormatTime(n->mtime), cr, P_.textDim, Small(12.5f)); break;
+            case SK_MTIME: gfx_.Text(util::FormatDateTimeLocal(n->mtime), cr, P_.textDim, Small(12.5f)); break;
         }
     });
 }
@@ -1107,8 +1161,9 @@ void App::DrawTypes(const RectF& area) {
     float top = area.top + 18;
     uint64_t total = 0;
     for (int c = 0; c < CAT_COUNT; ++c) total += catTotals_[c];
-    DrawViewHeader(R(area.left + 24, top, area.right - 24, top + 46), L"File types",
-                   util::FormatCount(types_.size()) + L" kinds of files  ·  " + util::FormatSizeShort(total) + L"  ·  double-click a type to list its files",
+    DrawViewHeader(R(area.left + 24, top, area.right - 24, top + 46), Tr(L"File types"),
+                   Dots({TrN(types_.size(), L"{0} kind of file", L"{0} kinds of files"), util::FormatSizeShort(total),
+                         Tr(L"double-click a type to list its files")}),
                    IC_TYPES);
     // Category distribution bar + legend.
     float y = top + 62;
@@ -1141,10 +1196,10 @@ void App::DrawTypes(const RectF& area) {
         lx += w;
     }
     y += 34;
-    std::vector<Column> cols = {{L"Type", -1.0f, Align::Left, -1},
-                                {L"Files", 90, Align::Right, -1},
-                                {settings_.apparent ? L"Size" : L"Disk usage", 100, Align::Right, -1},
-                                {L"Share", 210, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"Type"), -1.0f, Align::Left, -1},
+                                {Tr(L"Files"), 90, Align::Right, -1},
+                                {settings_.apparent ? Tr(L"Size") : Tr(L"Disk usage"), 100, Align::Right, -1},
+                                {Tr(L"Share"), 210, Align::Left, -1}};
     uint64_t maxv = 0;
     for (auto& t : types_) maxv = std::max(maxv, settings_.apparent ? t.size : t.disk);
     DrawTable(R(area.left, y, area.right, area.bottom), cols, -1, true, [&](int i, const Column& c, int ci, const RectF& cr, bool) {
@@ -1155,7 +1210,7 @@ void App::DrawTypes(const RectF& area) {
                 float cy = (cr.top + cr.bottom) / 2;
                 gfx_.Bitmap(t.ext.empty() ? nullptr : icons_.ForExt(gfx_, t.ext), RWH(cr.left, cy - 9, 18, 18));
                 gfx_.FillRound(RWH(cr.left + 26, cy - 4, 8, 8), 2.5f, Hex(CategoryRgb(CategoryOfExt(t.ext))));
-                std::wstring ext = t.ext.empty() ? L"(none)" : L"." + t.ext;
+                std::wstring ext = t.ext.empty() ? Tr(L"(none)") : L"." + t.ext;
                 float ew = gfx_.Measure(ext, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 12;
                 gfx_.Text(ext, R(cr.left + 42, cr.top, cr.left + 42 + ew, cr.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
                 gfx_.Text(TypeName(t.ext), R(cr.left + 42 + ew, cr.top, cr.right, cr.bottom), P_.textDim, Small(12.5f));
@@ -1177,49 +1232,56 @@ void App::DrawDuplicates(const RectF& area) {
         waste += g.size * (g.files.size() - 1);
         files += g.files.size();
     }
-    std::wstring sub = dupsDone_ ? util::FormatCount(dups_.size()) + (dups_.size() == 1 ? L" set of identical files  ·  " : L" sets of identical files  ·  ") + util::FormatCount(files) +
-                                       L" files  ·  " + util::FormatSizeShort(waste) + L" can be reclaimed"
-                                 : L"Find files with identical content (compared by size, then SHA-256)";
+    std::wstring sub = dupsDone_ ? Dots({TrN(dups_.size(), L"{0} set of identical files", L"{0} sets of identical files"),
+                                         TrN(files, L"{0} file", L"{0} files"), TrF(L"{0} can be reclaimed", util::FormatSizeShort(waste))})
+                                 : Tr(L"Find files with identical content (compared by size, then SHA-256)");
     float bx = area.right - 24;
     if (dupsDone_ && !dups_.empty()) {
         if (!sel_.empty()) {
-            bx -= 150;
-            Button(RWH(bx, top + 6, 150, 34), IC_DELETE, L"Delete selected", CMD_DELETE, 2);
+            std::wstring t = Tr(L"Delete selected");
+            float w = ButtonWidth(t, IC_DELETE, 150);
+            bx -= w;
+            Button(RWH(bx, top + 6, w, 34), IC_DELETE, t, CMD_DELETE, 2);
             bx -= 8;
         }
-        bx -= 196;
-        Button(RWH(bx, top + 6, 196, 34), IC_CHECK, L"Select all but oldest", CMD_DUP_MARK, 0);
+        std::wstring t = Tr(L"Select all but oldest");
+        float w = ButtonWidth(t, IC_CHECK, 196);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_CHECK, t, CMD_DUP_MARK, 0);
         bx -= 16;
     }
-    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Duplicate files", sub, IC_COPY);
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"Duplicate files"), sub, IC_COPY);
     float y = top + 58;
     float x = area.left + 24;
-    x += Chip(x, y, L"Identical files", true, 6, 0) + 6;
-    Chip(x, y, L"Similar photos", false, 6, 1);
+    x += Chip(x, y, Tr(L"Identical files"), true, 6, 0) + 6;
+    Chip(x, y, Tr(L"Similar photos"), false, 6, 1);
     y += 42;
     x = area.left + 24;
-    gfx_.Text(L"Ignore files smaller than", R(x, y, x + 170, y + 30), P_.textDim, Small(12.5f));
-    x += 160;
+    std::wstring label = Tr(L"Ignore files smaller than");
+    float lw = gfx_.Measure(label, Small(12.5f));
+    gfx_.Text(label, R(x, y, x + lw + 8, y + 30), P_.textDim, Small(12.5f));
+    x += std::max(160.0f, lw + 12);
     std::pair<const wchar_t*, uint64_t> sizes[] = {{L"100 KB", 100ull << 10}, {L"1 MB", 1ull << 20}, {L"10 MB", 10ull << 20}, {L"100 MB", 100ull << 20}};
     for (auto& s : sizes) x += Chip(x, y, s.first, dupMin_ == s.second, 1, static_cast<intptr_t>(s.second)) + 6;
     x += 12;
-    Button(RWH(x, y - 1, 150, 32), IC_SEARCH, dupsDone_ ? L"Search again" : L"Find duplicates", CMD_DUP_FIND, 1, !readOnly_);
+    std::wstring find = dupsDone_ ? Tr(L"Search again") : Tr(L"Find duplicates");
+    Button(RWH(x, y - 1, ButtonWidth(find, IC_SEARCH, 150), 32), IC_SEARCH, find, CMD_DUP_FIND, 1, !readOnly_);
     y += 46;
     RectF tr = R(area.left, y, area.right, area.bottom);
     if (!dupsDone_) {
-        DrawEmptyState(tr, IC_COPY, readOnly_ ? L"Not available for saved scans" : L"Ready when you are",
-                       readOnly_ ? L"Duplicate detection needs to read the real files."
-                                 : L"Pick a minimum size and press “Find duplicates”. Large drives can take a while; you can cancel any time.");
+        DrawEmptyState(tr, IC_COPY, readOnly_ ? Tr(L"Not available for saved scans") : Tr(L"Ready when you are"),
+                       readOnly_ ? Tr(L"Duplicate detection needs to read the real files.")
+                                 : Tr(L"Pick a minimum size and press “Find duplicates”. Large drives can take a while; you can cancel any time."));
         return;
     }
     if (dups_.empty()) {
-        DrawEmptyState(tr, IC_CHECK, L"No duplicates found", L"Every file larger than the minimum size is unique.");
+        DrawEmptyState(tr, IC_CHECK, Tr(L"No duplicates found"), Tr(L"Every file larger than the minimum size is unique."));
         return;
     }
-    std::vector<Column> cols = {{L"Name", -1.0f, Align::Left, -1},
-                                {L"Folder", -1.3f, Align::Left, -1},
-                                {L"Size", 100, Align::Right, -1},
-                                {L"Modified", 128, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"Name"), -1.0f, Align::Left, -1},
+                                {Tr(L"Folder"), -1.3f, Align::Left, -1},
+                                {Tr(L"Size"), 100, Align::Right, -1},
+                                {Tr(L"Modified"), 128, Align::Left, -1}};
     DrawTable(
         tr, cols, -1, true,
         [&](int i, const Column&, int ci, const RectF& cr, bool sel) {
@@ -1237,16 +1299,16 @@ void App::DrawDuplicates(const RectF& area) {
                 }
                 case 1: gfx_.Text(FitPath(RelFolder(n), cr.right - cr.left, 12.5f), cr, P_.textDim, Small(12.5f)); break;
                 case 2: gfx_.Text(util::FormatSizeShort(n->size), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
-                default: gfx_.Text(util::FormatTime(n->mtime), cr, P_.textDim, Small(12.5f));
+                default: gfx_.Text(util::FormatDateTimeLocal(n->mtime), cr, P_.textDim, Small(12.5f));
             }
         },
         [&](int i, const RectF& r) {
             const DupGroup& g = dups_[rows_[i].idx];
             gfx_.Icon(IC_COPY, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
-            std::wstring t = util::FormatCount(g.files.size()) + L" identical copies of " + util::FormatSizeShort(g.size);
+            std::wstring t = TrN(g.files.size(), L"{0} identical copy of {1}", L"{0} identical copies of {1}", util::FormatSizeShort(g.size));
             float tw = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 4;
             gfx_.Text(t, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-            gfx_.Text(util::FormatSizeShort(g.size * (g.files.size() - 1)) + L" reclaimable", R(r.left + 48 + tw, r.top, r.right, r.bottom),
+            gfx_.Text(TrF(L"{0} reclaimable", util::FormatSizeShort(g.size * (g.files.size() - 1))), R(r.left + 48 + tw, r.top, r.right, r.bottom),
                       P_.accent2, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         });
 }
@@ -1288,66 +1350,83 @@ void App::DrawSimilarPhotos(const RectF& area, float top) {
         files += g.photos.size();
     }
     std::wstring sub;
+    std::wstring compared = TrN(photoImages_, L"{0} image compared", L"{0} images compared") +
+                            (photoFailed_ ? L" " + TrF(L"({0} unreadable)", util::FormatCount(photoFailed_)) : std::wstring());
     if (photosDone_ && photos_.empty()) {
-        sub = util::FormatCount(photoImages_) + L" images compared" +
-              (photoFailed_ ? L" (" + util::FormatCount(photoFailed_) + L" unreadable)" : std::wstring());
+        sub = compared;
     } else if (photosDone_) {
-        sub = util::FormatCount(photos_.size()) + (photos_.size() == 1 ? L" group  ·  " : L" groups  ·  ") + util::FormatCount(files) +
-              L" photos  ·  " + util::FormatSizeShort(waste) + L" in the copies not suggested to keep  ·  " + util::FormatCount(photoImages_) +
-              L" images compared";
-        if (photoFailed_) sub += L" (" + util::FormatCount(photoFailed_) + L" unreadable)";
+        sub = Dots({TrN(photos_.size(), L"{0} group", L"{0} groups"), TrN(files, L"{0} photo", L"{0} photos"),
+                    TrF(L"{0} in the copies not suggested to keep", util::FormatSizeShort(waste)), compared});
     } else {
-        sub = L"Pictures that look alike: resized, re-saved or lightly edited copies (compared by perceptual hash)";
+        sub = Tr(L"Pictures that look alike: resized, re-saved or lightly edited copies (compared by perceptual hash)");
     }
     float bx = area.right - 24;
     if (photosDone_ && !photos_.empty()) {
         if (!sel_.empty()) {
-            bx -= 150;
-            Button(RWH(bx, top + 6, 150, 34), IC_DELETE, L"Delete selected", CMD_DELETE, 2);
+            std::wstring t = Tr(L"Delete selected");
+            float w = ButtonWidth(t, IC_DELETE, 150);
+            bx -= w;
+            Button(RWH(bx, top + 6, w, 34), IC_DELETE, t, CMD_DELETE, 2);
             bx -= 8;
         }
-        bx -= 226;
-        Button(RWH(bx, top + 6, 226, 34), IC_CHECK, L"Select all but suggested", CMD_PHOTO_MARK, 0);
+        std::wstring t = Tr(L"Select all but suggested");
+        float w = ButtonWidth(t, IC_CHECK, 226);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_CHECK, t, CMD_PHOTO_MARK, 0);
         bx -= 16;
     }
-    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Similar photos", sub, IC_PHOTO);
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"Similar photos"), sub, IC_PHOTO);
     float y = top + 58;
     float x = area.left + 24;
-    x += Chip(x, y, L"Identical files", false, 6, 0) + 6;
-    Chip(x, y, L"Similar photos", true, 6, 1);
+    x += Chip(x, y, Tr(L"Identical files"), false, 6, 0) + 6;
+    Chip(x, y, Tr(L"Similar photos"), true, 6, 1);
     y += 42;
     x = area.left + 24;
-    gfx_.Text(L"Match", R(x, y, x + 60, y + 30), P_.textDim, Small(12.5f));
-    x += 50;
-    std::pair<const wchar_t*, PhotoMatch> levels[] = {{L"Strict", PhotoMatch::Strict}, {L"Normal", PhotoMatch::Normal}, {L"Loose", PhotoMatch::Loose}};
+    TextStyle ls = Small(12.5f);
+    std::wstring match = Tr(L"Match");
+    gfx_.Text(match, R(x, y, x + gfx_.Measure(match, ls) + 8, y + 30), P_.textDim, ls);
+    x += std::max(50.0f, gfx_.Measure(match, ls) + 12);
+    std::pair<std::wstring, PhotoMatch> levels[] = {{Tr(L"Strict"), PhotoMatch::Strict}, {Tr(L"Normal"), PhotoMatch::Normal}, {Tr(L"Loose"), PhotoMatch::Loose}};
     for (auto& l : levels) x += Chip(x, y, l.first, photoMatch_ == l.second, 7, static_cast<intptr_t>(l.second)) + 6;
-    x += 18;
-    gfx_.Text(L"Ignore smaller than", R(x, y, x + 140, y + 30), P_.textDim, Small(12.5f));
-    x += 128;
-    std::pair<const wchar_t*, uint64_t> sizes[] = {{L"Any", 1}, {L"20 KB", 20ull << 10}, {L"100 KB", 100ull << 10}, {L"1 MB", 1ull << 20}};
+    std::wstring smaller = Tr(L"Ignore smaller than");
+    std::pair<std::wstring, uint64_t> sizes[] = {{Tr(L"Any"), 1}, {L"20 KB", 20ull << 10}, {L"100 KB", 100ull << 10}, {L"1 MB", 1ull << 20}};
+    std::wstring find = photosDone_ ? Tr(L"Search again") : Tr(L"Find similar photos");
+    float findW = ButtonWidth(find, IC_SEARCH, 176);
+    // The size chips and the button move to a second row when a longer translation doesn't fit.
+    float rest = std::max(128.0f, gfx_.Measure(smaller, ls) + 12) + 12 + findW;
+    for (auto& s : sizes) rest += gfx_.Measure(s.first, TS(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 26 + 6;
+    if (x + 18 + rest > area.right - 24) {
+        y += 40;
+        x = area.left + 24;
+    } else {
+        x += 18;
+    }
+    gfx_.Text(smaller, R(x, y, x + gfx_.Measure(smaller, ls) + 8, y + 30), P_.textDim, ls);
+    x += std::max(128.0f, gfx_.Measure(smaller, ls) + 12);
     for (auto& s : sizes) x += Chip(x, y, s.first, photoMin_ == s.second, 8, static_cast<intptr_t>(s.second)) + 6;
     x += 12;
-    Button(RWH(x, y - 1, 176, 32), IC_SEARCH, photosDone_ ? L"Search again" : L"Find similar photos", CMD_PHOTO_FIND, 1, !readOnly_);
+    Button(RWH(x, y - 1, findW, 32), IC_SEARCH, find, CMD_PHOTO_FIND, 1, !readOnly_);
     y += 46;
     RectF tr = R(area.left, y, area.right, area.bottom);
     if (!photosDone_) {
-        DrawEmptyState(tr, IC_PHOTO, readOnly_ ? L"Not available for saved scans" : L"Ready when you are",
-                       readOnly_ ? L"Comparing photos needs to read the real files."
-                                 : L"Press “Find similar photos”. Each image is only read (a small copy is decoded), never changed; "
-                                   L"results are remembered, so searching again is quick. Nothing is selected for you.");
+        DrawEmptyState(tr, IC_PHOTO, readOnly_ ? Tr(L"Not available for saved scans") : Tr(L"Ready when you are"),
+                       readOnly_ ? Tr(L"Comparing photos needs to read the real files.")
+                                 : Tr(L"Press “Find similar photos”. Each image is only read (a small copy is decoded), never changed; "
+                                      L"results are remembered, so searching again is quick. Nothing is selected for you."));
         return;
     }
     if (photos_.empty()) {
-        DrawEmptyState(tr, IC_CHECK, L"No similar photos found",
-                       photoImages_ ? L"None of the " + util::FormatCount(photoImages_) + L" images look alike at this setting. “Loose” finds more."
-                                    : L"This scan has no images (JPEG, PNG, HEIC, WebP, TIFF, BMP, GIF) above the minimum size.");
+        DrawEmptyState(tr, IC_CHECK, Tr(L"No similar photos found"),
+                       photoImages_ ? TrN(photoImages_, L"The {0} image found doesn't look like another at this setting. “Loose” finds more.",
+                                          L"None of the {0} images look alike at this setting. “Loose” finds more.")
+                                    : Tr(L"This scan has no images (JPEG, PNG, HEIC, WebP, TIFF, BMP, GIF) above the minimum size."));
         return;
     }
-    std::vector<Column> cols = {{L"Name", -1.0f, Align::Left, -1},
-                                {L"Folder", -1.2f, Align::Left, -1},
-                                {L"Resolution", 104, Align::Right, -1},
-                                {L"Size", 84, Align::Right, -1},
-                                {L"Modified", 128, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"Name"), -1.0f, Align::Left, -1},
+                                {Tr(L"Folder"), -1.2f, Align::Left, -1},
+                                {Tr(L"Resolution"), 104, Align::Right, -1},
+                                {Tr(L"Size"), 84, Align::Right, -1},
+                                {Tr(L"Modified"), 128, Align::Left, -1}};
     auto photoOf = [&](int row) -> const Photo* {
         const PhotoGroup& g = photos_[rows_[row].idx];
         for (auto& p : g.photos)
@@ -1369,7 +1448,7 @@ void App::DrawSimilarPhotos(const RectF& area, float top) {
                         RectF star = RWH(cr.left, cr.top, 14, H(cr));
                         gfx_.Icon(0xE735 /*FavoriteStarFill*/, star, P_.warning, 10);
                         if (Inside(star, mouseX_, mouseY_)) {
-                            tipText_ = L"Suggested to keep: the largest picture (then the largest file, then the oldest)";
+                            tipText_ = Tr(L"Suggested to keep: the largest picture (then the largest file, then the oldest)");
                             tipAnchor_ = star;
                         }
                     }
@@ -1381,16 +1460,17 @@ void App::DrawSimilarPhotos(const RectF& area, float top) {
                               Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
                     break;
                 case 3: gfx_.Text(util::FormatSizeShort(n->size), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
-                default: gfx_.Text(util::FormatTime(n->mtime), cr, P_.textDim, Small(12.5f));
+                default: gfx_.Text(util::FormatDateTimeLocal(n->mtime), cr, P_.textDim, Small(12.5f));
             }
         },
         [&](int i, const RectF& r) {
             const PhotoGroup& g = photos_[rows_[i].idx];
             gfx_.Icon(IC_PHOTO, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
-            std::wstring t = util::FormatCount(g.photos.size()) + (g.maxDist == 0 ? L" photos that look the same" : L" similar photos");
+            std::wstring t = g.maxDist == 0 ? TrN(g.photos.size(), L"{0} photo that looks the same", L"{0} photos that look the same")
+                                            : TrN(g.photos.size(), L"{0} similar photo", L"{0} similar photos");
             float tw = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 4;
             gfx_.Text(t, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-            std::wstring keep = L"keep ★ " + g.photos[0].node->name + L"  ·  " + util::FormatSizeShort(g.Reclaimable()) + L" in the others";
+            std::wstring keep = Dots({TrF(L"keep ★ {0}", g.photos[0].node->name), TrF(L"{0} in the others", util::FormatSizeShort(g.Reclaimable()))});
             gfx_.Text(keep, R(r.left + 48 + tw, r.top, r.right - 8, r.bottom), P_.accent2, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         });
 }
@@ -1404,44 +1484,49 @@ void App::DrawDevJunk(const RectF& area) {
         total += DevProjectSize(p, disk);
         folders += p.artifacts.size();
     }
-    std::wstring sub = devJunk_.empty() ? L"Build output and dependencies your projects recreate on the next build or install"
-                                        : util::FormatCount(devJunk_.size()) + (devJunk_.size() == 1 ? L" project  ·  " : L" projects  ·  ") +
-                                              util::FormatCount(folders) + L" folders  ·  " + util::FormatSizeShort(total) +
-                                              L" comes back with the next build or install";
+    std::wstring sub = devJunk_.empty() ? Tr(L"Build output and dependencies your projects recreate on the next build or install")
+                                        : Dots({TrN(devJunk_.size(), L"{0} project", L"{0} projects"), TrN(folders, L"{0} folder", L"{0} folders"),
+                                                TrF(L"{0} comes back with the next build or install", util::FormatSizeShort(total))});
     float bx = area.right - 24;
     if (!devJunk_.empty()) {
         if (!sel_.empty()) {
-            bx -= 150;
-            Button(RWH(bx, top + 6, 150, 34), IC_DELETE, L"Delete selected", CMD_DELETE, 2, !readOnly_);
+            std::wstring t = Tr(L"Delete selected");
+            float w = ButtonWidth(t, IC_DELETE, 150);
+            bx -= w;
+            Button(RWH(bx, top + 6, w, 34), IC_DELETE, t, CMD_DELETE, 2, !readOnly_);
             bx -= 8;
         }
-        bx -= 222;
-        Button(RWH(bx, top + 6, 222, 34), IC_CLOCK, L"Select inactive 3+ months", CMD_DEV_MARK_OLD, 0);
+        std::wstring t = Tr(L"Select inactive 3+ months");
+        float w = ButtonWidth(t, IC_CLOCK, 222);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_CLOCK, t, CMD_DEV_MARK_OLD, 0);
         bx -= 16;
     }
-    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Developer junk", sub, IC_CODE);
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"Developer junk"), sub, IC_CODE);
     float y = top + 58;
     if (!devJunk_.empty()) {
         float x = area.left + 24;
-        gfx_.Text(L"Sort projects by", R(x, y, x + 120, y + 30), P_.textDim, Small(12.5f));
-        x += 112;
-        x += Chip(x, y, L"Size", !devJunkByAge_, 4, 0) + 6;
-        Chip(x, y, L"Least recently changed", devJunkByAge_, 4, 1);
-        gfx_.Text(L"Click a project to select all its folders", R(area.left + 24, y, area.right - 24, y + 30), P_.textFaint,
+        std::wstring label = Tr(L"Sort projects by");
+        float lw = gfx_.Measure(label, Small(12.5f));
+        gfx_.Text(label, R(x, y, x + lw + 8, y + 30), P_.textDim, Small(12.5f));
+        x += std::max(112.0f, lw + 12);
+        x += Chip(x, y, Tr(L"Size"), !devJunkByAge_, 4, 0) + 6;
+        x += Chip(x, y, Tr(L"Least recently changed"), devJunkByAge_, 4, 1);
+        gfx_.Text(Tr(L"Click a project to select all its folders"), R(x + 16, y, area.right - 24, y + 30), P_.textFaint,
                   Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
         y += 44;
     }
     RectF tr = R(area.left, y, area.right, area.bottom);
     if (devJunk_.empty()) {
-        DrawEmptyState(tr, IC_CODE, L"No developer junk found",
-                       L"No node_modules, target, bin/obj, build, .gradle, Unity Library, __pycache__ or .venv folders next to their projects "
-                       L"in this scan. App folders (AppData, Program Files) are not searched.");
+        DrawEmptyState(tr, IC_CODE, Tr(L"No developer junk found"),
+                       Tr(L"No node_modules, target, bin/obj, build, .gradle, Unity Library, __pycache__ or .venv folders next to their projects "
+                          L"in this scan. App folders (AppData, Program Files) are not searched."));
         return;
     }
-    std::vector<Column> cols = {{L"Folder", -1.0f, Align::Left, -1},
-                                {L"Comes back with", -1.0f, Align::Left, -1},
-                                {settings_.apparent ? L"Size" : L"Disk usage", 100, Align::Right, -1},
-                                {L"Modified", 128, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"Folder"), -1.0f, Align::Left, -1},
+                                {Tr(L"Comes back with"), -1.0f, Align::Left, -1},
+                                {settings_.apparent ? Tr(L"Size") : Tr(L"Disk usage"), 100, Align::Right, -1},
+                                {Tr(L"Modified"), 128, Align::Left, -1}};
     DrawTable(
         tr, cols, -1, true,
         [&](int i, const Column&, int ci, const RectF& cr, bool sel) {
@@ -1459,10 +1544,10 @@ void App::DrawDevJunk(const RectF& area) {
                     break;
                 }
                 case 1:
-                    if (a) gfx_.Text(std::wstring(a->kind) + L"  ·  " + a->how, cr, P_.textDim, Small(12.5f));
+                    if (a) gfx_.Text(Tr(a->kind) + L"  ·  " + Tr(a->how), cr, P_.textDim, Small(12.5f));
                     break;
                 case 2: gfx_.Text(util::FormatSizeShort(Val(n)), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
-                default: gfx_.Text(util::FormatTime(n->mtime), cr, P_.textDim, Small(12.5f));
+                default: gfx_.Text(util::FormatDateTimeLocal(n->mtime), cr, P_.textDim, Small(12.5f));
             }
         },
         [&](int i, const RectF& r) {
@@ -1473,7 +1558,7 @@ void App::DrawDevJunk(const RectF& area) {
             Checkbox(cb, all, Hovered(HK_ROW, i), some);
             std::wstring size = util::FormatSizeShort(DevProjectSize(p, disk));
             float sw = gfx_.Measure(size, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 8;
-            std::wstring age = L"changed " + AgeText(p.lastChange);
+            std::wstring age = TrF(L"changed {0}", AgeText(p.lastChange));
             float aw = gfx_.Measure(age, Small(12.5f)) + 24;
             int64_t days = p.lastChange ? (util::NowFileTime() - p.lastChange) / 864000000000LL : 0;
             float x = r.left + 36;
@@ -1502,46 +1587,51 @@ void App::DrawAiModels(const RectF& area) {
         total += s.bytes;
         for (auto& it : s.items) anyUnused = anyUnused || it.unused;
     }
-    std::wstring sub = ai_.empty() ? L"Hugging Face, Ollama and LM Studio downloads, one model at a time"
-                                   : util::FormatSizeShort(total) + L" in " + util::FormatCount(ai_.size()) +
-                                         (ai_.size() == 1 ? L" model folder" : L" model folders") +
-                                         L"  ·  “Frees” is what deleting that model alone frees  ·  chats and settings are never touched";
+    std::wstring sub = ai_.empty() ? Tr(L"Hugging Face, Ollama and LM Studio downloads, one model at a time")
+                                   : Dots({TrF(L"{0} in {1}", util::FormatSizeShort(total), TrN(ai_.size(), L"{0} model folder", L"{0} model folders")),
+                                           Tr(L"“Frees” is what deleting that model alone frees"), Tr(L"chats and settings are never touched")});
     float bx = area.right - 24;
     if (!aiSel_.empty()) {
-        std::wstring t = L"Delete " + util::FormatSizeShort(AiSelectedBytes());
-        float w = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 54;
+        std::wstring t = TrF(L"Delete {0}", util::FormatSizeShort(AiSelectedBytes()));
+        float w = ButtonWidth(t, IC_DELETE);
         bx -= w;
         Button(RWH(bx, top + 6, w, 34), IC_DELETE, t, CMD_AI_DELETE, 2);
         bx -= 8;
     }
     if (anyUnused) {
-        bx -= 204;
-        Button(RWH(bx, top + 6, 204, 34), IC_CHECK, L"Select unused revisions", CMD_AI_UNUSED, 0);
+        std::wstring t = Tr(L"Select unused revisions");
+        float w = ButtonWidth(t, IC_CHECK, 204);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_CHECK, t, CMD_AI_UNUSED, 0);
         bx -= 8;
     }
-    bx -= 108;
-    Button(RWH(bx, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_AI_REFRESH, 0);
-    bx -= 16;
-    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"AI models", sub, IC_AI);
+    {
+        std::wstring t = Tr(L"Refresh");
+        float w = ButtonWidth(t, IC_REFRESH, 108);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_REFRESH, t, CMD_AI_REFRESH, 0);
+        bx -= 16;
+    }
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"AI models"), sub, IC_AI);
     float y = top + 58;
     if (!ai_.empty()) {
-        std::wstring hint = L"Click a model to select it  ·  double-click to show its files";
-        if (!aiAtime_) hint += L"  ·  “Last used” is unknown: Windows doesn't record file access on this PC";
+        std::wstring hint = Dots({Tr(L"Click a model to select it"), Tr(L"double-click to show its files"),
+                                  aiAtime_ ? L"" : Tr(L"“Last used” is unknown: Windows doesn't record file access on this PC")});
         gfx_.Text(hint, R(area.left + 24, y, area.right - 24, y + 24), P_.textFaint, Small(12));
         y += 30;
     }
     RectF tr = R(area.left, y, area.right, area.bottom);
     if (ai_.empty()) {
-        DrawEmptyState(tr, IC_AI, L"No local AI models found",
-                       L"Looked for the Hugging Face cache (HF_HOME, HF_HUB_CACHE, ~\\.cache\\huggingface), Ollama (OLLAMA_MODELS, "
-                       L"~\\.ollama\\models) and LM Studio (its models and downloads folders).");
+        DrawEmptyState(tr, IC_AI, Tr(L"No local AI models found"),
+                       Tr(L"Looked for the Hugging Face cache (HF_HOME, HF_HUB_CACHE, ~\\.cache\\huggingface), Ollama (OLLAMA_MODELS, "
+                          L"~\\.ollama\\models) and LM Studio (its models and downloads folders)."));
         return;
     }
-    std::vector<Column> cols = {{L"Model", -1.3f, Align::Left, -1},
-                                {L"Details", -1.0f, Align::Left, -1},
-                                {L"Frees", 96, Align::Right, -1},
-                                {L"Downloaded", 100, Align::Left, -1}};
-    if (aiAtime_) cols.push_back({L"Last used", 100, Align::Left, -1});
+    std::vector<Column> cols = {{Tr(L"Model"), -1.3f, Align::Left, -1},
+                                {Tr(L"Details"), -1.0f, Align::Left, -1},
+                                {Tr(L"Frees"), 96, Align::Right, -1},
+                                {Tr(L"Downloaded"), 100, Align::Left, -1}};
+    if (aiAtime_) cols.push_back({Tr(L"Last used"), 100, Align::Left, -1});
     auto item = [&](int row) -> std::pair<size_t, size_t> {
         return {static_cast<size_t>(rows_[row].idx) >> 20, static_cast<size_t>(rows_[row].idx) & 0xFFFFF};
     };
@@ -1559,22 +1649,24 @@ void App::DrawAiModels(const RectF& area) {
                     Checkbox(RWH(x, cy - 9, 18, 18), checked, Hovered(HK_ROW, i));
                     x += 30;
                     TextStyle ts = TS(13, it.parent >= 0 ? DWRITE_FONT_WEIGHT_NORMAL : DWRITE_FONT_WEIGHT_SEMI_BOLD);
-                    float nw = std::min(gfx_.Measure(it.name, ts) + 4, std::max(0.0f, cr.right - x));
-                    gfx_.Text(it.name, R(x, cr.top, x + nw, cr.bottom), P_.text, ts);
+                    std::wstring name = AiItemName(it.name);
+                    float nw = std::min(gfx_.Measure(name, ts) + 4, std::max(0.0f, cr.right - x));
+                    gfx_.Text(name, R(x, cr.top, x + nw, cr.bottom), P_.text, ts);
                     x += nw + 8;
                     if (it.unused) {
-                        float uw = gfx_.Measure(L"Unused", Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+                        std::wstring unused = Tr(L"Unused");
+                        float uw = gfx_.Measure(unused, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
                         if (x + uw < cr.right) {
                             RectF br = R(x, cy - 9, x + uw, cy + 9);
                             gfx_.FillRound(br, 9, WithAlpha(P_.warning, 0.16f));
-                            gfx_.Text(L"Unused", br, P_.warning, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                            gfx_.Text(unused, br, P_.warning, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
                         }
                     }
                     break;
                 }
                 case 1: gfx_.Text(it.detail, cr, P_.textDim, Small(12.5f)); break;
                 case 2: gfx_.Text(util::FormatSizeShort(it.bytes), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
-                case 3: gfx_.Text(it.added ? util::FormatTime(it.added).substr(0, 10) : L"", cr, P_.textDim, Small(12.5f)); break;
+                case 3: gfx_.Text(it.added ? util::FormatDateLocal(it.added) : L"", cr, P_.textDim, Small(12.5f)); break;
                 default: gfx_.Text(it.used ? AgeText(it.used) : L"", cr, P_.textDim, Small(12.5f));
             }
         },
@@ -1584,8 +1676,9 @@ void App::DrawAiModels(const RectF& area) {
             const AiStore& st = ai_[s];
             gfx_.Icon(IC_AI, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
             TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
-            float tw = gfx_.Measure(st.name, ts) + 4;
-            gfx_.Text(st.name, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
+            std::wstring name = Tr(st.name);
+            float tw = gfx_.Measure(name, ts) + 4;
+            gfx_.Text(name, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
             std::wstring size = util::FormatSizeShort(st.bytes);
             float sw = gfx_.Measure(size, ts) + 8;
             float fx = r.left + 48 + tw;
@@ -1603,43 +1696,47 @@ void App::DrawWsl(const RectF& area) {
     uint64_t total = 0, selTotal = 0;
     for (auto& d : vdisks_) total += d.Reclaimable();
     for (int id : wslSel_) selTotal += WslRowBytes(id);
-    std::wstring sub = vdisks_.empty() ? L"Virtual disks of WSL distros and Docker Desktop"
-                                       : L"Linux disks grow but never shrink by themselves  ·  " + util::FormatSizeShort(total) +
-                                             L" could go back to Windows";
+    std::wstring sub = vdisks_.empty() ? Tr(L"Virtual disks of WSL distros and Docker Desktop")
+                                       : Dots({Tr(L"Linux disks grow but never shrink by themselves"),
+                                               TrF(L"{0} could go back to Windows", util::FormatSizeShort(total))});
     float bx = area.right - 24;
     if (!wslSel_.empty()) {
-        std::wstring t = L"Free up " + util::FormatSizeShort(selTotal);
-        float w = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 54;
+        std::wstring t = TrF(L"Free up {0}", util::FormatSizeShort(selTotal));
+        float w = ButtonWidth(t, IC_CLEAN);
         bx -= w;
         Button(RWH(bx, top + 6, w, 34), IC_CLEAN, t, CMD_WSL_FREE, 1);
         bx -= 8;
     }
-    bx -= 108;
-    Button(RWH(bx, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_WSL_REFRESH, 0);
-    bx -= 16;
-    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"WSL & Docker", sub, IC_TERMINAL);
+    {
+        std::wstring t = Tr(L"Refresh");
+        float w = ButtonWidth(t, IC_REFRESH, 108);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_REFRESH, t, CMD_WSL_REFRESH, 0);
+        bx -= 16;
+    }
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"WSL & Docker"), sub, IC_TERMINAL);
     float y = top + 58;
     if (!wslLoaded_) return;
     if (vdisks_.empty() && !docker_.cli) {
-        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_TERMINAL, L"No WSL or Docker disks found",
-                       L"WSL 2 distros and Docker Desktop keep Linux files in .vhdx virtual disks. None are registered for this user.");
+        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_TERMINAL, Tr(L"No WSL or Docker disks found"),
+                       Tr(L"WSL 2 distros and Docker Desktop keep Linux files in .vhdx virtual disks. None are registered for this user."));
         return;
     }
-    gfx_.Text(L"Click to select  ·  double-click a disk to show its file  ·  running distros report their own usage, stopped "
-              L"ones are read from the disk file without starting them",
+    gfx_.Text(Dots({Tr(L"Click to select"), Tr(L"double-click a disk to show its file"),
+                    Tr(L"running distros report their own usage, stopped ones are read from the disk file without starting them")}),
               R(area.left + 24, y, area.right - 24, y + 24), P_.textFaint, Small(12));
     y += 30;
-    std::vector<Column> cols = {{L"Disk", -1.1f, Align::Left, -1},
-                                {L"Details", -1.3f, Align::Left, -1},
-                                {L"Size", 92, Align::Right, -1},
-                                {L"Used inside", 92, Align::Right, -1},
-                                {L"Could free", 92, Align::Right, -1}};
-    static const wchar_t* kDockerName[] = {L"Build cache", L"Unused images", L"Stopped containers", L"Unused volumes"};
-    static const wchar_t* kDockerType[] = {L"Build Cache", L"Images", L"Containers", L"Local Volumes"};
-    static const wchar_t* kDockerHow[] = {L"rebuilt by the next build  ·  docker builder prune -a",
-                                          L"pulled again when needed  ·  docker image prune -a",
-                                          L"can hold data: remove them in Docker Desktop if you're sure",
-                                          L"can hold data: remove them in Docker Desktop if you're sure"};
+    std::vector<Column> cols = {{Tr(L"Disk"), -1.1f, Align::Left, -1},
+                                {Tr(L"Details"), -1.3f, Align::Left, -1},
+                                {Tr(L"Size"), 92, Align::Right, -1},
+                                {Tr(L"Used inside"), 92, Align::Right, -1},
+                                {Tr(L"Could free"), 92, Align::Right, -1}};
+    static const wchar_t* kDockerName[] = {N_(L"Build cache"), N_(L"Unused images"), N_(L"Stopped containers"), N_(L"Unused volumes")};
+    static const wchar_t* kDockerType[] = {L"Build Cache", L"Images", L"Containers", L"Local Volumes"};  // docker system df's names
+    static const wchar_t* kDockerHow[] = {N_(L"rebuilt by the next build  ·  docker builder prune -a"),
+                                          N_(L"pulled again when needed  ·  docker image prune -a"),
+                                          N_(L"can hold data: remove them in Docker Desktop if you're sure"),
+                                          N_(L"can hold data: remove them in Docker Desktop if you're sure")};
     DrawTable(
         R(area.left, y, area.right, area.bottom), cols, -1, true,
         [&](int i, const Column&, int ci, const RectF& cr, bool) {
@@ -1658,17 +1755,18 @@ void App::DrawWsl(const RectF& area) {
                     else
                         gfx_.Icon(IC_INFO, RWH(x, cr.top, 18, H(cr)), P_.textFaint, 12);
                     x += 30;
-                    std::wstring name = disk ? vdisks_[id].name : kDockerName[k];
+                    std::wstring name = disk ? VDiskName(vdisks_[id]) : Tr(kDockerName[k]);
                     TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
                     float nw = std::min(gfx_.Measure(name, ts) + 4, std::max(0.0f, cr.right - x));
                     gfx_.Text(name, R(x, cr.top, x + nw, cr.bottom), selectable ? P_.text : P_.textDim, ts);
                     x += nw + 8;
                     if (disk && vdisks_[id].running) {
-                        float rw = gfx_.Measure(L"Running", Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+                        std::wstring running = Tr(L"Running");
+                        float rw = gfx_.Measure(running, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
                         if (x + rw < cr.right) {
                             RectF br = R(x, cy - 9, x + rw, cy + 9);
                             gfx_.FillRound(br, 9, WithAlpha(P_.success, 0.16f));
-                            gfx_.Text(L"Running", br, P_.success, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                            gfx_.Text(running, br, P_.success, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
                         }
                     }
                     break;
@@ -1677,7 +1775,7 @@ void App::DrawWsl(const RectF& area) {
                     if (disk)
                         gfx_.Text(FitPath(vdisks_[id].path, W(cr), 12), cr, P_.textFaint, Small(12));
                     else
-                        gfx_.Text(kDockerHow[k], cr, P_.textDim, Small(12.5f));
+                        gfx_.Text(Tr(kDockerHow[k]), cr, P_.textDim, Small(12.5f));
                     break;
                 case 2: {
                     uint64_t v = disk ? vdisks_[id].fileBytes : (dr ? dr->size : 0);
@@ -1687,7 +1785,7 @@ void App::DrawWsl(const RectF& area) {
                 case 3:
                     if (disk)
                         gfx_.Text(vdisks_[id].usedKnown ? (vdisks_[id].usedFrom == L"superblock" ? L"≈ " : L"") + util::FormatSizeShort(vdisks_[id].used)
-                                                        : L"unknown",
+                                                        : Tr(L"unknown"),
                                   cr, P_.textDim, Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
                     break;
                 default: {
@@ -1700,10 +1798,10 @@ void App::DrawWsl(const RectF& area) {
         [&](int i, const RectF& r) {
             bool dockerGroup = rows_[i].idx == 1;
             gfx_.Icon(dockerGroup ? IC_DRIVE : IC_TERMINAL, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
-            std::wstring title = dockerGroup ? L"Docker" : L"Virtual disks";
-            std::wstring note = !dockerGroup ? L"space each takes on the drive, and what Linux uses inside"
-                                : docker_.running ? L"data inside Docker's disk: compact the disk afterwards to give the space to Windows"
-                                                  : L"isn't running: start Docker Desktop to see what it could remove" +
+            std::wstring title = dockerGroup ? L"Docker" : Tr(L"Virtual disks");
+            std::wstring note = !dockerGroup ? Tr(L"space each takes on the drive, and what Linux uses inside")
+                                : docker_.running ? Tr(L"data inside Docker's disk: compact the disk afterwards to give the space to Windows")
+                                                  : Tr(L"isn't running: start Docker Desktop to see what it could remove") +
                                                         (docker_.error.empty() ? L"" : L" (" + docker_.error + L")");
             TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
             float tw = gfx_.Measure(title, ts) + 4;
@@ -1714,12 +1812,16 @@ void App::DrawWsl(const RectF& area) {
 
 void App::DrawWinTools(const RectF& area) {
     float top = area.top + 18;
-    Button(RWH(area.right - 24 - 108, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_WIN_REFRESH, 0);
-    DrawViewHeader(R(area.left + 24, top, area.right - 150, top + 46), L"Windows",
-                   L"Space Windows keeps for itself, changed with Windows' own tools  ·  works without a scan", IC_SYSTEM);
+    {
+        std::wstring t = Tr(L"Refresh");
+        float w = ButtonWidth(t, IC_REFRESH, 108);
+        Button(RWH(area.right - 24 - w, top + 6, w, 34), IC_REFRESH, t, CMD_WIN_REFRESH, 0);
+        DrawViewHeader(R(area.left + 24, top, area.right - 42 - w, top + 46), Tr(L"Windows"),
+                       Dots({Tr(L"Space Windows keeps for itself, changed with Windows' own tools"), Tr(L"works without a scan")}), IC_SYSTEM);
+    }
     if (!winLoaded_) return;
     struct Act {
-        const wchar_t* text;
+        std::wstring text;
         int action;
         int style;
     };
@@ -1730,19 +1832,20 @@ void App::DrawWinTools(const RectF& area) {
     };
     std::vector<Card> cards;
     {
-        Card c{0xE8F1, L"Component store (WinSxS)",
-               L"Older versions of Windows components kept after updates. DISM removes the ones newer updates replaced.", L"", L"", {}};
+        Card c{0xE8F1, Tr(L"Component store (WinSxS)"),
+               Tr(L"Older versions of Windows components kept after updates. DISM removes the ones newer updates replaced."), L"", L"", {}};
         const ComponentStore& s = win_.store;
         if (!win_.storeAnalyzed) {
-            c.status = L"Not analyzed yet: DISM takes a few minutes";
-            c.acts.push_back({L"Analyze", WA_ANALYZE, 0});
+            c.status = Tr(L"Not analyzed yet: DISM takes a few minutes");
+            c.acts.push_back({Tr(L"Analyze"), WA_ANALYZE, 0});
         } else {
             c.size = util::FormatSizeShort(s.actual);
-            c.status = util::FormatCount(s.reclaimablePackages < 0 ? 0 : s.reclaimablePackages) + L" components replaced by newer updates  ·  " +
-                       (s.recommended ? L"cleanup recommended" : L"no cleanup needed") +
-                       (s.lastCleanup.empty() ? L"" : L"  ·  last cleanup " + s.lastCleanup);
-            c.acts.push_back({L"Analyze", WA_ANALYZE, 0});
-            if (s.recommended || s.reclaimablePackages > 0) c.acts.push_back({L"Clean up", WA_CLEAN_STORE, 1});
+            c.status = Dots({TrN(s.reclaimablePackages < 0 ? 0 : s.reclaimablePackages, L"{0} component replaced by newer updates",
+                                 L"{0} components replaced by newer updates"),
+                             s.recommended ? Tr(L"cleanup recommended") : Tr(L"no cleanup needed"),
+                             s.lastCleanup.empty() ? L"" : TrF(L"last cleanup {0}", s.lastCleanup)});
+            c.acts.push_back({Tr(L"Analyze"), WA_ANALYZE, 0});
+            if (s.recommended || s.reclaimablePackages > 0) c.acts.push_back({Tr(L"Clean up"), WA_CLEAN_STORE, 1});
         }
         cards.push_back(c);
     }
@@ -1754,62 +1857,61 @@ void App::DrawWinTools(const RectF& area) {
                 bytes += p.bytes;
                 ++n;
             }
-        Card c{0xE964, L"Old driver packages",
-               L"Older versions of drivers that a newer version replaced. Drivers a device uses, and printer drivers, are kept.",
-               util::FormatCount(n) + L" old of " + util::FormatCount(win_.drivers.size()) + L" third-party driver packages",
+        Card c{0xE964, Tr(L"Old driver packages"),
+               Tr(L"Older versions of drivers that a newer version replaced. Drivers a device uses, and printer drivers, are kept."),
+               TrN(win_.drivers.size(), L"{1} old of {0} third-party driver package", L"{1} old of {0} third-party driver packages", util::FormatCount(n)),
                n ? util::FormatSizeShort(bytes) : L"", {}};
-        if (n) c.acts.push_back({L"Remove old", WA_DRIVERS, 1});
+        if (n) c.acts.push_back({Tr(L"Remove old"), WA_DRIVERS, 1});
         cards.push_back(c);
     }
     {
-        Card c{0xE777, L"System Restore", L"Space for restore points. A smaller limit deletes the oldest restore points first.", L"", L"", {}};
+        Card c{0xE777, Tr(L"System Restore"), Tr(L"Space for restore points. A smaller limit deletes the oldest restore points first."), L"", L"", {}};
         if (win_.shadows.empty()) {
-            c.status = win_.shadowErr.empty() ? L"No restore point storage on this PC"
+            c.status = win_.shadowErr.empty() ? Tr(L"No restore point storage on this PC")
                        : elevated_          ? win_.shadowErr
-                                            : L"Restart as administrator to see how much it uses";
+                                            : Tr(L"Restart as administrator to see how much it uses");
         } else {
             uint64_t used = 0;
             for (auto& s : win_.shadows) {
                 used += s.used;
-                std::wstring max = s.max == UINT64_MAX ? L"no limit"
-                                   : s.volumeSize    ? util::FormatSizeShort(s.max) + L" (" +
-                                                        std::to_wstring(static_cast<int>(s.max * 100.0 / s.volumeSize + 0.5)) + L"% of " +
-                                                        s.onDrive + L")"
+                std::wstring max = s.max == UINT64_MAX ? Tr(L"no limit")
+                                   : s.volumeSize    ? TrF(L"{0} ({1}% of {2})", util::FormatSizeShort(s.max),
+                                                           static_cast<int>(s.max * 100.0 / s.volumeSize + 0.5), s.onDrive)
                                                      : util::FormatSizeShort(s.max);
-                c.status += (c.status.empty() ? L"" : L"  ·  ") + s.forDrive + L" uses " + util::FormatSizeShort(s.used) + L", limit " + max;
+                c.status += (c.status.empty() ? L"" : L"  ·  ") + TrF(L"{0} uses {1}, limit {2}", s.forDrive, util::FormatSizeShort(s.used), max);
             }
             c.size = util::FormatSizeShort(used);
-            c.acts.push_back({L"Set limit", WA_SHADOW, 0});
+            c.acts.push_back({Tr(L"Set limit"), WA_SHADOW, 0});
         }
         cards.push_back(c);
     }
     {
         const Hibernation& h = win_.hiber;
-        Card c{0xE708, L"Hibernation file",
-               L"hiberfil.sys holds memory while the PC hibernates. Off also turns off Fast Startup; reduced keeps Fast Startup.",
-               !h.on ? L"Off" : std::wstring(h.reduced ? L"On, reduced (Fast Startup only)" : L"On") +
-                                    (h.fastStartup ? L"  ·  Fast Startup on" : L"  ·  Fast Startup off"),
+        Card c{0xE708, Tr(L"Hibernation file"),
+               Tr(L"hiberfil.sys holds memory while the PC hibernates. Off also turns off Fast Startup; reduced keeps Fast Startup."),
+               !h.on ? Tr(L"Off")
+                     : Dots({h.reduced ? Tr(L"On, reduced (Fast Startup only)") : Tr(L"On"), h.fastStartup ? Tr(L"Fast Startup on") : Tr(L"Fast Startup off")}),
                h.bytes ? util::FormatSizeShort(h.bytes) : L"", {}};
         if (h.on) {
-            if (!h.reduced) c.acts.push_back({L"Reduce", WA_HIBER_REDUCED, 0});
-            c.acts.push_back({L"Turn off", WA_HIBER_OFF, 1});
+            if (!h.reduced) c.acts.push_back({Tr(L"Reduce"), WA_HIBER_REDUCED, 0});
+            c.acts.push_back({Tr(L"Turn off"), WA_HIBER_OFF, 1});
         } else {
-            c.acts.push_back({L"Turn on", WA_HIBER_ON, 0});
+            c.acts.push_back({Tr(L"Turn on"), WA_HIBER_ON, 0});
         }
         cards.push_back(c);
     }
     {
-        Card c{0xE7B8, L"Compact OS", L"Stores Windows' own files compressed, usually saving 2 GB or more. Can be turned off again.",
-               win_.compactOs ? L"On: Windows files are compressed" : L"Off", L"", {}};
-        c.acts.push_back(win_.compactOs ? Act{L"Turn off", WA_COMPACT_OFF, 0} : Act{L"Turn on", WA_COMPACT_ON, 1});
+        Card c{0xE7B8, Tr(L"Compact OS"), Tr(L"Stores Windows' own files compressed, usually saving 2 GB or more. Can be turned off again."),
+               win_.compactOs ? Tr(L"On: Windows files are compressed") : Tr(L"Off"), L"", {}};
+        c.acts.push_back(win_.compactOs ? Act{Tr(L"Turn off"), WA_COMPACT_OFF, 0} : Act{Tr(L"Turn on"), WA_COMPACT_ON, 1});
         cards.push_back(c);
     }
     {
         const EventLogs& e = win_.logs;
-        Card c{0xE7C3, L"Event logs", L"Windows' diagnostic history. Clearing loses it for troubleshooting; the Security log is kept.",
-               e.known ? util::FormatCount(e.files) + L" logs" : L"Couldn't read the log folder",
+        Card c{0xE7C3, Tr(L"Event logs"), Tr(L"Windows' diagnostic history. Clearing loses it for troubleshooting; the Security log is kept."),
+               e.known ? TrN(e.files, L"{0} log", L"{0} logs") : Tr(L"Couldn't read the log folder"),
                e.known ? util::FormatSizeShort(e.bytes - e.security) : L"", {}};
-        if (e.known) c.acts.push_back({L"Clear", WA_LOGS, 0});
+        if (e.known) c.acts.push_back({Tr(L"Clear"), WA_LOGS, 0});
         cards.push_back(c);
     }
 
@@ -1824,9 +1926,11 @@ void App::DrawWinTools(const RectF& area) {
         RectF b = R(area.left + 24, y, area.right - 24, y + 52);
         gfx_.FillRound(b, 10, WithAlpha(P_.warning, 0.12f));
         gfx_.Icon(IC_SHIELD, RWH(b.left + 10, b.top, 30, H(b)), P_.warning, 16);
-        gfx_.Text(L"Changes here need administrator rights: Windows asks each time, or restart as administrator once.",
-                  R(b.left + 46, b.top, b.right - 200, b.bottom), P_.text, TS(13));
-        Button(R(b.right - 190, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, L"Restart as admin", CMD_ADMIN, 0);
+        std::wstring t = Tr(L"Restart as admin");
+        float bw = ButtonWidth(t, IC_SHIELD, 178);
+        gfx_.Text(Tr(L"Changes here need administrator rights: Windows asks each time, or restart as administrator once."),
+                  R(b.left + 46, b.top, b.right - 22 - bw, b.bottom), P_.text, TS(13));
+        Button(R(b.right - 12 - bw, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, t, CMD_ADMIN, 0);
         y += 64;
     }
     for (auto& c : cards) {
@@ -1837,7 +1941,10 @@ void App::DrawWinTools(const RectF& area) {
         gfx_.FillRound(RWH(x, card.top + 18, 40, 40), 10, WithAlpha(P_.accent, 0.14f));
         gfx_.Icon(c.icon, RWH(x, card.top + 18, 40, 40), P_.accent, 16);
         x += 54;
-        float textRight = card.right - 330;
+        // The text keeps clear of the action buttons, however long their labels are.
+        float actsW = 0;
+        for (auto& a : c.acts) actsW += gfx_.Measure(a.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 44;
+        float textRight = card.right - std::max(330.0f, actsW + 40);
         gfx_.Text(c.title, R(x, card.top + 12, textRight, card.top + 34), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         gfx_.Text(c.desc, R(x, card.top + 35, textRight, card.top + 55), P_.textDim, Small(12.5f));
         gfx_.Text(c.status, R(x, card.top + 58, textRight, card.top + 80), P_.textFaint, Small(12));
@@ -1870,9 +1977,9 @@ void App::DrawGames(const RectF& area) {
         }
     }
     std::wstring sub = !gamesLoaded_ || games_.empty()
-                           ? L"Installed games from every launcher, uninstalled through the launcher itself"
-                           : util::FormatCount(count) + (count == 1 ? L" game  ·  " : L" games  ·  ") + util::FormatSizeShort(installed) +
-                                 (leftovers ? L"  ·  " + util::FormatSizeShort(leftovers) + L" left behind by uninstalled games" : L"");
+                           ? Tr(L"Installed games from every launcher, uninstalled through the launcher itself")
+                           : Dots({TrN(count, L"{0} game", L"{0} games"), util::FormatSizeShort(installed),
+                                   leftovers ? TrF(L"{0} left behind by uninstalled games", util::FormatSizeShort(leftovers)) : L""});
     float bx = area.right - 24;
     auto button = [&](const std::wstring& t, wchar_t icon, int cmd, int style) {
         float w = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + (icon ? 54 : 36);
@@ -1880,38 +1987,40 @@ void App::DrawGames(const RectF& area) {
         Button(RWH(bx, top + 6, w, 34), icon, t, cmd, style);
         bx -= 8;
     };
-    if (!gameLeftSel_.empty()) button(L"Delete leftovers " + util::FormatSizeShort(chosenLeft), IC_DELETE, CMD_GAMES_DELETE, 2);
+    if (!gameLeftSel_.empty()) button(TrF(L"Delete leftovers {0}", util::FormatSizeShort(chosenLeft)), IC_DELETE, CMD_GAMES_DELETE, 2);
     if (gameChosen_ >= 0 && gameChosen_ < static_cast<int>(games_.size())) {
         std::wstring name = games_[gameChosen_].name;
         if (name.size() > 28) name = name.substr(0, 27) + L"…";
-        button(L"Uninstall " + name, IC_DELETE, CMD_GAME_UNINSTALL, 2);
+        button(TrF(L"Uninstall {0}", name), IC_DELETE, CMD_GAME_UNINSTALL, 2);
     }
-    button(L"Refresh", IC_REFRESH, CMD_GAMES_REFRESH, 0);
+    button(Tr(L"Refresh"), IC_REFRESH, CMD_GAMES_REFRESH, 0);
     bx -= 8;
-    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Games", sub, IC_GAME);
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"Games"), sub, IC_GAME);
     float y = top + 58;
     if (!gamesLoaded_) return;
     if (games_.empty()) {
-        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_GAME, L"No games found",
-                       L"Looked for Steam libraries, Epic Games manifests, GOG, EA app, Ubisoft Connect and Battle.net games, and "
-                       L"XboxGames folders.");
+        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_GAME, Tr(L"No games found"),
+                       Tr(L"Looked for Steam libraries, Epic Games manifests, GOG, EA app, Ubisoft Connect and Battle.net games, and "
+                          L"XboxGames folders."));
         return;
     }
     {
         float x = area.left + 24;
-        gfx_.Text(L"Sort by", R(x, y, x + 60, y + 30), P_.textDim, Small(12.5f));
-        x += 58;
-        x += Chip(x, y, L"Size", !gamesByAge_, 5, 0) + 6;
-        Chip(x, y, L"Least recently played", gamesByAge_, 5, 1);
-        gfx_.Text(L"Click a game to choose it  ·  double-click to open its folder", R(area.left + 24, y, area.right - 24, y + 30),
+        std::wstring label = Tr(L"Sort by");
+        float lw = gfx_.Measure(label, Small(12.5f));
+        gfx_.Text(label, R(x, y, x + lw + 8, y + 30), P_.textDim, Small(12.5f));
+        x += std::max(58.0f, lw + 12);
+        x += Chip(x, y, Tr(L"Size"), !gamesByAge_, 5, 0) + 6;
+        x += Chip(x, y, Tr(L"Least recently played"), gamesByAge_, 5, 1);
+        gfx_.Text(Dots({Tr(L"Click a game to choose it"), Tr(L"double-click to open its folder")}), R(x + 16, y, area.right - 24, y + 30),
                   P_.textFaint, Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
         y += 44;
     }
-    std::vector<Column> cols = {{L"Game", -1.3f, Align::Left, -1},
-                                {L"Launcher", 120, Align::Left, -1},
-                                {L"Size", 96, Align::Right, -1},
-                                {L"Last played", 140, Align::Left, -1},
-                                {L"Folder", -1.0f, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"Game"), -1.3f, Align::Left, -1},
+                                {Tr(L"Launcher"), 120, Align::Left, -1},
+                                {Tr(L"Size"), 96, Align::Right, -1},
+                                {Tr(L"Last played"), 140, Align::Left, -1},
+                                {Tr(L"Folder"), -1.0f, Align::Left, -1}};
     DrawTable(
         R(area.left, y, area.right, area.bottom), cols, -1, true,
         [&](int i, const Column&, int ci, const RectF& cr, bool) {
@@ -1931,9 +2040,9 @@ void App::DrawGames(const RectF& area) {
                 case 2: gfx_.Text(util::FormatSizeShort(g.bytes), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
                 case 3: {
                     std::wstring t = g.leftover         ? L""
-                                     : g.lastPlayed      ? AgeText(g.lastPlayed) + (g.lastPlayedGuess ? L" (approx.)" : L"")
-                                     : g.launcher == L"Steam" ? L"never"
-                                                              : L"unknown";
+                                     : g.lastPlayed      ? (g.lastPlayedGuess ? TrF(L"{0} (approx.)", AgeText(g.lastPlayed)) : AgeText(g.lastPlayed))
+                                     : g.launcher == L"Steam" ? Tr(L"never")
+                                                              : Tr(L"unknown");
                     int64_t days = g.lastPlayed ? (util::NowFileTime() - g.lastPlayed) / 864000000000LL : 0;
                     gfx_.Text(t, cr, days >= 180 ? P_.warning : P_.textDim, Small(12.5f));
                     break;
@@ -1944,9 +2053,9 @@ void App::DrawGames(const RectF& area) {
         [&](int i, const RectF& r) {
             bool left = rows_[i].idx == 1;
             gfx_.Icon(left ? IC_DELETE : IC_GAME, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
-            std::wstring title = left ? L"Leftovers" : L"Installed games";
-            std::wstring note = left ? L"folders of games no launcher has installed any more: check them to move them to the Recycle Bin"
-                                     : L"choose one to uninstall it through its launcher";
+            std::wstring title = left ? Tr(L"Leftovers") : Tr(L"Installed games");
+            std::wstring note = left ? Tr(L"folders of games no launcher has installed any more: check them to move them to the Recycle Bin")
+                                     : Tr(L"choose one to uninstall it through its launcher");
             TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
             float tw = gfx_.Measure(title, ts) + 4;
             gfx_.Text(title, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
@@ -1956,10 +2065,15 @@ void App::DrawGames(const RectF& area) {
 
 void App::DrawDiskHealth(const RectF& area) {
     float top = area.top + 18;
-    Button(RWH(area.right - 24 - 108, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_DISK_REFRESH, 0);
-    DrawViewHeader(R(area.left + 24, top, area.right - 150, top + 46), L"Disk health",
-                   L"Each physical disk's health, wear and temperature, and used space over time  ·  read-only, works without a scan",
-                   IC_DRIVE);
+    {
+        std::wstring t = Tr(L"Refresh");
+        float w = ButtonWidth(t, IC_REFRESH, 108);
+        Button(RWH(area.right - 24 - w, top + 6, w, 34), IC_REFRESH, t, CMD_DISK_REFRESH, 0);
+        DrawViewHeader(R(area.left + 24, top, area.right - 42 - w, top + 46), Tr(L"Disk health"),
+                       Dots({Tr(L"Each physical disk's health, wear and temperature, and used space over time"),
+                             Tr(L"read-only, works without a scan")}),
+                       IC_DRIVE);
+    }
     if (!diskLoaded_) return;
 
     auto levelColor = [&](DiskHealthLevel l) {
@@ -1988,50 +2102,46 @@ void App::DrawDiskHealth(const RectF& area) {
     bool needAdmin = false;
     for (auto& d : disk_.disks) {
         Card c{&d, AssessDisk(d), L"", {}, L"", 0};
-        c.sub = MediaName(d) + L"  ·  " + util::FormatSizeShort(d.size) + L"  ·  disk " + std::to_wstring(d.number);
+        c.sub = Dots({MediaName(d), util::FormatSizeShort(d.size), TrF(L"disk {0}", d.number)});
         if (d.drives.empty()) {
-            c.sub += L"  ·  no drive letters";
+            c.sub += L"  ·  " + Tr(L"no drive letters");
         } else {
-            std::wstring list;
-            for (size_t i = 0; i < d.drives.size(); ++i)
-                list += (i == 0 ? L"" : i + 1 == d.drives.size() ? L" and " : L", ") + d.drives[i];
-            c.sub += L"  ·  " + list + (d.drives.size() == 1 ? L" is on it" : L" are on it");
+            std::wstring list = d.drives[0];
+            for (size_t i = 1; i + 1 < d.drives.size(); ++i) list = TrF(L"{0}, {1}", list, d.drives[i]);
+            if (d.drives.size() > 1) list = TrF(L"{0} and {1}", list, d.drives.back());
+            c.sub += L"  ·  " + (d.drives.size() == 1 ? TrF(L"{0} is on it", list) : TrF(L"{0} are on it", list));
         }
         if (d.HasCounters()) {
             if (d.wear >= 0)
-                c.metrics.push_back({L"WEAR", std::to_wstring(d.wear) + L"%", L"of rated life",
+                c.metrics.push_back({Tr(L"WEAR"), std::to_wstring(d.wear) + L"%", Tr(L"of rated life"),
                                      d.wear >= 100 ? P_.danger : d.wear >= 90 ? P_.warning : P_.text, std::min(1.0, d.wear / 100.0),
                                      d.wear >= 90 ? P_.warning : P_.accent});
             if (d.temperature > 0) {
                 bool hot = d.temperatureMax > 0 && d.temperature >= d.temperatureMax;
-                c.metrics.push_back({L"TEMPERATURE", std::to_wstring(d.temperature) + L" °C",
-                                     d.temperatureMax > 0 ? L"limit " + std::to_wstring(d.temperatureMax) + L" °C" : L"",
+                c.metrics.push_back({Tr(L"TEMPERATURE"), std::to_wstring(d.temperature) + L" °C",
+                                     d.temperatureMax > 0 ? TrF(L"limit {0} °C", d.temperatureMax) : L"",
                                      hot ? P_.danger : d.temperature >= 60 ? P_.warning : P_.text});
             }
             if (d.powerOnHours >= 0) {
-                wchar_t yrs[48];
                 double y = d.powerOnHours / 8766.0;
-                if (y >= 1)
-                    swprintf(yrs, 48, L"%.1f years", y);
-                else
-                    swprintf(yrs, 48, L"%lld days", static_cast<long long>(d.powerOnHours / 24));
-                c.metrics.push_back({L"POWERED ON", util::FormatCount(static_cast<uint64_t>(d.powerOnHours)) + L" h", yrs, P_.text});
+                std::wstring yrs = y >= 1 ? TrF(L"{0} years", util::FormatDecimal(y, 1)) : TrN(d.powerOnHours / 24, L"{0} day", L"{0} days");
+                c.metrics.push_back({Tr(L"POWERED ON"), TrF(L"{0} h", util::FormatCount(static_cast<uint64_t>(d.powerOnHours))), yrs, P_.text});
             }
             int64_t errs = d.mediaErrors >= 0 ? d.mediaErrors
                                               : std::max<int64_t>(0, d.readErrorsUncorrected) + std::max<int64_t>(0, d.writeErrorsUncorrected);
             bool errKnown = d.mediaErrors >= 0 || d.readErrorsUncorrected >= 0 || d.writeErrorsUncorrected >= 0;
             if (errKnown)
-                c.metrics.push_back({L"ERRORS", errs ? util::FormatCount(static_cast<uint64_t>(errs)) : L"None",
-                                     d.mediaErrors >= 0 ? L"media errors" : L"uncorrected reads/writes", errs ? P_.warning : P_.text});
+                c.metrics.push_back({Tr(L"ERRORS"), errs ? util::FormatCount(static_cast<uint64_t>(errs)) : Tr(L"None"),
+                                     d.mediaErrors >= 0 ? Tr(L"media errors") : Tr(L"uncorrected reads/writes"), errs ? P_.warning : P_.text});
             if (d.availableSpare >= 0)
-                c.metrics.push_back({L"SPARE", std::to_wstring(d.availableSpare) + L"%",
-                                     L"warns at " + std::to_wstring(d.spareThreshold) + L"%",
+                c.metrics.push_back({Tr(L"SPARE"), std::to_wstring(d.availableSpare) + L"%",
+                                     TrF(L"warns at {0}%", d.spareThreshold),
                                      d.availableSpare <= d.spareThreshold ? P_.danger : d.availableSpare <= d.spareThreshold + 10 ? P_.warning : P_.text,
                                      d.availableSpare / 100.0, d.availableSpare <= d.spareThreshold + 10 ? P_.warning : P_.accent});
-            if (d.bytesWritten) c.metrics.push_back({L"WRITTEN", util::FormatSizeShort(d.bytesWritten), L"lifetime", P_.text});
+            if (d.bytesWritten) c.metrics.push_back({Tr(L"WRITTEN"), util::FormatSizeShort(d.bytesWritten), Tr(L"lifetime"), P_.text});
         } else {
-            c.noCounters = d.countersDenied ? L"Restart as administrator to see wear and temperature"
-                                            : L"This disk doesn't report wear or temperature to Windows";
+            c.noCounters = d.countersDenied ? Tr(L"Restart as administrator to see wear and temperature")
+                                            : Tr(L"This disk doesn't report wear or temperature to Windows");
             needAdmin |= d.countersDenied;
         }
         if (d.Ssd()) {
@@ -2044,12 +2154,12 @@ void App::DrawDiskHealth(const RectF& area) {
                 if (fsList.find(fs) == std::wstring::npos) fsList += (fsList.empty() ? L"" : L", ") + fs;
             }
             if (on >= 0)
-                c.metrics.push_back({L"TRIM", on ? L"On" : L"Off", fsList, on ? P_.success : P_.warning});
+                c.metrics.push_back({L"TRIM", on ? Tr(L"On") : Tr(L"Off"), fsList, on ? P_.success : P_.warning});
             if (on == 0)
-                c.v.notes.push_back(L"TRIM is off: Windows doesn't tell the SSD which blocks are free, so it slows down over time. "
-                                    L"`fsutil behavior set DisableDeleteNotify 0` (as administrator) turns it on");
+                c.v.notes.push_back(Tr(L"TRIM is off: Windows doesn't tell the SSD which blocks are free, so it slows down over time. "
+                                       L"`fsutil behavior set DisableDeleteNotify 0` (as administrator) turns it on"));
         } else if (d.mediaType == 3) {
-            c.metrics.push_back({L"TRIM", L"Not used", L"hard disks don't need it", P_.textDim});
+            c.metrics.push_back({L"TRIM", Tr(L"Not used"), Tr(L"hard disks don't need it"), P_.textDim});
         }
         c.h = 84 + (c.metrics.empty() && c.noCounters.empty() ? 0 : 62) + (c.v.problems.size() + c.v.notes.size()) * 24.0f + 12;
         cards.push_back(std::move(c));
@@ -2068,19 +2178,21 @@ void App::DrawDiskHealth(const RectF& area) {
         RectF b = R(area.left + 24, y, area.right - 24, y + 52);
         gfx_.FillRound(b, 10, WithAlpha(tone, 0.12f));
         gfx_.Icon(adminButton ? IC_SHIELD : IC_WARN, RWH(b.left + 10, b.top, 30, H(b)), tone, 16);
-        gfx_.Text(text, R(b.left + 46, b.top, b.right - (adminButton ? 200 : 12), b.bottom), P_.text, TS(13));
-        if (adminButton) Button(R(b.right - 190, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, L"Restart as admin", CMD_ADMIN, 0);
+        std::wstring t = Tr(L"Restart as admin");
+        float bw = ButtonWidth(t, IC_SHIELD, 178);
+        gfx_.Text(text, R(b.left + 46, b.top, b.right - (adminButton ? 22 + bw : 12), b.bottom), P_.text, TS(13));
+        if (adminButton) Button(R(b.right - 12 - bw, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, t, CMD_ADMIN, 0);
         y += 64;
     };
     if (!disk_.error.empty()) banner(disk_.error, P_.danger, false);
     if (needAdmin && !elevated_)
-        banner(L"Wear, temperature and error counts of some disks need administrator rights. Nothing is changed either way.", P_.warning,
+        banner(Tr(L"Wear, temperature and error counts of some disks need administrator rights. Nothing is changed either way."), P_.warning,
                true);
 
-    gfx_.Text(L"PHYSICAL DISKS", R(area.left + 26, y + 10, area.right, y + 30), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(Tr(L"PHYSICAL DISKS"), R(area.left + 26, y + 10, area.right, y + 30), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     y += 36;
     if (cards.empty()) {
-        gfx_.Text(disk_.error.empty() ? L"Windows lists no physical disks." : L"No disk information.", R(area.left + 26, y, area.right, y + 30),
+        gfx_.Text(disk_.error.empty() ? Tr(L"Windows lists no physical disks.") : Tr(L"No disk information."), R(area.left + 26, y, area.right, y + 30),
                   P_.textDim, TS(13));
         y += 40;
     }
@@ -2095,7 +2207,7 @@ void App::DrawDiskHealth(const RectF& area) {
         gfx_.Icon(IC_DRIVE, RWH(x, card.top + 18, 40, 40), lc, 17);
         x += 54;
         // Health pill
-        std::wstring pill = HealthLevelName(c.v.level);
+        std::wstring pill = Tr(HealthLevelName(c.v.level));
         float pw = gfx_.Measure(pill, TS(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 30;
         RectF pr = RWH(card.right - 18 - pw, card.top + 20, pw, 28);
         gfx_.FillRound(pr, 14, WithAlpha(lc, 0.16f));
@@ -2114,7 +2226,7 @@ void App::DrawDiskHealth(const RectF& area) {
             // TRIM still shows at the right.
             float right = nr.right - 12;
             for (auto& m : c.metrics) {
-                std::wstring t = L"TRIM " + m.value + (m.sub.empty() ? L"" : L" (" + m.sub + L")");
+                std::wstring t = m.sub.empty() ? TrF(L"TRIM {0}", m.value) : TrF(L"TRIM {0} ({1})", m.value, m.sub);
                 gfx_.Text(t, R(nr.left, nr.top, right, nr.bottom), m.color, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
             }
             gfx_.Text(c.noCounters, R(nr.left + 40, nr.top, right - 160, nr.bottom), P_.textDim, TS(13));
@@ -2152,18 +2264,21 @@ void App::DrawDiskHealth(const RectF& area) {
 
     // Used space over time
     y += 8;
-    gfx_.Text(L"USED SPACE OVER TIME", R(area.left + 26, y, area.right, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-    gfx_.Text(L"WinNCDU notes each drive's free space when this view opens or a scan finishes", R(area.left + 200, y, area.right - 26, y + 20),
-              P_.textFaint, Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+    std::wstring overTime = Tr(L"USED SPACE OVER TIME");
+    float otw = gfx_.Measure(overTime, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(overTime, R(area.left + 26, y, area.right, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(Tr(L"WinNCDU notes each drive's free space when this view opens or a scan finishes"),
+              R(std::max(area.left + 200, area.left + 46 + otw), y, area.right - 26, y + 20), P_.textFaint,
+              Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
     y += 28;
     for (auto& t : diskTrends_) {
         RectF r = R(area.left + 24, y, area.right - 24, y + 66);
         gfx_.FillRound(r, 12, P_.surface);
         gfx_.StrokeRound(r, 12, P_.border);
-        std::wstring name = t.drive + L"  " + (t.label.empty() ? L"Local disk" : t.label);
+        std::wstring name = t.drive + L"  " + (t.label.empty() ? Tr(L"Local disk") : t.label);
         gfx_.Text(name, R(r.left + 18, r.top + 10, r.left + 260, r.top + 32), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         uint64_t used = t.total >= t.free ? t.total - t.free : 0;
-        gfx_.Text(util::FormatSizeShort(used) + L" of " + util::FormatSizeShort(t.total) + L" used", R(r.left + 18, r.top + 34, r.left + 260, r.top + 56),
+        gfx_.Text(TrF(L"{0} of {1} used", util::FormatSizeShort(used), util::FormatSizeShort(t.total)), R(r.left + 18, r.top + 34, r.left + 260, r.top + 56),
                   P_.textDim, Small(12.5f));
         // Sparkline
         RectF sp = R(r.left + 270, r.top + 12, r.left + 270 + 200, r.bottom - 12);
@@ -2186,9 +2301,10 @@ void App::DrawDiskHealth(const RectF& area) {
         }
         float tx = t.trend.ok ? sp.right + 18 : r.left + 270;
         gfx_.Text(t.text, R(tx, r.top + 10, r.right - 18, r.top + 34), t.trend.ok ? P_.text : P_.textDim, TS(13));
-        std::wstring src = !t.trend.ok ? L"A trend needs measurements a day or more apart"
-                           : t.fromScans ? L"From " + util::FormatCount(t.samples) + L" scans of " + t.drive + L"\\ (the size of the files they found)"
-                                         : L"From " + util::FormatCount(t.samples) + L" free-space measurements";
+        std::wstring src = !t.trend.ok ? Tr(L"A trend needs measurements a day or more apart")
+                           : t.fromScans ? TrN(t.samples, L"From {0} scan of {1}\\ (the size of the files it found)",
+                                               L"From {0} scans of {1}\\ (the size of the files they found)", t.drive)
+                                         : TrN(t.samples, L"From {0} free-space measurement", L"From {0} free-space measurements");
         gfx_.Text(src, R(tx, r.top + 34, r.right - 18, r.top + 56), P_.textFaint, Small(12));
         y += 76;
     }
@@ -2206,39 +2322,41 @@ void App::DrawStartup(const RectF& area) {
         ++shown;
         (e.enabled ? on : off) += 1;
     }
-    std::wstring sub = !startupLoaded_ ? L"Run keys, Startup folders, scheduled tasks and services; turned off, never deleted"
-                                       : util::FormatCount(on) + (on == 1 ? L" entry starts with Windows" : L" entries start with Windows") +
-                                             (off ? L"  ·  " + util::FormatCount(off) + L" turned off" : L"") +
-                                             L"  ·  turning one off keeps it, so it can be turned on again";
+    std::wstring sub = !startupLoaded_ ? Tr(L"Run keys, Startup folders, scheduled tasks and services; turned off, never deleted")
+                                       : Dots({TrN(on, L"{0} entry starts with Windows", L"{0} entries start with Windows"),
+                                               off ? TrN(off, L"{0} turned off", L"{0} turned off") : L"",
+                                               Tr(L"turning one off keeps it, so it can be turned on again")});
     float bx = area.right - 24;
     {
-        float w = gfx_.Measure(L"Refresh", TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 54;
+        std::wstring t = Tr(L"Refresh");
+        float w = ButtonWidth(t, IC_REFRESH);
         bx -= w;
-        Button(RWH(bx, top + 6, w, 34), IC_REFRESH, L"Refresh", CMD_STARTUP_REFRESH, 0);
+        Button(RWH(bx, top + 6, w, 34), IC_REFRESH, t, CMD_STARTUP_REFRESH, 0);
         bx -= 16;
     }
-    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Startup", sub, IC_POWER);
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"Startup"), sub, IC_POWER);
     float y = top + 58;
     if (!startupLoaded_) return;
     {
         float x = area.left + 24;
-        x += Chip(x, y, L"Show Microsoft's services and tasks", startupShowMs_, 40, 0) + 12;
-        std::wstring note = startup_.bootLogRead ? L"Impact: measured where Windows logged a slow start, else estimated (hover for why)"
-                                                 : L"Impact: estimated from program size and type (hover for why); measured needs admin";
+        x += Chip(x, y, Tr(L"Show Microsoft's services and tasks"), startupShowMs_, 40, 0) + 12;
+        std::wstring note = startup_.bootLogRead ? Tr(L"Impact: measured where Windows logged a slow start, else estimated (hover for why)")
+                                                 : Tr(L"Impact: estimated from program size and type (hover for why); measured needs admin");
         gfx_.Text(note, R(x, y, area.right - 24, y + 30), P_.textFaint, Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
         y += 44;
     }
     if (!shown) {
-        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_POWER, L"Nothing starts with Windows",
-                       hidden ? L"Only Microsoft's own services and tasks were found." : L"No Run keys, Startup folder items, logon tasks or services were found.");
+        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_POWER, Tr(L"Nothing starts with Windows"),
+                       hidden ? Tr(L"Only Microsoft's own services and tasks were found.")
+                              : Tr(L"No Run keys, Startup folder items, logon tasks or services were found."));
         return;
     }
-    std::vector<Column> cols = {{L"On", 44, Align::Left, -1},
-                                {L"Name", -1.2f, Align::Left, -1},
-                                {L"Publisher", 170, Align::Left, -1},
-                                {L"Where", 150, Align::Left, -1},
-                                {L"Impact", 110, Align::Left, -1},
-                                {L"Command", -1.0f, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"On"), 44, Align::Left, -1},
+                                {Tr(L"Name"), -1.2f, Align::Left, -1},
+                                {Tr(L"Publisher"), 170, Align::Left, -1},
+                                {Tr(L"Where"), 150, Align::Left, -1},
+                                {Tr(L"Impact"), 110, Align::Left, -1},
+                                {Tr(L"Command"), -1.0f, Align::Left, -1}};
     DrawTable(
         R(area.left, y, area.right, area.bottom), cols, -1, true,
         [&](int i, const Column&, int ci, const RectF& cr, bool) {
@@ -2260,9 +2378,8 @@ void App::DrawStartup(const RectF& area) {
                     gfx_.FillRound(RWH(kx, sw.top + 2, 14, 14), 7, e.enabled ? P_.accentText : (e.canToggle ? P_.textDim : P_.textFaint));
                     AddHit(Inset(sw, -4, -6), HK_SWITCH, static_cast<int>(k));
                     if (hv) {
-                        tipText_ = !e.canToggle ? e.cantToggle
-                                   : e.enabled  ? std::wstring(L"Turn off at startup") + (StartupNeedsAdmin(e) ? L" (needs administrator permission)" : L"")
-                                                : std::wstring(L"Turn on at startup") + (StartupNeedsAdmin(e) ? L" (needs administrator permission)" : L"");
+                        std::wstring what = e.enabled ? Tr(L"Turn off at startup") : Tr(L"Turn on at startup");
+                        tipText_ = !e.canToggle ? e.cantToggle : StartupNeedsAdmin(e) ? TrF(L"{0} (needs administrator permission)", what) : what;
                         tipAnchor_ = sw;
                     }
                     break;
@@ -2274,24 +2391,24 @@ void App::DrawStartup(const RectF& area) {
                         tipAnchor_ = cr;
                     }
                     break;
-                case 2: gfx_.Text(e.publisher.empty() ? L"unknown" : e.publisher, cr, e.publisher.empty() ? P_.textFaint : P_.textDim, Small(12.5f)); break;
+                case 2: gfx_.Text(e.publisher.empty() ? Tr(L"unknown") : e.publisher, cr, e.publisher.empty() ? P_.textFaint : P_.textDim, Small(12.5f)); break;
                 case 3: {
                     std::wstring w;
                     switch (e.kind) {
-                        case StartupKind::Run: w = e.machine ? L"Run key · all users" : L"Run key · you"; break;
-                        case StartupKind::RunOnce: w = L"Run once"; break;
-                        case StartupKind::Folder: w = e.machine ? L"Startup folder · all" : L"Startup folder · you"; break;
-                        case StartupKind::Task: w = L"Task · " + e.trigger; break;
+                        case StartupKind::Run: w = e.machine ? Tr(L"Run key · all users") : Tr(L"Run key · you"); break;
+                        case StartupKind::RunOnce: w = Tr(L"Run once"); break;
+                        case StartupKind::Folder: w = e.machine ? Tr(L"Startup folder · all") : Tr(L"Startup folder · you"); break;
+                        case StartupKind::Task: w = TrF(L"Task · {0}", Tr(e.trigger)); break;
                         case StartupKind::Service:
-                            w = !e.enabled ? L"Service · manual" : e.delayed ? L"Service · delayed" : L"Service · automatic";
+                            w = !e.enabled ? Tr(L"Service · manual") : e.delayed ? Tr(L"Service · delayed") : Tr(L"Service · automatic");
                             break;
                     }
                     gfx_.Text(w, cr, P_.textDim, Small(12.5f));
                     if (hoverCell) {
-                        tipText_ = e.kind == StartupKind::Service ? L"Service " + e.name
+                        tipText_ = e.kind == StartupKind::Service ? TrF(L"Service {0}", e.name)
                                    : e.kind == StartupKind::Task  ? e.name
                                                                   : e.where;
-                        if (!e.enabled && e.disabledAt) tipText_ += L"  ·  turned off " + AgeText(e.disabledAt);
+                        if (!e.enabled && e.disabledAt) tipText_ += L"  ·  " + TrF(L"turned off {0}", AgeText(e.disabledAt));
                         tipAnchor_ = cr;
                     }
                     break;
@@ -2301,12 +2418,14 @@ void App::DrawStartup(const RectF& area) {
                                      : e.impact == StartupImpact::Medium ? P_.warning
                                      : e.impact == StartupImpact::Low    ? P_.textDim
                                                                          : P_.textFaint;
-                    std::wstring t = StartupImpactName(e.impact);
-                    t[0] = static_cast<wchar_t>(towupper(t[0]));
-                    if (e.impact != StartupImpact::Unknown) t += e.measured ? L" · measured" : L" (est.)";
+                    std::wstring t = e.impact == StartupImpact::High     ? Tr(L"High")
+                                     : e.impact == StartupImpact::Medium ? Tr(L"Medium")
+                                     : e.impact == StartupImpact::Low    ? Tr(L"Low")
+                                                                         : Tr(L"Unknown");
+                    if (e.impact != StartupImpact::Unknown) t = e.measured ? TrF(L"{0} · measured", t) : TrF(L"{0} (est.)", t);
                     gfx_.Text(t, cr, e.enabled ? c : P_.textFaint, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
                     if (hoverCell) {
-                        tipText_ = e.impactWhy;
+                        tipText_ = Tr(e.impactWhy);
                         tipAnchor_ = cr;
                     }
                     break;
@@ -2315,24 +2434,25 @@ void App::DrawStartup(const RectF& area) {
                     gfx_.Text(FitPath(e.command.empty() ? e.program : e.command, W(cr), 12), cr, e.programFound || e.program.empty() ? P_.textFaint : P_.warning,
                               Small(12));
                     if (hoverCell) {
-                        tipText_ = e.programFound ? e.program : e.program.empty() ? e.command : L"Not found: " + e.program;
+                        tipText_ = e.programFound ? e.program : e.program.empty() ? e.command : TrF(L"Not found: {0}", e.program);
                         tipAnchor_ = cr;
                     }
             }
         },
         [&](int i, const RectF& r) {
             int g = rows_[i].idx;
-            static const wchar_t* titles[] = {L"Run keys", L"Startup folders", L"Scheduled tasks", L"Services"};
+            static const wchar_t* titles[] = {N_(L"Run keys"), N_(L"Startup folders"), N_(L"Scheduled tasks"), N_(L"Services")};
             static const wchar_t* notes[] = {
-                L"programs registered to start at sign-in; turned off in StartupApproved, as Task Manager does",
-                L"shortcuts and programs in the Startup folders; turned off in StartupApproved, the file stays",
-                L"tasks that run at log on or startup (\\Microsoft\\Windows\\ is left out); turned off in Task Scheduler",
-                L"services that start automatically; turned off = Manual start, which programs can still start"};
+                N_(L"programs registered to start at sign-in; turned off in StartupApproved, as Task Manager does"),
+                N_(L"shortcuts and programs in the Startup folders; turned off in StartupApproved, the file stays"),
+                N_(L"tasks that run at log on or startup (\\Microsoft\\Windows\\ is left out); turned off in Task Scheduler"),
+                N_(L"services that start automatically; turned off = Manual start, which programs can still start")};
             gfx_.Icon(IC_POWER, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
             TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
-            float tw = gfx_.Measure(titles[g & 3], ts) + 4;
-            gfx_.Text(titles[g & 3], R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
-            gfx_.Text(notes[g & 3], R(r.left + 48 + tw, r.top, r.right - 12, r.bottom), P_.textFaint, Small(12));
+            std::wstring title = Tr(titles[g & 3]);
+            float tw = gfx_.Measure(title, ts) + 4;
+            gfx_.Text(title, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
+            gfx_.Text(Tr(notes[g & 3]), R(r.left + 48 + tw, r.top, r.right - 12, r.bottom), P_.textFaint, Small(12));
         });
 }
 
@@ -2344,19 +2464,25 @@ void App::DrawCleanup(const RectF& area) {
         all += c.bytes;
         if (c.selected) selTotal += c.ToClean();
     }
-    DrawViewHeader(R(area.left + 24, top, area.right - 500, top + 46), L"Cleanup",
-                   cleanupMeasuring_ ? L"Measuring caches and leftovers…"
-                                     : util::FormatSizeShort(all) + L" of caches and leftovers found  ·  works without a scan",
-                   IC_CLEAN);
     float bx = area.right - 24;
-    float w = 190;
-    bx -= w;
-    Button(RWH(bx, top + 6, w, 34), IC_CLEAN, selTotal ? L"Clean up " + util::FormatSizeShort(selTotal) : L"Clean up", CMD_CLEAN_SELECTED,
-           selTotal ? 2 : 0, selTotal > 0 && !cleanupMeasuring_);
-    bx -= 8 + 130;
-    Button(RWH(bx, top + 6, 130, 34), IC_REFRESH, L"Measure", CMD_CLEAN_MEASURE, 0, !cleanupMeasuring_);
-    bx -= 8 + 132;
-    Button(RWH(bx, top + 6, 132, 34), IC_CALENDAR, L"Schedule…", CMD_CLEAN_SCHEDULE, 0, !cleanupMeasuring_);
+    {
+        std::wstring t = selTotal ? TrF(L"Clean up {0}", util::FormatSizeShort(selTotal)) : Tr(L"Clean up");
+        float w = ButtonWidth(t, IC_CLEAN, 190);
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_CLEAN, t, CMD_CLEAN_SELECTED, selTotal ? 2 : 0, selTotal > 0 && !cleanupMeasuring_);
+        t = Tr(L"Measure");
+        w = ButtonWidth(t, IC_REFRESH, 130);
+        bx -= 8 + w;
+        Button(RWH(bx, top + 6, w, 34), IC_REFRESH, t, CMD_CLEAN_MEASURE, 0, !cleanupMeasuring_);
+        t = Tr(L"Schedule…");
+        w = ButtonWidth(t, IC_CALENDAR, 132);
+        bx -= 8 + w;
+        Button(RWH(bx, top + 6, w, 34), IC_CALENDAR, t, CMD_CLEAN_SCHEDULE, 0, !cleanupMeasuring_);
+    }
+    DrawViewHeader(R(area.left + 24, top, bx - 16, top + 46), Tr(L"Cleanup"),
+                   cleanupMeasuring_ ? Tr(L"Measuring caches and leftovers…")
+                                     : Dots({TrF(L"{0} of caches and leftovers found", util::FormatSizeShort(all)), Tr(L"works without a scan")}),
+                   IC_CLEAN);
 
     // Built-in and user categories in their order, then imported ones (winapp2.ini): only those
     // that found something on this PC, largest first, under a header (kHeader in the list).
@@ -2389,40 +2515,45 @@ void App::DrawCleanup(const RectF& area) {
         RectF b = R(area.left + 24, y, area.right - 24, y + 56);
         gfx_.FillRound(b, 10, WithAlpha(P_.accent, 0.10f));
         gfx_.Icon(IC_CALENDAR, RWH(b.left + 10, b.top, 30, H(b)), P_.accent, 16);
-        std::wstring when = schedule_.specKnown ? DescribeSchedule(schedule_.spec) : std::wstring(L"Custom schedule (changed in Task Scheduler)");
-        if (!schedule_.enabled) when += L"  ·  turned off in Task Scheduler";
+        std::wstring when = schedule_.specKnown ? DescribeSchedule(schedule_.spec) : Tr(L"Custom schedule (changed in Task Scheduler)");
+        if (!schedule_.enabled) when += L"  ·  " + Tr(L"turned off in Task Scheduler");
         std::wstring names;
         for (auto& id : schedule_.spec.ids) {
             auto it = std::find_if(cleanup_.begin(), cleanup_.end(), [&](const CleanCategory& c) { return c.id == id; });
-            names += (names.empty() ? L"" : L", ") + (it != cleanup_.end() ? it->name : id);
+            names += (names.empty() ? L"" : L", ") + (it != cleanup_.end() ? CatName(*it) : id);
         }
         std::wstring detail = names.empty() ? std::wstring(L"?") : names;
-        if (schedule_.nextRun) detail += L"  ·  next run " + util::FormatTime(schedule_.nextRun);
-        detail += L"  ·  last run " + (schedule_.lastRun ? util::FormatTime(schedule_.lastRun) + L": " : std::wstring()) +
-                  DescribeTaskResult(schedule_.lastResult);
-        gfx_.Text(L"Scheduled cleanup: " + when, R(b.left + 46, b.top + 7, b.right - 130, b.top + 29), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-        gfx_.Text(FitPath(detail, W(b) - 186, 12), R(b.left + 46, b.top + 29, b.right - 130, b.bottom - 6), P_.textDim, Small(12));
-        Button(R(b.right - 112, b.top + 11, b.right - 12, b.bottom - 11), 0, L"Change", CMD_CLEAN_SCHEDULE, 0);
+        if (schedule_.nextRun) detail += L"  ·  " + TrF(L"next run {0}", util::FormatDateTimeLocal(schedule_.nextRun));
+        detail += L"  ·  " + (schedule_.lastRun ? TrF(L"last run {0}: {1}", util::FormatDateTimeLocal(schedule_.lastRun), DescribeTaskResult(schedule_.lastResult))
+                                                : TrF(L"last run {0}", DescribeTaskResult(schedule_.lastResult)));
+        std::wstring change = Tr(L"Change");
+        float cw = ButtonWidth(change, 0, 100);
+        gfx_.Text(TrF(L"Scheduled cleanup: {0}", when), R(b.left + 46, b.top + 7, b.right - 30 - cw, b.top + 29), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(FitPath(detail, W(b) - 86 - cw, 12), R(b.left + 46, b.top + 29, b.right - 30 - cw, b.bottom - 6), P_.textDim, Small(12));
+        Button(R(b.right - 12 - cw, b.top + 11, b.right - 12, b.bottom - 11), 0, change, CMD_CLEAN_SCHEDULE, 0);
         y += 68;
     }
     if (!elevated_) {
         RectF b = R(area.left + 24, y, area.right - 24, y + 52);
         gfx_.FillRound(b, 10, WithAlpha(P_.warning, 0.12f));
         gfx_.Icon(IC_SHIELD, RWH(b.left + 10, b.top, 30, H(b)), P_.warning, 16);
-        gfx_.Text(L"Some locations (Windows Update, system temp) need administrator rights.", R(b.left + 46, b.top, b.right - 200, b.bottom),
+        std::wstring t = Tr(L"Restart as admin");
+        float bw = ButtonWidth(t, IC_SHIELD, 178);
+        gfx_.Text(Tr(L"Some locations (Windows Update, system temp) need administrator rights."), R(b.left + 46, b.top, b.right - 22 - bw, b.bottom),
                   P_.text, TS(13));
-        Button(R(b.right - 190, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, L"Restart as admin", CMD_ADMIN, 0);
+        Button(R(b.right - 12 - bw, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, t, CMD_ADMIN, 0);
         y += 64;
     }
     for (size_t i : show) {
         if (i == kHeader) {
             RectF hr = R(area.left + 28, y + 44, area.right - 28, y + 66);
-            float lw = gfx_.Measure(L"FROM WINAPP2.INI", Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
-            gfx_.Text(L"FROM WINAPP2.INI", R(hr.left, hr.top, hr.left + lw, hr.bottom), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+            std::wstring from = Tr(L"FROM WINAPP2.INI");
+            float lw = gfx_.Measure(from, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+            gfx_.Text(from, R(hr.left, hr.top, hr.left + lw, hr.bottom), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
             std::wstring note = cleanupMeasuring_ && imported.empty()
-                                    ? L"Checking " + util::FormatCount(importedAll) + L" community app cleaners…"
-                                    : util::FormatCount(imported.size()) + L" apps on this PC have something to clean  ·  community rules, "
-                                                                           L"never preselected: review before cleaning";
+                                    ? TrN(importedAll, L"Checking {0} community app cleaner…", L"Checking {0} community app cleaners…")
+                                    : Dots({TrN(imported.size(), L"{0} app on this PC has something to clean", L"{0} apps on this PC have something to clean"),
+                                            Tr(L"community rules, never preselected: review before cleaning")});
             gfx_.Text(note, R(hr.left + lw, hr.top, hr.right, hr.bottom), P_.textDim, Small(12));
             y += 82;
             continue;
@@ -2442,10 +2573,11 @@ void App::DrawCleanup(const RectF& area) {
         gfx_.Icon(c.icon, RWH(x, card.top + 16, 40, 40), P_.accent, 16);
         x += 54;
         float textRight = card.right - 200;
-        float nw = gfx_.Measure(c.name, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 10;
-        gfx_.Text(c.name, R(x, card.top + 14, std::min(textRight, x + nw), card.top + 36), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        std::wstring name = CatName(c);
+        float nw = gfx_.Measure(name, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 10;
+        gfx_.Text(name, R(x, card.top + 14, std::min(textRight, x + nw), card.top + 36), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         float bxx = x + nw;
-        auto badge = [&](const wchar_t* t, D2D1_COLOR_F col) {
+        auto badge = [&](const std::wstring& t, D2D1_COLOR_F col) {
             float bw2 = gfx_.Measure(t, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
             if (bxx + bw2 > textRight) return;
             RectF br = RWH(bxx, card.top + 16, bw2, 18);
@@ -2453,19 +2585,19 @@ void App::DrawCleanup(const RectF& area) {
             gfx_.Text(t, br, col, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
             bxx += bw2 + 6;
         };
-        if (locked) badge(L"Needs admin", P_.warning);
-        if (!c.safe && !c.external && !c.imported) badge(L"Review first", P_.accent2);
-        if (c.denied && !locked) badge(L"Partly inaccessible", P_.textFaint);
-        if (c.user) badge(L"Your rule", P_.accent);
-        if (c.guarded) badge(L"Protected items left out", P_.success);
+        if (locked) badge(Tr(L"Needs admin"), P_.warning);
+        if (!c.safe && !c.external && !c.imported) badge(Tr(L"Review first"), P_.accent2);
+        if (c.denied && !locked) badge(Tr(L"Partly inaccessible"), P_.textFaint);
+        if (c.user) badge(Tr(L"Your rule"), P_.accent);
+        if (c.guarded) badge(Tr(L"Protected items left out"), P_.success);
         std::wstring tool = c.command.substr(0, c.command.find(L' '));
-        if (c.toolMissing && c.bytes) badge((tool + L" not found on PATH").c_str(), P_.warning);
+        if (c.toolMissing && c.bytes) badge(TrF(L"{0} not found on PATH", tool), P_.warning);
         // Cookies: the "keep me signed in to" list, one click away (it opens in the text editor).
         RectF keepLink{};
         if (c.browserData == BrowserData::Cookies && c.measured) {
-            std::wstring t = c.keep.empty() ? L"Keep me signed in to…  ›"
-                                            : L"Keeps you signed in to " + util::FormatCount(c.keep.size()) +
-                                                  (c.keep.size() == 1 ? L" site  ›" : L" sites  ›");
+            std::wstring t = (c.keep.empty() ? Tr(L"Keep me signed in to…")
+                                             : TrN(c.keep.size(), L"Keeps you signed in to {0} site", L"Keeps you signed in to {0} sites")) +
+                             L"  ›";
             float kw = gfx_.Measure(t, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 16;
             if (bxx + kw <= textRight) {
                 keepLink = RWH(bxx, card.top + 16, kw, 18);
@@ -2475,17 +2607,17 @@ void App::DrawCleanup(const RectF& area) {
                 bxx += kw + 6;
             }
         }
-        gfx_.Text(c.desc, R(x, card.top + 37, textRight, card.top + 58), P_.textDim, Small(12.5f));
+        gfx_.Text(CatDesc(c), R(x, card.top + 37, textRight, card.top + 58), P_.textDim, Small(12.5f));
         RectF sr = R(card.right - 190, card.top, card.right - 20, card.bottom);
         RectF review{};
         if (c.external) {
             if (c.bytes) {
                 gfx_.Text(util::FormatSizeShort(c.bytes), R(sr.left, card.top + 8, sr.right, card.top + 36), P_.text,
                           TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
-                gfx_.Text(L"use Windows Disk Cleanup", R(sr.left - 40, card.top + 36, sr.right, card.top + 58), P_.textFaint,
+                gfx_.Text(Tr(L"use Windows Disk Cleanup"), R(sr.left - 40, card.top + 36, sr.right, card.top + 58), P_.textFaint,
                           Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
             } else {
-                gfx_.Text(c.measured ? L"Not present" : L"…", sr, P_.textFaint, Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+                gfx_.Text(c.measured ? Tr(L"Not present") : L"…", sr, P_.textFaint, Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
             }
         } else if (!c.measured || cleanupMeasuring_) {
             float a = (GetTickCount64() % 1200) / 1200.0f * 360.0f;
@@ -2493,15 +2625,15 @@ void App::DrawCleanup(const RectF& area) {
         } else {
             gfx_.Text(util::FormatSizeShort(c.ToClean()), R(sr.left, card.top + 8, sr.right, card.top + 36), c.bytes ? P_.text : P_.textFaint,
                       TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
-            std::wstring count = util::FormatCount(c.files) + (c.recycleBin ? (c.files == 1 ? L" item" : L" items") : (c.files == 1 ? L" file" : L" files"));
-            if (c.browserData == BrowserData::Cookies) count = util::FormatCount(c.files) + (c.files == 1 ? L" cookie" : L" cookies");
-            if (c.browserData == BrowserData::History) count = util::FormatCount(c.files) + (c.files == 1 ? L" visit" : L" visits");
-            if (size_t kept = c.KeptCount()) count += L" · " + util::FormatCount(kept) + L" kept";
+            std::wstring count = c.recycleBin ? TrN(c.files, L"{0} item", L"{0} items") : TrN(c.files, L"{0} file", L"{0} files");
+            if (c.browserData == BrowserData::Cookies) count = TrN(c.files, L"{0} cookie", L"{0} cookies");
+            if (c.browserData == BrowserData::History) count = TrN(c.files, L"{0} visit", L"{0} visits");
+            if (size_t kept = c.KeptCount()) count += L" · " + TrN(kept, L"{0} kept", L"{0} kept");
             // A tool cleans its own cache: there is no file list to pick from, so say what runs.
-            if (!c.command.empty()) count = L"runs " + c.command;
+            if (!c.command.empty()) count = TrF(L"runs {0}", c.command);
             if (!c.entries.empty() && c.command.empty()) {
                 // "Review" opens the exact list of what would be deleted (a dry run with opt-outs).
-                std::wstring link = L"Review " + count + L"  ›";
+                std::wstring link = TrF(L"Review {0}", count) + L"  ›";
                 float lw = gfx_.Measure(link, Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 12;
                 RectF lr = R(sr.right - lw + 6, card.top + 37, sr.right + 6, card.top + 57);
                 bool hv = Hovered(HK_REVIEW, static_cast<int>(i));
@@ -2530,35 +2662,37 @@ void App::DrawCleanReview(const RectF& area) {
     hits_.back().kind = HK_NAV;
     hits_.back().a = static_cast<int>(View::Cleanup);
     size_t kept = c.KeptCount();
-    std::wstring sub = util::FormatCount(c.entries.size() - kept) + L" of " + util::FormatCount(c.entries.size()) +
-                       L" selected  ·  " + util::FormatSizeShort(c.ToClean()) +
-                       L" would be deleted permanently  ·  uncheck what you want to keep" +
-                       (c.guarded ? L"  ·  " + util::FormatCount(c.guarded) + L" protected items left out" : L"");
+    std::wstring sub = Dots({TrN(c.entries.size(), L"{1} of {0} selected", L"{1} of {0} selected", util::FormatCount(c.entries.size() - kept)),
+                             TrF(L"{0} would be deleted permanently", util::FormatSizeShort(c.ToClean())), Tr(L"uncheck what you want to keep"),
+                             c.guarded ? TrN(c.guarded, L"{0} protected item left out", L"{0} protected items left out") : L""});
     if (c.browserData != BrowserData::None) {
         uint64_t rows = 0;
         for (auto& e : c.entries) rows += e.keep ? 0 : e.files;
-        sub = util::FormatCount(c.entries.size() - kept) + L" of " + util::FormatCount(c.entries.size()) + L" browser profiles  ·  " +
-              util::FormatCount(rows) + (c.browserData == BrowserData::Cookies ? L" cookies" : L" visits") +
-              L" would be removed for good  ·  uncheck a profile to leave it alone";
+        sub = Dots({TrN(c.entries.size(), L"{1} of {0} browser profile", L"{1} of {0} browser profiles", util::FormatCount(c.entries.size() - kept)),
+                    c.browserData == BrowserData::Cookies ? TrN(rows, L"{0} cookie would be removed for good", L"{0} cookies would be removed for good")
+                                                          : TrN(rows, L"{0} visit would be removed for good", L"{0} visits would be removed for good"),
+                    Tr(L"uncheck a profile to leave it alone")});
     }
-    DrawViewHeader(R(area.left + 70, top, area.right - 290, top + 46), L"Review: " + c.name, sub, c.icon);
-    float bx = area.right - 24 - 130;
-    Button(RWH(bx, top + 6, 130, 34), IC_CHECK, L"Select all", CMD_REVIEW_ALL, 0, kept > 0);
-    bx -= 8 + 130;
-    Button(RWH(bx, top + 6, 130, 34), 0, L"Keep all", CMD_REVIEW_NONE, 0, kept < c.entries.size());
+    std::wstring selectAll = Tr(L"Select all"), keepAll = Tr(L"Keep all");
+    float w1 = ButtonWidth(selectAll, IC_CHECK, 130), w2 = ButtonWidth(keepAll, 0, 130);
+    float bx = area.right - 24 - w1;
+    Button(RWH(bx, top + 6, w1, 34), IC_CHECK, selectAll, CMD_REVIEW_ALL, 0, kept > 0);
+    bx -= 8 + w2;
+    Button(RWH(bx, top + 6, w2, 34), 0, keepAll, CMD_REVIEW_NONE, 0, kept < c.entries.size());
+    DrawViewHeader(R(area.left + 70, top, bx - 16, top + 46), TrF(L"Review: {0}", CatName(c)), sub, c.icon);
     float y = top + 62;
     if (cleanupMeasuring_) {
-        gfx_.Text(L"Measuring again…", R(area.left + 24, y, area.right - 24, y + 22), P_.textDim, Small(12.5f));
+        gfx_.Text(Tr(L"Measuring again…"), R(area.left + 24, y, area.right - 24, y + 22), P_.textDim, Small(12.5f));
         y += 26;
     }
     RectF body = R(area.left, y, area.right, area.bottom);
     if (c.entries.empty()) {
-        DrawEmptyState(body, c.icon, L"Nothing to clean here", L"This category is empty right now.");
+        DrawEmptyState(body, c.icon, Tr(L"Nothing to clean here"), Tr(L"This category is empty right now."));
         return;
     }
-    std::vector<Column> cols = {{L"Item", -1.0f, Align::Left, -1},
-                                {L"Size", 100, Align::Right, -1},
-                                {c.recycleBin ? L"Deleted" : L"Modified", 140, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"Item"), -1.0f, Align::Left, -1},
+                                {Tr(L"Size"), 100, Align::Right, -1},
+                                {c.recycleBin ? Tr(L"Deleted") : Tr(L"Modified"), 140, Align::Left, -1}};
     DrawTable(body, cols, -1, true, [&](int i, const Column&, int ci, const RectF& cr, bool) {
         const CleanEntry& e = c.entries[rows_[i].idx];
         D2D1_COLOR_F textCol = e.keep ? P_.textFaint : P_.text;
@@ -2584,11 +2718,12 @@ void App::DrawCleanReview(const RectF& area) {
                     x += tw + 10;
                 }
                 if (e.keep) {
-                    float kw = gfx_.Measure(L"Kept", Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
+                    std::wstring keptText = Tr(L"Kept");
+                    float kw = gfx_.Measure(keptText, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 14;
                     if (x + kw < cr.right) {
                         RectF br = R(x, cy - 9, x + kw, cy + 9);
                         gfx_.FillRound(br, 9, WithAlpha(P_.success, 0.16f));
-                        gfx_.Text(L"Kept", br, P_.success, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+                        gfx_.Text(keptText, br, P_.success, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
                         x += kw + 10;
                     }
                 }
@@ -2599,7 +2734,7 @@ void App::DrawCleanReview(const RectF& area) {
             case 1:
                 gfx_.Text(util::FormatSizeShort(e.bytes), cr, textCol, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
                 break;
-            default: gfx_.Text(e.mtime ? util::FormatTime(e.mtime) : L"", cr, P_.textDim, Small(12.5f)); break;
+            default: gfx_.Text(e.mtime ? util::FormatDateTimeLocal(e.mtime) : L"", cr, P_.textDim, Small(12.5f)); break;
         }
     });
 }
@@ -2610,14 +2745,15 @@ void App::DrawCleanReview(const RectF& area) {
 void App::DrawHistory(const RectF& area) {
     float top = area.top + 18;
     bool scoped = root_ && !readOnly_;
-    DrawViewHeader(R(area.left + 24, top, area.right - 24, top + 46), L"History",
-                   scoped ? L"Earlier scans of " + root_->name + L"  ·  compare to see what grew"
-                          : L"Every completed scan is saved automatically (folder sizes only)",
+    DrawViewHeader(R(area.left + 24, top, area.right - 24, top + 46), Tr(L"History"),
+                   scoped ? Dots({TrF(L"Earlier scans of {0}", root_->name), Tr(L"compare to see what grew")})
+                          : Tr(L"Every completed scan is saved automatically (folder sizes only)"),
                    IC_HISTORY);
     float y = top + 64;
     RectF body = R(area.left, y, area.right, area.bottom);
     if (snapshots_.empty()) {
-        DrawEmptyState(body, IC_HISTORY, L"No history yet", L"Scan a drive or folder; next time you scan it you can compare the two and see exactly what changed.");
+        DrawEmptyState(body, IC_HISTORY, Tr(L"No history yet"),
+                       Tr(L"Scan a drive or folder; next time you scan it you can compare the two and see exactly what changed."));
         return;
     }
     ListState& ls = lists_[static_cast<int>(View::History)];
@@ -2632,9 +2768,9 @@ void App::DrawHistory(const RectF& area) {
         gfx_.StrokeRound(card, 12, P_.border);
         gfx_.FillRound(RWH(card.left + 14, card.top + 12, 36, 36), 9, WithAlpha(P_.accent, 0.14f));
         gfx_.Icon(IC_HISTORY, RWH(card.left + 14, card.top + 12, 36, 36), P_.accent, 15);
-        gfx_.Text(util::FormatTime(s.time) + L"   ·   " + RelativeTime(s.time), R(card.left + 64, card.top + 10, card.right - 360, card.top + 32), P_.text,
+        gfx_.Text(util::FormatDateTimeLocal(s.time) + L"   ·   " + RelativeTime(s.time), R(card.left + 64, card.top + 10, card.right - 360, card.top + 32), P_.text,
                   TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-        gfx_.Text(FitPath(s.root, 420, 12.5f) + L"   ·   " + util::FormatCount(s.items) + L" items", R(card.left + 64, card.top + 31, card.right - 360, card.top + 52),
+        gfx_.Text(FitPath(s.root, 420, 12.5f) + L"   ·   " + TrN(s.items, L"{0} item", L"{0} items"), R(card.left + 64, card.top + 31, card.right - 360, card.top + 52),
                   P_.textDim, Small(12.5f));
         float x = card.right - 14;
         bool sameRoot = scoped && _wcsicmp(s.root.c_str(), root_->name.c_str()) == 0;
@@ -2644,25 +2780,30 @@ void App::DrawHistory(const RectF& area) {
         gfx_.Icon(IC_DELETE, del, P_.textDim, 14);
         AddHit(del, HK_SNAPSHOT, static_cast<int>(i), 1);
         x -= 42;
+        TextStyle bs = Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center);
         if (sameRoot) {
-            RectF cmp = RWH(x - 100, card.top + 13, 100, 34);
+            std::wstring t = Tr(L"Compare");
+            float bw = std::max(100.0f, gfx_.Measure(t, bs) + 24);
+            RectF cmp = RWH(x - bw, card.top + 13, bw, 34);
             bool hv = Hovered(HK_SNAPSHOT, static_cast<int>(i), 0);
             gfx_.FillRound(cmp, 8, hv ? P_.accent : WithAlpha(P_.accent, 0.16f));
-            gfx_.Text(L"Compare", cmp, hv ? P_.accentText : P_.accent, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+            gfx_.Text(t, cmp, hv ? P_.accentText : P_.accent, bs);
             AddHit(cmp, HK_SNAPSHOT, static_cast<int>(i), 0);
-            x -= 112;
+            x -= bw + 12;
             int64_t d = static_cast<int64_t>(root_->disk) - static_cast<int64_t>(s.disk);
-            gfx_.Text(SignedSize(d) + L" since", R(x - 160, card.top + 10, x, card.top + 32),
+            gfx_.Text(TrF(L"{0} since", SignedSize(d)), R(x - 160, card.top + 10, x, card.top + 32),
                       d > 0 ? P_.danger : (d < 0 ? P_.success : P_.textDim), TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
         } else if (!scoped) {
-            RectF scan = RWH(x - 100, card.top + 13, 100, 34);
+            std::wstring t = Tr(L"Scan again");
+            float bw = std::max(100.0f, gfx_.Measure(t, bs) + 24);
+            RectF scan = RWH(x - bw, card.top + 13, bw, 34);
             bool hv = Hovered(HK_RECENT, static_cast<int>(i));
             gfx_.FillRound(scan, 8, hv ? P_.accent : WithAlpha(P_.accent, 0.16f));
-            gfx_.Text(L"Scan again", scan, hv ? P_.accentText : P_.accent, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+            gfx_.Text(t, scan, hv ? P_.accentText : P_.accent, bs);
             AddHit(scan, HK_RECENT, static_cast<int>(i));
-            x -= 112;
+            x -= bw + 12;
         }
-        gfx_.Text(util::FormatSizeShort(s.disk) + L" on disk", R(x - 200, card.top + 31, x, card.top + 52), P_.textDim,
+        gfx_.Text(TrF(L"{0} on disk", util::FormatSizeShort(s.disk)), R(x - 200, card.top + 31, x, card.top + 52), P_.textDim,
                   Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
         y += 70;
     }
@@ -2671,14 +2812,18 @@ void App::DrawHistory(const RectF& area) {
 
 void App::DrawDeleted(const RectF& area) {
     float top = area.top + 18;
-    DrawViewHeader(R(area.left + 24, top, area.right - 200, top + 46), L"Recently deleted",
-                   L"Everything WinNCDU deleted or cleaned up, newest first  ·  restore what is still in the Recycle Bin", IC_UNDO);
-    Button(RWH(area.right - 24 - 150, top + 6, 150, 34), IC_OPEN, L"Open journal", CMD_OPEN_JOURNAL, 0);
+    {
+        std::wstring t = Tr(L"Open journal");
+        float w = ButtonWidth(t, IC_OPEN, 150);
+        Button(RWH(area.right - 24 - w, top + 6, w, 34), IC_OPEN, t, CMD_OPEN_JOURNAL, 0);
+        DrawViewHeader(R(area.left + 24, top, area.right - 50 - w, top + 46), Tr(L"Recently deleted"),
+                       Dots({Tr(L"Everything WinNCDU deleted or cleaned up, newest first"), Tr(L"restore what is still in the Recycle Bin")}), IC_UNDO);
+    }
     float y = top + 64;
     RectF body = R(area.left, y, area.right, area.bottom);
     if (deleted_.empty()) {
-        DrawEmptyState(body, IC_UNDO, L"Nothing deleted yet",
-                       L"Everything you delete or clean up with WinNCDU is listed here. Items still in the Recycle Bin can be restored with one click.");
+        DrawEmptyState(body, IC_UNDO, Tr(L"Nothing deleted yet"),
+                       Tr(L"Everything you delete or clean up with WinNCDU is listed here. Items still in the Recycle Bin can be restored with one click."));
         return;
     }
     ListState& ls = lists_[static_cast<int>(View::Deleted)];
@@ -2705,16 +2850,18 @@ void App::DrawDeleted(const RectF& area) {
         std::wstring status;
         D2D1_COLOR_F statusCol = P_.textFaint;
         if (d.bin >= 0) {
-            RectF btn = RWH(x - 100, card.top + 13, 100, 34);
+            std::wstring t = Tr(L"Restore");
+            float bw = std::min(statusW, std::max(100.0f, gfx_.Measure(t, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 24));
+            RectF btn = RWH(x - bw, card.top + 13, bw, 34);
             bool hv = Hovered(HK_RESTORE, static_cast<int>(i));
             gfx_.FillRound(btn, 8, hv ? P_.accent : WithAlpha(P_.accent, 0.16f));
-            gfx_.Text(L"Restore", btn, hv ? P_.accentText : P_.accent, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+            gfx_.Text(t, btn, hv ? P_.accentText : P_.accent, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
             AddHit(btn, HK_RESTORE, static_cast<int>(i));
         } else if (e.action == JournalAction::Recycle) {
-            status = d.back ? L"Restored" : L"No longer in the Recycle Bin";
+            status = d.back ? Tr(L"Restored") : Tr(L"No longer in the Recycle Bin");
             if (d.back) statusCol = P_.success;
         } else {
-            status = clean ? L"Cleaned up" : L"Deleted permanently";
+            status = clean ? Tr(L"Cleaned up") : Tr(L"Deleted permanently");
         }
         if (!status.empty())
             gfx_.Text(status, R(x - statusW, card.top, x, card.bottom), statusCol, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
@@ -2729,12 +2876,15 @@ void App::DrawDeleted(const RectF& area) {
         // Left: what it was.
         size_t slash = e.path.find_last_of(L'\\');
         std::wstring name = clean || slash == std::wstring::npos || slash + 1 >= e.path.size() ? e.path : e.path.substr(slash + 1);
-        std::wstring where = clean ? L"Cleanup" : (slash == std::wstring::npos ? L"" : e.path.substr(0, slash));
+        std::wstring where = clean ? Tr(L"Cleanup") : (slash == std::wstring::npos ? L"" : e.path.substr(0, slash));
         if (where.size() == 2 && where[1] == L':') where += L'\\';
         std::wstring detail = where;
-        if (e.items > 1) detail += L"   ·   " + util::FormatCount(e.items) + (clean ? L" files" : L" items");
-        if (!e.note.empty()) detail += L"   ·   " + e.note;
+        if (e.items > 1) detail += L"   ·   " + (clean ? TrN(e.items, L"{0} file", L"{0} files") : TrN(e.items, L"{0} item", L"{0} items"));
+        // The journal is kept in English; its fixed notes ("Hibernation is off") are shown translated.
+        if (!e.note.empty()) detail += L"   ·   " + Tr(e.note);
         float textW = std::max(40.0f, x - (card.left + 64));
+        // Cleanup entries are named after their category (built-in names are translated).
+        if (clean) name = Tr(name);
         gfx_.Text(name, R(card.left + 64, card.top + 10, card.left + 64 + textW, card.top + 32), P_.text, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         gfx_.Text(FitPath(detail, textW, 12.5f), R(card.left + 64, card.top + 31, card.left + 64 + textW, card.top + 52), P_.textDim,
                   Small(12.5f));
@@ -2749,21 +2899,22 @@ void App::DrawCompare(const RectF& area) {
     IconButton(area.left + 24, top + 4, IC_BACK, CMD_NONE, L"");
     hits_.back().kind = HK_NAV;
     hits_.back().a = static_cast<int>(View::History);
-    DrawViewHeader(R(area.left + 70, top, area.right - 24, top + 46), L"Changes since " + util::FormatTime(diffInfo_.time),
-                   util::FormatSizeShort(static_cast<uint64_t>(oldTotal)) + L"  →  " + util::FormatSizeShort(static_cast<uint64_t>(nowTotal)) +
-                       L"   (" + SignedSize(nowTotal - oldTotal) + L")  ·  showing the folders that explain the change",
+    DrawViewHeader(R(area.left + 70, top, area.right - 24, top + 46), TrF(L"Changes since {0}", util::FormatDateTimeLocal(diffInfo_.time)),
+                   Dots({util::FormatSizeShort(static_cast<uint64_t>(oldTotal)) + L"  →  " + util::FormatSizeShort(static_cast<uint64_t>(nowTotal)) +
+                             L"   (" + SignedSize(nowTotal - oldTotal) + L")",
+                         Tr(L"showing the folders that explain the change")}),
                    IC_COMPARE);
     RectF tr = R(area.left, top + 62, area.right, area.bottom);
     if (rows_.empty()) {
-        DrawEmptyState(tr, IC_CHECK, L"No significant changes", L"Folder sizes are about the same as in this snapshot.");
+        DrawEmptyState(tr, IC_CHECK, Tr(L"No significant changes"), Tr(L"Folder sizes are about the same as in this snapshot."));
         return;
     }
     int64_t maxAbs = 1;
     for (auto& d : diff_) maxAbs = std::max(maxAbs, std::llabs(d.delta()));
-    std::vector<Column> cols = {{L"Folder", -1.0f, Align::Left, -1},
-                                {L"Before", 100, Align::Right, -1},
-                                {L"Now", 100, Align::Right, -1},
-                                {L"Change", 230, Align::Left, -1}};
+    std::vector<Column> cols = {{Tr(L"Folder"), -1.0f, Align::Left, -1},
+                                {Tr(L"Before"), 100, Align::Right, -1},
+                                {Tr(L"Now"), 100, Align::Right, -1},
+                                {Tr(L"Change"), 230, Align::Left, -1}};
     DrawTable(tr, cols, -1, true, [&](int i, const Column&, int ci, const RectF& cr, bool) {
         const DiffEntry& d = diff_[rows_[i].idx];
         switch (ci) {
@@ -2776,7 +2927,7 @@ void App::DrawCompare(const RectF& area) {
                     if (!p.empty() && p[0] == L'\\') p.erase(0, 1);
                 }
                 if (p.empty()) p = root_ ? root_->name : d.path;
-                gfx_.Text(FitPath(p, cr.right - cr.left - 30, 13) + (d.node ? L"" : L"   (deleted)"), R(cr.left + 26, cr.top, cr.right, cr.bottom),
+                gfx_.Text(FitPath(p, cr.right - cr.left - 30, 13) + (d.node ? L"" : L"   " + Tr(L"(deleted)")), R(cr.left + 26, cr.top, cr.right, cr.bottom),
                           d.node ? P_.text : P_.textFaint, TS(13));
                 break;
             }
@@ -2806,13 +2957,13 @@ void App::DrawHome(const RectF& area) {
     float startY = y;
     TextStyle h1 = TS(28, DWRITE_FONT_WEIGHT_SEMI_BOLD);
     h1.font = FontKind::Display;
-    gfx_.Text(L"What would you like to analyze?", R(x0, y, x0 + maxW, y + 40), P_.text, h1);
+    gfx_.Text(Tr(L"What would you like to analyze?"), R(x0, y, x0 + maxW, y + 40), P_.text, h1);
     y += 42;
-    gfx_.Text(L"Pick a drive or folder to see what's using your disk space — then clean it up.", R(x0, y, x0 + maxW, y + 24),
+    gfx_.Text(Tr(L"Pick a drive or folder to see what's using your disk space — then clean it up."), R(x0, y, x0 + maxW, y + 24),
               P_.textDim, TS(14));
     y += 46;
 
-    gfx_.Text(L"DRIVES", R(x0, y, x0 + 200, y + 20), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(Tr(L"DRIVES"), R(x0, y, x0 + maxW, y + 20), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     y += 28;
     float cardW = 300, cardH = 118, gap = 16;
     int perRow = std::max(1, static_cast<int>((maxW + gap) / (cardW + gap)));
@@ -2825,9 +2976,9 @@ void App::DrawHome(const RectF& area) {
         gfx_.FillRound(card, 14, P_.surface);
         gfx_.StrokeRound(card, 14, hover ? P_.accent : P_.border, hover ? 1.5f : 1.0f);
         gfx_.Bitmap(icons_.ForPath(gfx_, d.root), RWH(card.left + 18, card.top + 18, 36, 36));
-        std::wstring name = (d.label.empty() ? std::wstring(DriveTypeName(d.type)) + L" disk" : d.label) + L" (" + d.root.substr(0, 2) + L")";
+        std::wstring name = DriveLabel(d) + L" (" + d.root.substr(0, 2) + L")";
         gfx_.Text(name, R(card.left + 66, card.top + 16, card.right - 14, card.top + 38), P_.text, TS(14.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-        gfx_.Text((d.fs.empty() ? L"" : d.fs + L"  ·  ") + DriveTypeName(d.type), R(card.left + 66, card.top + 37, card.right - 14, card.top + 56),
+        gfx_.Text((d.fs.empty() ? L"" : d.fs + L"  ·  ") + Tr(DriveTypeName(d.type)), R(card.left + 66, card.top + 37, card.right - 14, card.top + 56),
                   P_.textFaint, Small(12));
         if (d.ready && d.total) {
             double used = 1.0 - static_cast<double>(d.free) / d.total;
@@ -2835,30 +2986,32 @@ void App::DrawHome(const RectF& area) {
             RectF bar = R(card.left + 18, card.top + 70, card.right - 18, card.top + 78);
             gfx_.FillRound(bar, 4, P_.track);
             gfx_.FillRound(R(bar.left, bar.top, bar.left + W(bar) * static_cast<float>(used), bar.bottom), 4, col);
-            gfx_.Text(util::FormatSizeShort(d.free) + L" free of " + util::FormatSizeShort(d.total), R(card.left + 18, card.top + 84, card.right - 18, card.top + 104),
-                      P_.textDim, Small(12));
-            gfx_.Text(Pct(used * 100) + L" used", R(card.left + 18, card.top + 84, card.right - 18, card.top + 104), col,
+            std::wstring usedText = TrF(L"{0} used", Pct(used * 100));
+            float uw = gfx_.Measure(usedText, Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 10;
+            gfx_.Text(TrF(L"{0} free of {1}", util::FormatSizeShort(d.free), util::FormatSizeShort(d.total)),
+                      R(card.left + 18, card.top + 84, card.right - 18 - uw, card.top + 104), P_.textDim, Small(12));
+            gfx_.Text(usedText, R(card.left + 18, card.top + 84, card.right - 18, card.top + 104), col,
                       Small(12, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
         } else {
-            gfx_.Text(d.label == L"(not responding)" ? L"Not responding" : L"Not ready", R(card.left + 18, card.top + 70, card.right - 18, card.top + 100),
+            gfx_.Text(d.label == L"(not responding)" ? Tr(L"Not responding") : Tr(L"Not ready"), R(card.left + 18, card.top + 70, card.right - 18, card.top + 100),
                       P_.textFaint, Small(12.5f));
         }
         AddHit(card, HK_CARD, static_cast<int>(i));
     }
     y += ((drives_.size() + perRow - 1) / perRow) * (cardH + gap) + 18;
 
-    gfx_.Text(L"MORE WAYS TO START", R(x0, y, x0 + 300, y + 20), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(Tr(L"MORE WAYS TO START"), R(x0, y, x0 + maxW, y + 20), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     y += 28;
     struct Card {
         int id;
         wchar_t icon;
-        const wchar_t* title;
-        const wchar_t* text;
+        std::wstring title;
+        std::wstring text;
     };
-    std::vector<Card> cards = {{1000, IC_FOLDER, L"Scan a folder", L"Choose any folder or network share"},
-                               {1001, IC_OPEN, L"Open a saved scan", L"Browse a .json export (also from Linux ncdu)"},
-                               {1002, IC_CLEAN, L"Quick cleanup", L"Caches, temp files and the Recycle Bin"}};
-    if (!elevated_) cards.push_back({1003, IC_SHIELD, L"Run as administrator", L"Read protected system folders too"});
+    std::vector<Card> cards = {{1000, IC_FOLDER, Tr(L"Scan a folder"), Tr(L"Choose any folder or network share")},
+                               {1001, IC_OPEN, Tr(L"Open a saved scan"), Tr(L"Browse a .json export (also from Linux ncdu)")},
+                               {1002, IC_CLEAN, Tr(L"Quick cleanup"), Tr(L"Caches, temp files and the Recycle Bin")}};
+    if (!elevated_) cards.push_back({1003, IC_SHIELD, Tr(L"Run as administrator"), Tr(L"Read protected system folders too")});
     for (size_t i = 0; i < cards.size(); ++i) {
         float cx = x0 + (i % perRow) * (cardW + gap), cy = y + (i / perRow) * (84 + gap);
         RectF card = RWH(cx, cy, cardW, 84);
@@ -2875,7 +3028,7 @@ void App::DrawHome(const RectF& area) {
     y += ((cards.size() + perRow - 1) / perRow) * (84 + gap) + 18;
 
     if (!snapshots_.empty()) {
-        gfx_.Text(L"RECENT SCANS", R(x0, y, x0 + 300, y + 20), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(Tr(L"RECENT SCANS"), R(x0, y, x0 + maxW, y + 20), P_.textFaint, Small(11, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         y += 28;
         for (size_t i = 0; i < snapshots_.size() && i < 8; ++i) {
             const SnapshotInfo& s = snapshots_[i];
@@ -2884,15 +3037,16 @@ void App::DrawHome(const RectF& area) {
             gfx_.FillRound(r, 10, hover ? P_.surface2 : P_.surface);
             gfx_.StrokeRound(r, 10, hover ? P_.accent : P_.border);
             gfx_.Bitmap(icons_.Folder(gfx_), RWH(r.left + 16, r.top + 16, 20, 20));
-            gfx_.Text(s.root, R(r.left + 50, r.top, r.right - 300, r.bottom), P_.text, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-            gfx_.Text(util::FormatSizeShort(s.disk) + L"   ·   " + util::FormatCount(s.items) + L" items   ·   " + RelativeTime(s.time),
-                      R(r.left, r.top, r.right - 18, r.bottom), P_.textDim, Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+            std::wstring info = Dots({util::FormatSizeShort(s.disk), TrN(s.items, L"{0} item", L"{0} items"), RelativeTime(s.time)}, L"   ·   ");
+            float iw = gfx_.Measure(info, Small(12.5f)) + 30;
+            gfx_.Text(s.root, R(r.left + 50, r.top, std::min(r.right - 300, r.right - 18 - iw), r.bottom), P_.text, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+            gfx_.Text(info, R(r.left, r.top, r.right - 18, r.bottom), P_.textDim, Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
             AddHit(r, HK_RECENT, static_cast<int>(i));
             y += 60;
         }
         y += 12;
     }
-    gfx_.Text(L"Tip: drop a folder onto this window to scan it  ·  right-click any item for more actions  ·  F1 shows all shortcuts",
+    gfx_.Text(Dots({Tr(L"Tip: drop a folder onto this window to scan it"), Tr(L"right-click any item for more actions"), Tr(L"F1 shows all shortcuts")}),
               R(x0, y, x0 + maxW, y + 22), P_.textFaint, Small(12));
     y += 40;
     float contentH = y - startY + 36;
@@ -2917,7 +3071,24 @@ void App::DrawDialog() {
     int shownChoices = 0;
     for (auto& ch : dialog_.choices) shownChoices += ch.hidden ? 0 : 1;
     float choicesH = shownChoices ? shownChoices * 40.0f + 10 : 0;
-    float h = 24 + 30 + msgH + (listH ? listH + 14 : 0) + (dialog_.hasCheck ? 40 : 0) + choicesH + 24 + 40 + 24;
+    // A title too long for one line wraps (translations run longer than English).
+    TextStyle ts = TS(17, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    ts.font = FontKind::Display;
+    ts.wrap = true;
+    ts.center = false;
+    float titleW = w - 48 - (dialog_.icon ? 56 : 0);
+    float titleH = std::max(28.0f, gfx_.MeasureHeight(dialog_.title, titleW, ts) + 2);
+    // Labels of the choices ("Repeat", "Time") and of the lines ("Publisher\t...") get the room they need.
+    float choiceLabelW = 84;
+    for (auto& ch : dialog_.choices)
+        if (!ch.hidden) choiceLabelW = std::max(choiceLabelW, std::min(200.0f, gfx_.Measure(ch.label, TS(13)) + 10));
+    float lineLabelW = 74;
+    for (auto& l : dialog_.lines) {
+        size_t tab = l.find(L'\t');
+        if (tab != std::wstring::npos && tab > 0)
+            lineLabelW = std::max(lineLabelW, std::min(170.0f, gfx_.Measure(l.substr(0, tab), Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 4));
+    }
+    float h = 24 + titleH + 2 + msgH + (listH ? listH + 14 : 0) + (dialog_.hasCheck ? 40 : 0) + choicesH + 24 + 40 + 24;
     RectF card = RWH((sz.width - w) / 2, std::max(20.0f, (sz.height - h) / 2 - 20), w, h);
     accModalText_ = gfx_.Runs().size();
     accModalRect_ = card;
@@ -2934,10 +3105,9 @@ void App::DrawDialog() {
         gfx_.Icon(dialog_.icon, RWH(x, y, 40, 40), tone, 18);
     }
     float tx = x + (dialog_.icon ? 56 : 0);
-    TextStyle ts = TS(17, DWRITE_FONT_WEIGHT_SEMI_BOLD);
-    ts.font = FontKind::Display;
-    gfx_.Text(dialog_.title, R(tx, y, card.right - 24, y + 28), P_.text, ts);
-    y += 32;
+    gfx_.Text(dialog_.title, R(tx, y + (titleH <= 28.5f ? (28 - gfx_.MeasureHeight(dialog_.title, titleW, ts)) / 2 : 0), card.right - 24, y + titleH),
+              P_.text, ts);
+    y += titleH + 4;
     if (msgH) {
         gfx_.Text(dialog_.message, R(tx, y, card.right - 24, y + msgH), P_.textDim, msgStyle);
         y += msgH;
@@ -2950,8 +3120,9 @@ void App::DrawDialog() {
         for (auto& l : dialog_.lines) {
             size_t tab = l.find(L'\t');
             if (tab != std::wstring::npos) {
-                gfx_.Text(l.substr(0, tab), R(lb.left + 12, ly, lb.left + 86, ly + 24), P_.text, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
-                gfx_.Text(FitPath(l.substr(tab + 1), W(lb) - 120, 12.5f), R(lb.left + 100, ly, lb.right - 10, ly + 24), P_.textDim, Small(12.5f));
+                gfx_.Text(l.substr(0, tab), R(lb.left + 12, ly, lb.left + 12 + lineLabelW, ly + 24), P_.text, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+                gfx_.Text(FitPath(l.substr(tab + 1), W(lb) - 46 - lineLabelW, 12.5f), R(lb.left + 26 + lineLabelW, ly, lb.right - 10, ly + 24), P_.textDim,
+                          Small(12.5f));
             } else {
                 gfx_.Text(FitPath(l, W(lb) - 24, 12.5f), R(lb.left + 12, ly, lb.right - 10, ly + 24), P_.textDim, Small(12.5f));
             }
@@ -2975,8 +3146,8 @@ void App::DrawDialog() {
         for (int ci = 0; ci < static_cast<int>(dialog_.choices.size()); ++ci) {
             const DialogChoice& ch = dialog_.choices[ci];
             if (ch.hidden) continue;
-            gfx_.Text(ch.label, R(tx, y, tx + 84, y + 32), P_.textDim, TS(13));
-            float cx = tx + 88;
+            gfx_.Text(ch.label, R(tx, y, tx + choiceLabelW, y + 32), P_.textDim, TS(13));
+            float cx = tx + choiceLabelW + 4;
             auto chip = [&](const std::wstring& t, float w, bool active, intptr_t value) {
                 RectF r = RWH(cx, y + 1, w, 30);
                 bool hv = Hovered(HK_DIALOG_CHOICE, ci, value);
@@ -2996,7 +3167,7 @@ void App::DrawDialog() {
                 for (int oi = 0; oi < static_cast<int>(ch.options.size()); ++oi)
                     chip(ch.options[oi], gfx_.Measure(ch.options[oi], cs) + 22, oi == ch.value, oi);
             }
-            if (focus == 1000 + ci) ring(R(tx + 88, y + 1, cx - 6, y + 31), 15);
+            if (focus == 1000 + ci) ring(R(tx + choiceLabelW + 4, y + 1, cx - 6, y + 31), 15);
             y += 40;
         }
     }
@@ -3028,6 +3199,9 @@ void App::DrawBusy() {
     double prog = task_->progress ? task_->progress() : -1.0;
     float w = std::min(560.0f, sz.width - 40);
     float h = 24 + 34 + lines.size() * 26.0f + 18 + 10 + 38 + 24;
+    float labelW = 100;  // "Files", "Elapsed", ...: as wide as the longest (translated) one needs
+    for (auto& [k, v] : lines)
+        if (!k.empty()) labelW = std::max(labelW, std::min(200.0f, gfx_.Measure(k, TS(13)) + 12));
     RectF card = RWH((sz.width - w) / 2, (sz.height - h) / 2 - 20, w, h);
     accModalText_ = gfx_.Runs().size();
     accModalRect_ = card;
@@ -3047,8 +3221,8 @@ void App::DrawBusy() {
         if (k.empty()) {
             gfx_.Text(FitPath(v, w - 60, 12), R(x, y, card.right - 24, y + 24), P_.textFaint, Small(12));
         } else {
-            gfx_.Text(k, R(x, y, x + 100, y + 24), P_.textDim, TS(13));
-            gfx_.Text(v, R(x + 100, y, card.right - 24, y + 24), P_.text, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+            gfx_.Text(k, R(x, y, x + labelW, y + 24), P_.textDim, TS(13));
+            gfx_.Text(v, R(x + labelW, y, card.right - 24, y + 24), P_.text, TS(13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         }
         y += 26;
     }
@@ -3067,11 +3241,13 @@ void App::DrawBusy() {
         gfx_.PopClip();
     }
     if (task_->cancel) {
-        RectF br = R(card.right - 26 - 110, card.bottom - 24 - 36, card.right - 26, card.bottom - 24);
+        std::wstring t = task_->cancelRequested ? Tr(L"Stopping…") : Tr(L"Cancel");
+        float bw = std::max(110.0f, gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 30);
+        RectF br = R(card.right - 26 - bw, card.bottom - 24 - 36, card.right - 26, card.bottom - 24);
         bool hv = Hovered(HK_BUTTON, CMD_CANCEL_TASK);
         gfx_.FillRound(br, 9, hv ? P_.surface3 : P_.surface2);
         gfx_.StrokeRound(br, 9, P_.border);
-        gfx_.Text(task_->cancelRequested ? L"Stopping…" : L"Cancel", br, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+        gfx_.Text(t, br, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
         AddHit(br, HK_BUTTON, CMD_CANCEL_TASK);
     }
 }
@@ -3107,10 +3283,10 @@ void App::DrawTooltip() {
         Node* n = tm_[tmHover_].node;
         std::wstring title = n->name;
         std::wstring size = util::FormatSizeShort(Val(n));
-        if (tmRoot_ && Val(tmRoot_)) size += L"  ·  " + Pct(100.0 * Val(n) / Val(tmRoot_)) + L" of this folder";
+        if (tmRoot_ && Val(tmRoot_)) size += L"  ·  " + TrF(L"{0} of this folder", Pct(100.0 * Val(n) / Val(tmRoot_)));
         std::wstring path = NodePath(n->parent ? n->parent : n);
         const ProtectHit& prot = badges_.For(n);
-        std::wstring protText = prot.level == Protect::None ? L"" : std::wstring(ProtectLevelName(prot.level)) + L": " + DescribeHit(prot);
+        std::wstring protText = prot.level == Protect::None ? L"" : TrF(L"{0}: {1}", Tr(ProtectLevelName(prot.level)), DescribeHit(prot));
         float w = std::max({gfx_.Measure(title, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)), gfx_.Measure(size, Small(12)),
                             protText.empty() ? 0.0f : gfx_.Measure(protText, Small(11.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 18, 160.0f}) + 28;
         w = std::min(w, 420.0f);

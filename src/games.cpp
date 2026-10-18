@@ -8,6 +8,7 @@
 
 #include "aimodels.h"
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -92,12 +93,12 @@ std::wstring JsonValue(const std::wstring& json, const wchar_t* key) {
 }
 
 const wchar_t* HowFor(const std::wstring& launcher) {
-    if (launcher == L"Steam") return L"Steam asks you to confirm, then removes it";
-    if (launcher == L"Epic Games") return L"Opens the Epic Games Launcher: uninstall it from your Library";
-    if (launcher == L"Ubisoft Connect") return L"Ubisoft Connect asks you to confirm";
-    if (launcher == L"Battle.net") return L"Battle.net asks you to confirm";
-    if (launcher == L"Xbox") return L"Opens Settings > Installed apps: uninstall it there";
-    return L"Its uninstaller asks you to confirm";
+    if (launcher == L"Steam") return N_(L"Steam asks you to confirm, then removes it");
+    if (launcher == L"Epic Games") return N_(L"Opens the Epic Games Launcher: uninstall it from your Library");
+    if (launcher == L"Ubisoft Connect") return N_(L"Ubisoft Connect asks you to confirm");
+    if (launcher == L"Battle.net") return N_(L"Battle.net asks you to confirm");
+    if (launcher == L"Xbox") return N_(L"Opens Settings > Installed apps: uninstall it there");
+    return N_(L"Its uninstaller asks you to confirm");
 }
 
 }  // namespace
@@ -219,7 +220,7 @@ void ScanSteamLibrary(const std::wstring& steamapps, std::vector<Game>& out) {
                 installed.count(id))
                 return;
             leftover(steamapps + L"\\" + sub + L"\\" + id,
-                     (workshop ? L"Workshop items of an uninstalled game (app " : L"Shader cache of an uninstalled game (app ") + id + L")");
+                     workshop ? TrF(L"Workshop items of an uninstalled game (app {0})", id) : TrF(L"Shader cache of an uninstalled game (app {0})", id));
         });
     }
 }
@@ -329,19 +330,19 @@ std::vector<Game> FindGames() {
         }
     }
     for (auto& g : out)
-        if (g.leftover) g.uninstallHow = L"Moved to the Recycle Bin";
+        if (g.leftover) g.uninstallHow = N_(L"Moved to the Recycle Bin");
     std::stable_sort(out.begin(), out.end(), [](const Game& a, const Game& b) { return a.bytes > b.bytes; });
     return out;
 }
 
 bool StartUninstall(const Game& g, std::wstring& err) {
     if (g.uninstall.empty() || g.leftover) {
-        err = L"No uninstaller is registered for " + g.name;
+        err = TrF(L"No uninstaller is registered for {0}", g.name);
         return false;
     }
     std::wstring launchErr;
     if (LaunchCommand(g.uninstall, nullptr, launchErr)) return true;
     // "steam://...", "ms-settings:...": the launcher isn't there to open it.
-    err = IsUriCommand(g.uninstall) && launchErr != L"Cancelled" ? L"Couldn't open " + g.launcher + L" (is it installed?)" : launchErr;
+    err = IsUriCommand(g.uninstall) && launchErr != L"Cancelled" ? TrF(L"Couldn't open {0} (is it installed?)", g.launcher) : launchErr;
     return false;
 }

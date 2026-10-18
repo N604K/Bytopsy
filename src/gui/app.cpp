@@ -26,6 +26,12 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
     settings_ = LoadSettings();
     util::g_si = settings_.si;
     elevated_ = IsElevated();
+    // Numbers and dates in the Windows regional format; the language from the settings.
+    wchar_t dec[8] = L".", grp[8] = L",";
+    if (!GetLocaleInfoEx(LOCALE_NAME_USER_DEFAULT, LOCALE_SDECIMAL, dec, 8)) wcscpy_s(dec, L".");
+    if (!GetLocaleInfoEx(LOCALE_NAME_USER_DEFAULT, LOCALE_STHOUSAND, grp, 8)) wcscpy_s(grp, L",");
+    util::SetNumberFormat(dec, grp);
+    ApplyLanguage(false);
 
     WNDCLASSEXW wc{sizeof(wc)};
     wc.style = CS_DBLCLKS;
@@ -40,7 +46,7 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
 
     UINT sysDpi = GetDpiForSystem();
     int w = MulDiv(1320, sysDpi, 96), h = MulDiv(840, sysDpi, 96);
-    std::wstring title = elevated_ ? L"WinNCDU (Administrator)" : L"WinNCDU";
+    std::wstring title = elevated_ ? Tr(L"WinNCDU (Administrator)") : L"WinNCDU";
     hwnd_ = CreateWindowExW(0, kClass, title.c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, w, h, nullptr, nullptr,
                             inst, this);
     if (!hwnd_) return false;
@@ -56,9 +62,10 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
     }
     gfx_.SetDpi(static_cast<float>(GetDpiForWindow(hwnd_)));
     if (!gfx_.Init(hwnd_)) {
-        MessageBoxW(hwnd_, L"Direct2D could not be initialized.", L"WinNCDU", MB_ICONERROR);
+        MessageBoxW(hwnd_, Tr(L"Direct2D could not be initialized.").c_str(), L"WinNCDU", MB_ICONERROR);
         return false;
     }
+    gfx_.SetLocale(i18n::CurrentCode() == i18n::kPseudoCode ? L"en-US" : i18n::CurrentCode());
     ApplyTheme();
     CreateSearchBox();
     DragAcceptFiles(hwnd_, TRUE);
@@ -74,6 +81,7 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
     bool plain = show == SW_SHOWNORMAL || show == SW_SHOWDEFAULT;
     ShowWindow(hwnd_, plain ? (settings_.maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL) : show);
     UpdateWindow(hwnd_);
+    if (!toast_.text.empty()) EnsureTimer();  // a problem with the language file
 
     if (!importFile.empty())
         StartImport(importFile);
@@ -95,10 +103,37 @@ void App::CreateSearchBox() {
     search_ = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL, 0, 0, 10, 10, hwnd_, nullptr, inst_,
                               nullptr);
     SetWindowSubclass(search_, SearchProc, 1, reinterpret_cast<DWORD_PTR>(this));
-    SendMessageW(search_, EM_SETCUEBANNER, TRUE,
-                 reinterpret_cast<LPARAM>(L"Search files & folders   e.g.  *.iso   >1G   older:1y   type:d"));
+    SendMessageW(search_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(SearchCue().c_str()));
     AccNameSearchBox(true);
     UpdateSearchBox();
+}
+
+std::wstring App::SearchCue() const {
+    return searchForApps_ ? Tr(L"Filter apps by name or publisher") : Tr(L"Search files & folders   e.g.  *.iso   >1G   older:1y   type:d");
+}
+
+void App::ApplyLanguage(bool redraw) {
+    std::vector<std::wstring> problems;
+    std::wstring code = i18n::LoadLanguage(settings_.language, &problems);
+    if (!redraw) {
+        // At start: problems in a translation someone is trying out are shown once the window is up.
+        if (!problems.empty())
+            toast_ = {TrN(problems.size(), L"The language file has {0} problem: {1}", L"The language file has {0} problems, the first: {1}",
+                          problems[0]),
+                      1, GetTickCount64() + 12000};
+        return;
+    }
+    gfx_.SetLocale(code == i18n::kPseudoCode ? L"en-US" : code);
+    typeNames_.clear();
+    fitCache_.clear();
+    SetWindowTextW(hwnd_, elevated_ ? Tr(L"WinNCDU (Administrator)").c_str() : L"WinNCDU");
+    if (search_) SendMessageW(search_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(SearchCue().c_str()));
+    if (!problems.empty())
+        Toast(TrN(problems.size(), L"The language file has {0} problem: {1}", L"The language file has {0} problems, the first: {1}", problems[0]),
+              1);
+    rowsDirty_ = true;
+    tmDirty_ = true;
+    Invalidate();
 }
 
 void App::UpdateSearchBox() {

@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <sstream>
 
+#include "../i18n.h"
 #include "../util.h"
 #include "history.h"
 
@@ -70,6 +71,7 @@ Settings LoadSettings() {
                 s.hasWindow = true;
             }
         } else if (k == L"maximized") s.maximized = iv != 0;
+        else if (k == L"language") s.language = v;
     }
     if (s.split < 0.2f || s.split > 0.9f) s.split = 0.56f;
     return s;
@@ -90,6 +92,7 @@ void SaveSettings(const Settings& s) {
     if (s.hasWindow)
         ss << L"window=" << s.window.left << L"," << s.window.top << L"," << s.window.right << L"," << s.window.bottom << L"\n";
     ss << L"maximized=" << s.maximized << L"\n";
+    if (!s.language.empty()) ss << L"language=" << s.language << L"\n";
     std::string data = util::WideToUtf8(ss.str());
     FILE* f = nullptr;
     if (_wfopen_s(&f, SettingsFile().c_str(), L"wb") != 0 || !f) return;
@@ -157,10 +160,10 @@ bool SetShellIntegration(bool enable, std::wstring& err) {
     std::wstring cmd = L"\"" + exe + L"\" \"%V\"";
     for (auto k : kShellKeys) {
         std::wstring key = k;
-        if (!RegSetString(HKEY_CURRENT_USER, key, nullptr, L"Analyze with WinNCDU") ||
+        if (!RegSetString(HKEY_CURRENT_USER, key, nullptr, Tr(L"Analyze with WinNCDU")) ||
             !RegSetString(HKEY_CURRENT_USER, key, L"Icon", L"\"" + exe + L"\",0") ||
             !RegSetString(HKEY_CURRENT_USER, key + L"\\command", nullptr, cmd)) {
-            err = L"Could not write to the registry";
+            err = Tr(L"Could not write to the registry");
             return false;
         }
     }
@@ -201,13 +204,14 @@ std::wstring PickFolder(HWND owner, const std::wstring& title) {
     return out;
 }
 
-std::wstring PickOpenFile(HWND owner, const wchar_t* title, const wchar_t* filterName, const wchar_t* filter) {
+std::wstring PickOpenFile(HWND owner, const std::wstring& title, const std::wstring& filterName, const wchar_t* filter) {
     IFileOpenDialog* dlg = nullptr;
     std::wstring out;
     if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&dlg)))) return out;
-    COMDLG_FILTERSPEC spec[] = {{filterName, filter}, {L"All files", L"*.*"}};
+    std::wstring name = filterName.empty() ? Tr(L"Scan files (*.json)") : filterName, all = Tr(L"All files");
+    COMDLG_FILTERSPEC spec[] = {{name.c_str(), filter}, {all.c_str(), L"*.*"}};
     dlg->SetFileTypes(2, spec);
-    dlg->SetTitle(title);
+    dlg->SetTitle(title.empty() ? Tr(L"Open a saved scan").c_str() : title.c_str());
     if (SUCCEEDED(dlg->Show(owner))) {
         IShellItem* item = nullptr;
         if (SUCCEEDED(dlg->GetResult(&item))) {
@@ -227,12 +231,13 @@ std::wstring PickSaveFile(HWND owner, const std::wstring& defaultName, bool csv)
     IFileSaveDialog* dlg = nullptr;
     std::wstring out;
     if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&dlg)))) return out;
-    COMDLG_FILTERSPEC json[] = {{L"ncdu JSON export (*.json)", L"*.json"}};
-    COMDLG_FILTERSPEC csvs[] = {{L"CSV spreadsheet (*.csv)", L"*.csv"}};
+    std::wstring jsonName = Tr(L"ncdu JSON export (*.json)"), csvName = Tr(L"CSV spreadsheet (*.csv)");
+    COMDLG_FILTERSPEC json[] = {{jsonName.c_str(), L"*.json"}};
+    COMDLG_FILTERSPEC csvs[] = {{csvName.c_str(), L"*.csv"}};
     dlg->SetFileTypes(1, csv ? csvs : json);
     dlg->SetDefaultExtension(csv ? L"csv" : L"json");
     dlg->SetFileName(defaultName.c_str());
-    dlg->SetTitle(csv ? L"Export as CSV" : L"Save scan");
+    dlg->SetTitle((csv ? Tr(L"Export as CSV") : Tr(L"Save scan")).c_str());
     if (SUCCEEDED(dlg->Show(owner))) {
         IShellItem* item = nullptr;
         if (SUCCEEDED(dlg->GetResult(&item))) {

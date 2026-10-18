@@ -11,6 +11,7 @@
 #include "../journal.h"
 #include "../protect.h"
 #include "../tree.h"
+#include "../i18n.h"
 #include "../util.h"
 
 namespace {
@@ -295,7 +296,7 @@ bool CreateRestorePoint(const std::wstring& description, std::wstring& err) {
     HMODULE lib = LoadLibraryExW(L"srclient.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     auto set = lib ? reinterpret_cast<SetFn>(GetProcAddress(lib, "SRSetRestorePointW")) : nullptr;
     if (!set) {
-        err = L"System Restore is not available on this PC.";
+        err = Tr(L"System Restore is not available on this PC.");
         if (lib) FreeLibrary(lib);
         return false;
     }
@@ -313,7 +314,7 @@ bool CreateRestorePoint(const std::wstring& description, std::wstring& err) {
         SmgrStatus s2{};
         set(&end, &s2);
     } else if (status.nStatus == ERROR_SERVICE_DISABLED) {
-        err = L"System Protection is turned off for the system drive (System Properties \u2192 System Protection).";
+        err = Tr(L"System Protection is turned off for the system drive (System Properties → System Protection).");
     } else {
         err = util::Win32ErrorMessage(status.nStatus ? status.nStatus : GetLastError());
     }
@@ -393,7 +394,7 @@ std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<s
     std::vector<CleanCategory> out;
     CleanCategory* cur = nullptr;
     std::unordered_set<std::wstring> commandKind;  // ids with "kind = command"
-    auto error = [&](size_t line, const std::wstring& msg) { errors.push_back(L"line " + std::to_wstring(line) + L": " + msg); };
+    auto error = [&](size_t line, const std::wstring& msg) { errors.push_back(TrF(L"line {0}: {1}", line, msg)); };
     size_t pos = 0, lineNo = 0;
     while (pos <= text.size()) {
         size_t eol = text.find(L'\n', pos);
@@ -418,11 +419,11 @@ std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<s
         }
         size_t eq = line.find(L'=');
         if (eq == std::wstring::npos) {
-            error(lineNo, L"expected key = value");
+            error(lineNo, Tr(L"expected key = value"));
             continue;
         }
         if (!cur) {
-            error(lineNo, L"setting outside a [section]");
+            error(lineNo, Tr(L"setting outside a [section]"));
             continue;
         }
         std::wstring key = util::ToLower(Trim(line.substr(0, eq))), val = Trim(line.substr(eq + 1));
@@ -454,32 +455,32 @@ std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<s
                 std::wstring ok2 = util::ToLower(Trim(opt.substr(0, oe))), ov = oe == std::wstring::npos ? L"" : Trim(opt.substr(oe + 1));
                 if (ok2 == L"files" && !ov.empty()) t.filePattern = ov;
                 else if (ok2 == L"age" && ParseAge(ov, t.minAgeHours)) {}
-                else error(lineNo, L"unknown path option \"" + opt + L"\"");
+                else error(lineNo, TrF(L"unknown path option \"{0}\"", opt));
             }
             // A cleaner must name a folder, never a whole drive.
             if (IsDriveRoot(t.path)) {
-                error(lineNo, L"path must be a folder, not a drive, e.g. %LOCALAPPDATA%\\App\\Cache");
+                error(lineNo, Tr(L"path must be a folder, not a drive, e.g. %LOCALAPPDATA%\\App\\Cache"));
                 continue;
             }
             cur->targets.push_back(t);
         } else {
-            error(lineNo, L"unknown key \"" + key + L"\"");
+            error(lineNo, TrF(L"unknown key \"{0}\"", key));
             continue;
         }
-        if (!ok) error(lineNo, L"bad value for " + key + L": \"" + val + L"\"");
+        if (!ok) error(lineNo, TrF(L"bad value for {0}: \"{1}\"", key, val));
     }
     // Drop incomplete categories (but keep "enabled = false" stubs: they switch built-ins off).
     for (size_t i = 0; i < out.size();) {
         CleanCategory& c = out[i];
         bool stub = !c.enabled;
         if (!stub && c.name.empty()) {
-            errors.push_back(L"[" + c.id + L"]: missing name");
+            errors.push_back(L"[" + c.id + L"]: " + Tr(L"missing name"));
             out.erase(out.begin() + i);
         } else if (!stub && !c.recycleBin && c.targets.empty()) {
-            errors.push_back(L"[" + c.id + L"]: no path");
+            errors.push_back(L"[" + c.id + L"]: " + Tr(L"no path"));
             out.erase(out.begin() + i);
         } else if (!stub && commandKind.count(c.id) != !c.command.empty()) {
-            errors.push_back(L"[" + c.id + (c.command.empty() ? L"]: kind = command needs a command" : L"]: command needs kind = command"));
+            errors.push_back(L"[" + c.id + L"]: " + (c.command.empty() ? Tr(L"kind = command needs a command") : Tr(L"command needs kind = command")));
             out.erase(out.begin() + i);
         } else {
             if (!c.icon) c.icon = 0xE74D;
@@ -513,13 +514,13 @@ std::vector<CleanCategory> BuildCleanupCategories(std::vector<std::wstring>* err
         bool found = false;
         std::wstring text = Utf8File(over, found);
         std::vector<CleanCategory> v = ParseCleaners(text, errs);
-        if (!found) errs.push_back(std::wstring(over) + L": not found");
+        if (!found) errs.push_back(TrF(L"{0}: not found", std::wstring(over)));
         v.erase(std::remove_if(v.begin(), v.end(), [](const CleanCategory& c) { return !c.enabled; }), v.end());
         if (errors) *errors = errs;
         return v;
     }
     std::vector<CleanCategory> v = ParseCleaners(BuiltinCleaners(), errs);
-    for (auto& e : errs) e = L"built-in cleaners.ini " + e;
+    for (auto& e : errs) e = TrF(L"built-in cleaners.ini {0}", e);
     bool found = false;
     std::wstring user = Utf8File(UserCleanersFile(false), found);
     if (found) {
@@ -632,7 +633,7 @@ std::wstring FindTool(const std::wstring& command) {
 int RunCommand(const std::wstring& command, std::atomic<bool>& cancel, std::wstring& err) {
     std::wstring tool = FindTool(command);
     if (tool.empty()) {
-        err = FirstWord(command) + L" was not found. Is it installed and on PATH?";
+        err = TrF(L"{0} was not found. Is it installed and on PATH?", FirstWord(command));
         return -1;
     }
     std::wstring trimmed = Trim(command);
@@ -735,13 +736,11 @@ void MeasureBrowserData(CleanCategory& c, std::atomic<bool>& cancel) {
             e.files = b.rows;
             e.mtime = b.mtime;
             if (c.browserData == BrowserData::Cookies)
-                e.note = util::FormatCount(b.rows) + (b.rows == 1 ? L" cookie" : L" cookies") +
-                         (b.keptRows ? L"  ·  " + util::FormatCount(b.keptRows) + L" kept for " + util::FormatCount(b.keptSites) +
-                                           (b.keptSites == 1 ? L" site" : L" sites")
+                e.note = TrN(b.rows, L"{0} cookie", L"{0} cookies") +
+                         (b.keptRows ? L"  ·  " + TrN(b.keptSites, L"{1} kept for {0} site", L"{1} kept for {0} sites", util::FormatCount(b.keptRows))
                                      : L"");
             else
-                e.note = util::FormatCount(b.rows) + (b.rows == 1 ? L" visit" : L" visits") +
-                         (b.firefox ? L"  ·  bookmarks stay" : L"");
+                e.note = TrN(b.rows, L"{0} visit", L"{0} visits") + (b.firefox ? L"  ·  " + Tr(L"bookmarks stay") : L"");
             c.bytes += e.bytes;
             c.files += e.files;
             c.entries.push_back(std::move(e));
@@ -901,9 +900,9 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
     }
     if (!c.command.empty()) {
         // The tool cleans its own cache; what it freed is measured before and after.
-        onItem(L"Running " + c.command);
+        onItem(TrF(L"Running {0}", c.command));
         int code = RunCommand(c.command, cancel, r.error);
-        if (code != 0 && r.error.empty()) r.error = c.command + L" failed (exit code " + std::to_wstring(code) + L")";
+        if (code != 0 && r.error.empty()) r.error = TrF(L"{0} failed (exit code {1})", c.command, code);
         CleanCategory after = c;
         std::atomic<bool> measureAll{false};
         MeasureCategory(after, measureAll);
@@ -946,7 +945,7 @@ CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
         return r;
     }
     if (c.recycleBin && c.KeptCount() == 0) {
-        onItem(L"Emptying the Recycle Bin");
+        onItem(Tr(L"Emptying the Recycle Bin"));
         SHEmptyRecycleBinW(nullptr, nullptr, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
         SHQUERYRBINFO qi{sizeof(qi)};
         uint64_t left = SUCCEEDED(SHQueryRecycleBinW(nullptr, &qi)) ? static_cast<uint64_t>(qi.i64Size) : 0;
@@ -1016,6 +1015,7 @@ CleanResult CleanAndJournal(const CleanCategory& c, std::atomic<bool>& cancel, c
     je.bytes = r.freed;
     je.items = r.files;
     je.path = c.name;
+    i18n::EnglishScope english;  // the journal is kept in English, with plain numbers
     std::wstring note;
     if (r.failed) note = util::FormatCount(r.failed) + L" items in use were skipped";
     if (!r.lockedBy.empty()) note += L" (by " + AppNames(r.lockedBy) + L")";

@@ -18,6 +18,7 @@
 #include "../diskhealth.h"
 #include "../fsops.h"
 #include "../games.h"
+#include "../i18n.h"
 #include "../journal.h"
 #include "../phash.h"
 #include "../protect.h"
@@ -112,6 +113,7 @@ enum Cmd : int {
     CMD_PHOTO_FIND,
     CMD_PHOTO_MARK,
     CMD_WIN_ACT = 600,  // + WinAction
+    CMD_LANG = 800,     // + 0 Windows' language, 1 the pseudo-language, 2 + an index into langMenu_
 };
 
 // The Windows view's actions (command CMD_WIN_ACT + action).
@@ -269,6 +271,9 @@ private:
     void OnTimer();
     const Hit* HitAt(float x, float y);
     void ApplyTheme();
+    // Loads settings_.language (or WINNCDU_LANG) and redraws in it.
+    void ApplyLanguage(bool redraw);
+    std::wstring SearchCue() const;
     void UpdateSearchBox();
     void CreateSearchBox();
     float Px2Dip(int px) const { return px * 96.0f / gfx_.Dpi(); }
@@ -327,7 +332,7 @@ private:
     void OnSearchChanged();
     void WinToolAction(int action);
     void RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
-                    std::function<AdminRun()> work);
+                    std::function<AdminRun()> work, const std::wstring& doneShown = L"");
     void RebuildOld();
 
     // ---- actions (actions.cpp)
@@ -430,6 +435,11 @@ private:
     void DrawTooltip();
     void DrawEmptyState(const RectF& area, wchar_t icon, const std::wstring& title, const std::wstring& text);
     float Button(const RectF& r, wchar_t icon, const std::wstring& text, int cmd, int style, bool enabled = true);
+    // What a Button with this text needs (at least minW): translations are often longer.
+    float ButtonWidth(const std::wstring& text, wchar_t icon, float minW = 0);
+    // A cleanup category's name and description as shown: built-in ones translated.
+    static std::wstring CatName(const CleanCategory& c);
+    static std::wstring CatDesc(const CleanCategory& c);
     float IconButton(float x, float y, wchar_t icon, int cmd, const std::wstring& tip, bool active = false);
     float Chip(float x, float y, const std::wstring& text, bool active, int group, intptr_t value);
     void Checkbox(const RectF& r, bool checked, bool hover, bool mixed = false);
@@ -445,6 +455,7 @@ private:
     Palette P_;
     Settings settings_;
     bool elevated_ = false;
+    std::vector<i18n::LanguageInfo> langMenu_;  // the Language menu's entries, as last shown
 
     std::unique_ptr<Node> root_;
     std::vector<std::unique_ptr<Node>> graveyard_;

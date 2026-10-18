@@ -10,6 +10,7 @@
 
 #include "fsops.h"
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -258,7 +259,7 @@ const RecycledItem* FindRecycled(const std::vector<RecycledItem>& bin, const Jou
 
 bool RestoreRecycled(const RecycledItem& it, std::wstring& err) {
     if (PathExists(it.original)) {
-        err = it.original + L": something with this name is there now. Rename or move it, then try again.";
+        err = TrF(L"{0}: something with this name is there now. Rename or move it, then try again.", it.original);
         return false;
     }
     size_t slash = it.original.find_last_of(L'\\');

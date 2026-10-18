@@ -14,6 +14,7 @@
 #include <thread>
 
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -46,12 +47,12 @@ bool QueryDrive(DriveInfo& d) {
 
 const wchar_t* DriveTypeName(unsigned type) {
     switch (type) {
-        case DRIVE_REMOVABLE: return L"Removable";
-        case DRIVE_FIXED: return L"Local";
-        case DRIVE_REMOTE: return L"Network";
-        case DRIVE_CDROM: return L"Optical";
-        case DRIVE_RAMDISK: return L"RAM disk";
-        default: return L"Unknown";
+        case DRIVE_REMOVABLE: return N_(L"Removable");
+        case DRIVE_FIXED: return N_(L"Local");
+        case DRIVE_REMOTE: return N_(L"Network");
+        case DRIVE_CDROM: return N_(L"Optical");
+        case DRIVE_RAMDISK: return N_(L"RAM disk");
+        default: return N_(L"Unknown");
     }
 }
 
@@ -85,7 +86,7 @@ std::vector<DriveInfo> ListDrives() {
             DriveInfo d;
             d.root = infos[i]->root;
             d.type = infos[i]->type;
-            d.label = L"(not responding)";
+            d.label = N_(L"(not responding)");
             out.push_back(d);
         }
     }
@@ -117,7 +118,7 @@ std::wstring NormalizeDirPath(const std::wstring& input, std::wstring& err) {
     while (!in.empty() && (in.back() == L'"' || in.back() == L' ')) in.pop_back();
     while (!in.empty() && (in.front() == L'"' || in.front() == L' ')) in.erase(in.begin());
     if (in.empty()) {
-        err = L"Empty path";
+        err = Tr(L"Empty path");
         return L"";
     }
     for (auto& c : in)
@@ -141,7 +142,7 @@ std::wstring NormalizeDirPath(const std::wstring& input, std::wstring& err) {
         return L"";
     }
     if (!(a & FILE_ATTRIBUTE_DIRECTORY)) {
-        err = L"Not a directory";
+        err = Tr(L"Not a directory");
         return L"";
     }
     bool isDriveRoot = p.size() == 3 && p[1] == L':';
@@ -308,7 +309,7 @@ bool DeletePermanently(const std::wstring& path, std::atomic<bool>& cancel, std:
     std::wstring actual;
     if (ProcessElevated() && OpenedElsewhere(root, path, actual)) {
         CloseHandle(root);
-        err = shown + L": this path now leads to " + actual + L" (a link or mount point changed). Nothing was deleted.";
+        err = TrF(L"{0}: this path now leads to {1} (a link or mount point changed). Nothing was deleted.", shown, actual);
         return false;
     }
 
@@ -423,7 +424,7 @@ bool DeleteToRecycleBin(const std::wstring& path, std::wstring& err) {
     IShellItem* item = nullptr;
     HRESULT hr = CoCreateInstance(CLSID_FileOperation, nullptr, CLSCTX_ALL, IID_PPV_ARGS(&op));
     if (FAILED(hr)) {
-        err = L"Cannot create file operation: " + HrMessage(hr);
+        err = TrF(L"Cannot create file operation: {0}", HrMessage(hr));
         return false;
     }
     // FOF_WANTNUKEWARNING: Windows asks before permanently deleting items that can't be recycled.
@@ -447,7 +448,7 @@ bool DeleteToRecycleBin(const std::wstring& path, std::wstring& err) {
         return false;
     }
     if (aborted) {
-        err = path + L": operation was cancelled";
+        err = TrF(L"{0}: operation was cancelled", path);
         return false;
     }
     return true;
@@ -504,7 +505,7 @@ std::vector<AppUsingFile> AppsUsing(const std::wstring& path, size_t maxFiles) {
                 AppUsingFile app;
                 app.pid = info[i].Process.dwProcessId;
                 app.name = info[i].strAppName;
-                if (app.name.empty()) app.name = L"process " + std::to_wstring(app.pid);
+                if (app.name.empty()) app.name = TrF(L"process {0}", std::to_wstring(app.pid));
                 out.push_back(std::move(app));
             }
     }
@@ -518,11 +519,9 @@ std::wstring AppNames(const std::vector<std::wstring>& names, size_t max) {
         if (std::find(u.begin(), u.end(), n) == u.end()) u.push_back(n);
     std::wstring s;
     size_t shown = std::min(u.size(), max);
-    for (size_t i = 0; i < shown; ++i) {
-        if (i) s += (i + 1 == shown && u.size() <= max) ? L" and " : L", ";
-        s += u[i];
-    }
-    if (u.size() > max) s += L" and " + std::to_wstring(u.size() - max) + L" more";
+    for (size_t i = 0; i < shown; ++i)
+        s = i == 0 ? u[i] : (i + 1 == shown && u.size() <= max) ? TrF(L"{0} and {1}", s, u[i]) : TrF(L"{0}, {1}", s, u[i]);
+    if (u.size() > max) s = TrN(u.size() - max, L"{1} and {0} more", L"{1} and {0} more", s);
     return s;
 }
 

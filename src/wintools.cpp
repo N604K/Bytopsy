@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -127,7 +128,7 @@ ComponentStore ParseComponentStore(const std::string& dismOutput) {
     std::wstring actual = get(L"actual size of component store");
     if (actual.empty()) {
         cs.error = LastLine(dismOutput);
-        if (cs.error.empty()) cs.error = L"DISM gave no report";
+        if (cs.error.empty()) cs.error = Tr(L"DISM gave no report");
         return cs;
     }
     cs.ok = true;
@@ -272,7 +273,7 @@ std::vector<ShadowStorage> QueryShadowStorage(std::wstring& err) {
                        L"'{0}|{1}|{2}|{3}|{4}' -f $_.UsedSpace,$_.AllocatedSpace,$_.MaxSpace,$_.Volume.DeviceID,$_.DiffVolume.DeviceID }\"",
                        raw, 60000);
     if (code != 0) {
-        err = RunningElevated() ? LastLine(raw) : L"needs administrator rights";
+        err = RunningElevated() ? LastLine(raw) : Tr(L"needs administrator rights");
         return out;
     }
     auto drive = [](const std::wstring& volumeId) {

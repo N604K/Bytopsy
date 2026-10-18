@@ -88,6 +88,8 @@ public:
     void PopClip();
 
     bool HasFluentIcons() const { return fluentIcons_; }
+    // The language text is drawn in ("de-DE"; empty: none), for font fallback and line breaking.
+    void SetLocale(const std::wstring& name);
 
     // While recording (a UI Automation client is attached), Text() also remembers what it drew and
     // where, for the accessible element tree. SetRecording clears what was recorded.
@@ -113,7 +115,7 @@ private:
     ID2D1SolidColorBrush* brush_ = nullptr;
     IDWriteInlineObject* ellipsis_ = nullptr;
     std::map<std::tuple<int, int, int, int, int, int>, IDWriteTextFormat*> formats_;
-    std::wstring uiFont_, displayFont_, iconFont_;
+    std::wstring uiFont_, displayFont_, iconFont_, locale_;
     bool fluentIcons_ = false;
     float dpi_ = 96.0f;
     unsigned generation_ = 1;

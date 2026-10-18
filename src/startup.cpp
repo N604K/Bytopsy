@@ -12,6 +12,7 @@
 #include <cwchar>
 
 #include "runtool.h"
+#include "i18n.h"
 #include "util.h"
 
 using Microsoft::WRL::ComPtr;
@@ -289,7 +290,7 @@ void ScanRunKeys(std::vector<StartupEntry>& out) {
             Describe(e, ExpandEnv(e.command), false);
             if (e.kind == StartupKind::RunOnce) {
                 e.canToggle = false;
-                e.cantToggle = L"Runs once at the next sign-in, then Windows removes it";
+                e.cantToggle = Tr(L"Runs once at the next sign-in, then Windows removes it");
             } else {
                 ReadApproved(e);
             }
@@ -402,7 +403,7 @@ void ScanTaskFolder(ITaskFolder* folder, std::vector<StartupEntry>& out, size_t&
             task->get_Name(&b);
             e.display = Bstr(b);
             e.where = path;
-            e.trigger = logon && boot ? L"at startup and log on" : logon ? L"at log on" : L"at startup";
+            e.trigger = logon && boot ? N_(L"at startup and log on") : logon ? N_(L"at log on") : N_(L"at startup");
             VARIANT_BOOL en = VARIANT_TRUE;
             task->get_Enabled(&en);
             e.enabled = en != VARIANT_FALSE;
@@ -556,7 +557,7 @@ void ScanServices(std::vector<StartupEntry>& out, const std::map<std::wstring, s
         Describe(e, image, true);
         if (e.microsoft) {
             e.canToggle = false;
-            e.cantToggle = L"Windows' own services are listed for reference and are not changed here";
+            e.cantToggle = Tr(L"Windows' own services are listed for reference and are not changed here");
         }
         out.push_back(std::move(e));
     }
@@ -585,8 +586,8 @@ bool ReadBootLog(BootLog& log, std::wstring& note) {
                             L"*[System[(EventID=101 or EventID=103)]]", EvtQueryChannelPath | EvtQueryReverseDirection);
     if (!q) {
         DWORD e = GetLastError();
-        note = e == ERROR_ACCESS_DENIED ? L"Windows' boot performance log needs administrator rights"
-                                        : L"Windows' boot performance log can't be read: " + util::Win32ErrorMessage(e);
+        note = e == ERROR_ACCESS_DENIED ? Tr(L"Windows' boot performance log needs administrator rights")
+                                        : TrF(L"Windows' boot performance log can't be read: {0}", util::Win32ErrorMessage(e));
         return false;
     }
     size_t seen = 0;
@@ -632,11 +633,11 @@ std::wstring XmlUnescape(std::wstring s) {
 
 const wchar_t* StartupKindName(StartupKind k) {
     switch (k) {
-        case StartupKind::Run: return L"Run key";
-        case StartupKind::RunOnce: return L"Run once";
-        case StartupKind::Folder: return L"Startup folder";
-        case StartupKind::Task: return L"Scheduled task";
-        case StartupKind::Service: return L"Service";
+        case StartupKind::Run: return N_(L"Run key");
+        case StartupKind::RunOnce: return N_(L"Run once");
+        case StartupKind::Folder: return N_(L"Startup folder");
+        case StartupKind::Task: return N_(L"Scheduled task");
+        case StartupKind::Service: return N_(L"Service");
     }
     return L"";
 }
@@ -744,42 +745,41 @@ bool IsMicrosoftPublisher(const std::wstring& company) { return util::ContainsI(
 void EstimateImpact(StartupEntry& e) {
     e.impactWhy.clear();
     if (e.measured) {
-        wchar_t b[96];
-        swprintf(b, 96, L"%.1f s", e.measuredMs / 1000.0);
         e.impact = e.measuredMs >= 3000 ? StartupImpact::High : StartupImpact::Medium;
-        e.impactWhy = L"Measured: Windows logged it slowing a boot down (" + std::wstring(b) + L", Diagnostics-Performance log)";
+        e.impactWhy = TrF(L"Measured: Windows logged it slowing a boot down ({0} s, Diagnostics-Performance log)",
+                          util::FormatDecimal(e.measuredMs / 1000.0, 1));
         return;
     }
     if (!e.programFound) {
         e.impact = StartupImpact::Unknown;
-        e.impactWhy = e.program.empty() ? L"Unknown: no program to look at" : L"Unknown: the program file wasn't found";
+        e.impactWhy = e.program.empty() ? Tr(L"Unknown: no program to look at") : Tr(L"Unknown: the program file wasn't found");
         return;
     }
     if (e.programBytes == 0) {
         e.impact = StartupImpact::Unknown;
-        e.impactWhy = L"Unknown: the program is an app alias or link (0 bytes), so its size says nothing";
+        e.impactWhy = Tr(L"Unknown: the program is an app alias or link (0 bytes), so its size says nothing");
         return;
     }
     std::wstring size = util::FormatSizeShort(e.programBytes);
     std::wstring file = Lower(FileNameOf(e.program));
     if (e.kind == StartupKind::Service && e.delayed) {
         e.impact = StartupImpact::Low;
-        e.impactWhy = L"Estimate: delayed start, so Windows starts it after sign-in has settled";
+        e.impactWhy = Tr(L"Estimate: delayed start, so Windows starts it after sign-in has settled");
     } else if (e.chromium) {
         e.impact = StartupImpact::High;
-        e.impactWhy = L"Estimate: an Electron/Chromium app (it loads a whole browser engine), " + size;
+        e.impactWhy = TrF(L"Estimate: an Electron/Chromium app (it loads a whole browser engine), {0}", size);
     } else if (e.programBytes >= (100ull << 20)) {
         e.impact = StartupImpact::High;
-        e.impactWhy = L"Estimate: a large program (" + size + L")";
+        e.impactWhy = TrF(L"Estimate: a large program ({0})", size);
     } else if (file.find(L"update") != std::wstring::npos && e.programBytes < (10ull << 20)) {
         e.impact = StartupImpact::Low;
-        e.impactWhy = L"Estimate: a small updater (" + size + L") that usually checks and exits";
+        e.impactWhy = TrF(L"Estimate: a small updater ({0}) that usually checks and exits", size);
     } else if (e.programBytes >= (20ull << 20)) {
         e.impact = StartupImpact::Medium;
-        e.impactWhy = L"Estimate: a mid-sized program (" + size + L")";
+        e.impactWhy = TrF(L"Estimate: a mid-sized program ({0})", size);
     } else {
         e.impact = StartupImpact::Low;
-        e.impactWhy = L"Estimate: a small program (" + size + L"); what it loads later isn't known";
+        e.impactWhy = TrF(L"Estimate: a small program ({0}); what it loads later isn't known", size);
     }
 }
 
@@ -911,7 +911,7 @@ StartupChange SetStartupEnabled(const StartupEntry& e, bool enable) {
     int64_t now = util::NowFileTime();
     std::wstring note;
     switch (e.kind) {
-        case StartupKind::RunOnce: r.error = L"A Run once entry runs at the next sign-in and is then removed; it isn't changed here"; return r;
+        case StartupKind::RunOnce: r.error = Tr(L"A Run once entry runs at the next sign-in and is then removed; it isn't changed here"); return r;
         case StartupKind::Run:
         case StartupKind::Folder: {
             std::vector<uint8_t> v = MakeApproved(enable, now);
@@ -924,19 +924,19 @@ StartupChange SetStartupEnabled(const StartupEntry& e, bool enable) {
                     RegCloseKey(k);
                 }
                 if (st != ERROR_SUCCESS) {
-                    r.error = L"Couldn't change it: " + util::Win32ErrorMessage(st);
+                    r.error = TrF(L"Couldn't change it: {0}", util::Win32ErrorMessage(st));
                     return r;
                 }
             } else {
                 std::wstring cmd = StartupAdminCommand(e, enable, now);
                 if (cmd.empty()) {
-                    r.error = L"Its name can't be passed to reg.exe safely; use Task Manager for this one";
+                    r.error = Tr(L"Its name can't be passed to reg.exe safely; use Task Manager for this one");
                     return r;
                 }
                 AdminRun a = RunAsAdmin(cmd);
                 if (!a.error.empty() || a.code != 0) {
                     r.declined = a.declined;
-                    r.error = !a.error.empty() ? a.error : L"reg.exe failed: " + LastLine(a.out);
+                    r.error = !a.error.empty() ? a.error : TrF(L"reg.exe failed: {0}", LastLine(a.out));
                     return r;
                 }
             }
@@ -960,18 +960,18 @@ StartupChange SetStartupEnabled(const StartupEntry& e, bool enable) {
             if (SUCCEEDED(co)) CoUninitialize();
             if (FAILED(hr)) {
                 if (hr != E_ACCESSDENIED && hr != HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)) {
-                    r.error = L"Task Scheduler refused: " + util::Win32ErrorMessage(static_cast<unsigned long>(hr));
+                    r.error = TrF(L"Task Scheduler refused: {0}", util::Win32ErrorMessage(static_cast<unsigned long>(hr)));
                     return r;
                 }
                 std::wstring cmd = StartupAdminCommand(e, enable, now);
                 if (cmd.empty()) {
-                    r.error = L"Its name can't be passed to schtasks.exe safely; use Task Scheduler for this one";
+                    r.error = Tr(L"Its name can't be passed to schtasks.exe safely; use Task Scheduler for this one");
                     return r;
                 }
                 AdminRun a = RunAsAdmin(cmd);
                 if (!a.error.empty() || a.code != 0) {
                     r.declined = a.declined;
-                    r.error = !a.error.empty() ? a.error : L"schtasks failed: " + LastLine(a.out);
+                    r.error = !a.error.empty() ? a.error : TrF(L"schtasks failed: {0}", LastLine(a.out));
                     return r;
                 }
             }
@@ -981,18 +981,18 @@ StartupChange SetStartupEnabled(const StartupEntry& e, bool enable) {
         }
         case StartupKind::Service: {
             if (e.microsoft) {
-                r.error = L"Windows' own services aren't changed here";
+                r.error = Tr(L"Windows' own services aren't changed here");
                 return r;
             }
             std::wstring cmd = StartupAdminCommand(e, enable, now);
             if (cmd.empty()) {
-                r.error = L"Its name can't be passed to sc.exe safely; use Services for this one";
+                r.error = Tr(L"Its name can't be passed to sc.exe safely; use Services for this one");
                 return r;
             }
             AdminRun a = RunAsAdmin(cmd);
             if (!a.error.empty() || a.code != 0) {
                 r.declined = a.declined;
-                r.error = !a.error.empty() ? a.error : L"sc.exe failed: " + LastLine(a.out);
+                r.error = !a.error.empty() ? a.error : TrF(L"sc.exe failed: {0}", LastLine(a.out));
                 return r;
             }
             std::wstring word = enable ? (e.restoreStart.empty() ? std::wstring(L"auto") : e.restoreStart) : StartWord(e.startType, e.delayed);

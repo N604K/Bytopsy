@@ -233,6 +233,13 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   single image (the list shows the same items), and the keyboard moves through lists and dialogs
   only, not between a view's buttons (a screen reader's own navigation reaches those). The right-click
   and `⋯` menus are standard Windows menus.
+- **Languages**: every text of the windowed app comes from a translation table, so WinNCDU can be
+  translated without touching the code ([how](#translations)). It starts in Windows' display
+  language when a translation for it exists, otherwise in English; `⋯` > *Language* overrides that
+  (remembered in `settings.ini`). Numbers and dates follow your Windows region settings in every
+  language. No translation ships yet: the menu offers English and a *pseudo-language* that
+  lengthens and accents every text, for checking that layouts cope with longer languages. The
+  terminal app, the journal, logs and command lines stay English.
 
 Command line: `winncdu.exe [folder]` scans a folder, `winncdu.exe -f scan.json` opens a saved scan.
 The window opens as it was started (e.g. minimized from a shortcut set to "Run: Minimized").
@@ -348,6 +355,7 @@ tasks, and disk health from WMI and the drives' own health logs.
 | `cleanup.log` | One line per `winncdu-cli --clean --yes` run and per schedule change |
 | `freespace.log` | Each drive's free space, at most every 6 hours, for *Disk health* trends |
 | `photohash.cache` | Image hashes by path, size and time, so *Similar photos* is fast the second time |
+| `lang\` | Translations you add yourself (only read; see [Translations](#translations)) |
 
 Outside that folder: exports where you save them; the Explorer menu entry, if you add it (three keys
 under `HKCU\Software\Classes`, removed by the same menu item); the scheduled cleanup task
@@ -365,6 +373,36 @@ storage and the Delivery Optimization cache, Disk Cleanup, `fsutil` for TRIM, `r
 launcher's uninstall link (`steam://uninstall/...`). WinNCDU itself goes online for none of these,
 but the programs behave as they always do: Steam or Docker Desktop, for example, may connect on
 their own.
+
+## Translations
+
+WinNCDU is in English only so far, and translations are welcome. Each language is one UTF-8 text
+file, `res/lang/<code>.lang` (e.g. `de.lang`, `pt-BR.lang`), with one line per text:
+
+```text
+@name = Deutsch
+Largest files = Größte Dateien
+Docker removed {0} = Docker hat {0} entfernt
+{0} item|{0} items = {0} Element|{0} Elemente
+```
+
+The English text is the key; `{0}`, `{1}` are values (sizes, names, counts) that can move to wherever
+the sentence needs them; plurals give one form per case of the language's plural rule. Untranslated
+lines fall back to English. Start a file from
+[res/lang/template.lang](res/lang/template.lang), which lists every text with where it is used:
+
+```bat
+python -I tools/extract_strings.py --new de --name Deutsch
+```
+
+**Try it without building**: put the file in a `lang` folder next to `winncdu.exe` (or in
+`%LOCALAPPDATA%\WinNCDU\lang`, `WinNCDU-data\lang` in portable mode), restart WinNCDU and pick it
+under `⋯` > *Language*. Mistakes in the file (such as a `{1}` the English text doesn't have) are
+shown as a message. Setting `WINNCDU_LANG=de` (or `WINNCDU_LANG=pseudo`) starts in that language
+whatever the menu says. Files in `res/lang` are built into `winncdu.exe`; a file in a `lang` folder
+replaces the built-in one of the same code. Paths, registry keys, command lines, cleanup rule ids,
+the journal and logs are never translated. See [CONTRIBUTING.md](CONTRIBUTING.md#translate-winncdu)
+for keeping a translation up to date.
 
 ## Install
 
@@ -406,7 +444,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash and uia self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash, uia and i18n self-tests
 ```
 
 GitHub Actions builds and runs the self-tests on every push and pull request
@@ -535,6 +573,7 @@ src/                  core engine + terminal app
   startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
   apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
   phash.cpp           similar photos: WIC decoding, dHash/pHash, hash index, grouping, cache
+  i18n.cpp            translations: Tr/TrF/TrN, .lang files, plural rules, pseudo-language
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -571,12 +610,15 @@ tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, 
 tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
 tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
 tests/uia_test.cpp      accessibility tree: element identity across frames, reading order, names from text, patterns (ctest)
+tests/i18n_test.cpp     translations: .lang parsing, placeholders, plural rules, pseudo-language, res/lang files (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
+res/lang/             translations (<code>.lang, built in) and template.lang, the generated list of texts
+tools/extract_strings.py  collects the texts into template.lang, checks and updates translations
 third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified
-CONTRIBUTING.md       building, testing, adding a protected location or a cleaner
+CONTRIBUTING.md       building, testing, adding a protected location, a cleaner or a translation
 .github/ISSUE_TEMPLATE  issue forms: false alarm, missing protected folder, bug report
-.github/workflows/build.yml  CI: build and self-tests; release zips with SHA-256 on tags
+.github/workflows/build.yml  CI: build, self-tests, translation template check; release zips with SHA-256 on tags
 docs/RELEASING.md     how releases are built, signed (once set up) and published
 packaging/signpath/   SignPath artifact configuration for code signing
 packaging/winget/, scoop/, chocolatey/  package manager manifests (templates)

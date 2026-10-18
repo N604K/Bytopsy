@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -41,15 +42,15 @@ const std::vector<Rule>& Rules() {
         {L"out", L"CMake", L"cmake --build", {L"cmakepresets.json"}},
         {L"build", L"Flutter", L"flutter build", {L"pubspec.yaml"}},
         {L".dart_tool", L"Dart", L"dart pub get", {L"pubspec.yaml"}},
-        {L"library", L"Unity", L"opening the project in Unity", {L"assets\\+projectsettings\\"}},
-        {L"temp", L"Unity", L"opening the project in Unity", {L"assets\\+projectsettings\\"}},
-        {L"obj", L"Unity", L"opening the project in Unity", {L"assets\\+projectsettings\\"}},
-        {L"intermediate", L"Unreal", L"building in Unreal Editor", {L"*.uproject"}},
-        {L"deriveddatacache", L"Unreal", L"opening the project in Unreal Editor", {L"*.uproject"}},
+        {L"library", L"Unity", N_(L"opening the project in Unity"), {L"assets\\+projectsettings\\"}},
+        {L"temp", L"Unity", N_(L"opening the project in Unity"), {L"assets\\+projectsettings\\"}},
+        {L"obj", L"Unity", N_(L"opening the project in Unity"), {L"assets\\+projectsettings\\"}},
+        {L"intermediate", L"Unreal", N_(L"building in Unreal Editor"), {L"*.uproject"}},
+        {L"deriveddatacache", L"Unreal", N_(L"opening the project in Unreal Editor"), {L"*.uproject"}},
         {L".venv", L"Python", L"python -m venv + pip install", {}, L"pyvenv.cfg"},
         {L"venv", L"Python", L"python -m venv + pip install", {}, L"pyvenv.cfg"},
         {L".tox", L"Python", L"tox", {L"tox.ini", L"pyproject.toml", L"setup.py"}},
-        {L"__pycache__", L"Python", L"running the code", {}, nullptr, true},
+        {L"__pycache__", L"Python", N_(L"running the code"), {}, nullptr, true},
         {L".pytest_cache", L"Python", L"pytest", {}, nullptr, true},
         {L".mypy_cache", L"Python", L"mypy", {}, nullptr, true},
         {L".ruff_cache", L"Python", L"ruff", {}, nullptr, true},

@@ -4,6 +4,8 @@
 1 24 "winncdu-gui.manifest"
 1 ICON "../../res/winncdu.ico"
 201 RCDATA "../../res/cleaners.ini"
+// Translations (res/lang/<code>.lang), listed by CMakeLists.txt in the build folder.
+#include "lang_resources.rc"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,0

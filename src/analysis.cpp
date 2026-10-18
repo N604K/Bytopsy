@@ -9,6 +9,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -80,7 +81,7 @@ bool ParseQuery(const std::wstring& text, SearchQuery& q, std::wstring& err) {
     q = SearchQuery{};
     auto tokens = Tokenize(text);
     if (tokens.empty()) {
-        err = L"Empty query";
+        err = Tr(L"Empty query");
         return false;
     }
     int64_t now = util::NowFileTime();
@@ -92,7 +93,7 @@ bool ParseQuery(const std::wstring& text, SearchQuery& q, std::wstring& err) {
             bool orEqual = t.size() > 1 && t[1] == L'=';
             uint64_t v;
             if (!util::ParseSize(t.substr(orEqual ? 2 : 1), v)) {
-                err = L"Bad size: " + tok;
+                err = TrF(L"Bad size: {0}", tok);
                 return false;
             }
             // ">" and "<" are strict, ">=" and "<=" include the limit itself.
@@ -108,7 +109,7 @@ bool ParseQuery(const std::wstring& text, SearchQuery& q, std::wstring& err) {
         } else if (t.rfind(L"older:", 0) == 0 || t.rfind(L"newer:", 0) == 0) {
             int64_t ticks;
             if (!ParseAge(t.substr(6), ticks)) {
-                err = L"Bad age (use e.g. 30d, 2w, 6m, 1y): " + tok;
+                err = TrF(L"Bad age (use e.g. 30d, 2w, 6m, 1y): {0}", tok);
                 return false;
             }
             if (t[0] == L'o')
@@ -122,7 +123,7 @@ bool ParseQuery(const std::wstring& text, SearchQuery& q, std::wstring& err) {
             else if (v == L"d" || v == L"dir" || v == L"folder" || v == L"dirs" || v == L"folders")
                 q.type = 2;
             else {
-                err = L"Bad type (use type:f or type:d): " + tok;
+                err = TrF(L"Bad type (use type:f or type:d): {0}", tok);
                 return false;
             }
         } else if (t.rfind(L"ext:", 0) == 0) {

@@ -19,6 +19,7 @@ struct Settings {
     RECT window{};
     bool hasWindow = false;
     bool maximized = false;
+    std::wstring language;  // "" Windows' display language, "en", "qps-ploc" (pseudo), or a code from res/lang
 };
 
 Settings LoadSettings();
@@ -34,7 +35,7 @@ bool SetShellIntegration(bool enable, std::wstring& err);
 bool RelaunchElevated(const std::wstring& args);
 
 std::wstring PickFolder(HWND owner, const std::wstring& title);
-std::wstring PickOpenFile(HWND owner, const wchar_t* title = L"Open a saved scan", const wchar_t* filterName = L"Scan files (*.json)",
-                          const wchar_t* filter = L"*.json");
+// Empty title / filter name: "Open a saved scan" / "Scan files (*.json)".
+std::wstring PickOpenFile(HWND owner, const std::wstring& title = L"", const std::wstring& filterName = L"", const wchar_t* filter = L"*.json");
 std::wstring PickSaveFile(HWND owner, const std::wstring& defaultName, bool csv);
 void ShowProperties(HWND owner, const std::wstring& path);

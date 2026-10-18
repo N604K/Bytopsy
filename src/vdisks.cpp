@@ -11,6 +11,7 @@
 #include "journal.h"
 #include "runtool.h"
 #include "tree.h"
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -166,7 +167,7 @@ T Get(const uint8_t* p) {
 // as zeros.
 bool ReadVirtual(HANDLE h, uint64_t virtOffset, uint8_t* out, DWORD n, std::wstring& err) {
     char sig[8];
-    if (!ReadAt(h, 0, sig, 8) || memcmp(sig, "vhdxfile", 8) != 0) return err = L"not a VHDX file", false;
+    if (!ReadAt(h, 0, sig, 8) || memcmp(sig, "vhdxfile", 8) != 0) return err = Tr(L"not a VHDX file"), false;
     uint64_t batOff = 0, metaOff = 0;
     for (uint64_t at : {0x30000ull, 0x40000ull}) {  // the region table and its copy
         std::vector<uint8_t> rt(0x10000);
@@ -179,10 +180,10 @@ bool ReadVirtual(HANDLE h, uint64_t virtOffset, uint8_t* out, DWORD n, std::wstr
         }
         if (batOff && metaOff) break;
     }
-    if (!batOff || !metaOff) return err = L"no block table in the VHDX", false;
+    if (!batOff || !metaOff) return err = Tr(L"no block table in the VHDX"), false;
     std::vector<uint8_t> md(0x10000);
     if (!ReadAt(h, metaOff, md.data(), static_cast<DWORD>(md.size())) || memcmp(md.data(), "metadata", 8) != 0)
-        return err = L"no metadata in the VHDX", false;
+        return err = Tr(L"no metadata in the VHDX"), false;
     uint32_t blockSize = 0, sector = 0;
     uint16_t count = std::min<uint16_t>(Get<uint16_t>(&md[10]), 2047);
     for (uint16_t i = 0; i < count; ++i) {
@@ -194,18 +195,18 @@ bool ReadVirtual(HANDLE h, uint64_t virtOffset, uint8_t* out, DWORD n, std::wstr
         if (memcmp(e, &kLogicalSectorSize, 16) == 0) sector = Get<uint32_t>(v);
     }
     if (blockSize < (1u << 20) || (blockSize & (blockSize - 1)) || (sector != 512 && sector != 4096))
-        return err = L"unexpected VHDX block size", false;
+        return err = Tr(L"unexpected VHDX block size"), false;
     uint64_t chunkRatio = (1ull << 23) * sector / blockSize;  // payload entries between sector bitmap entries
     uint64_t block = virtOffset / blockSize, within = virtOffset % blockSize;
-    if (within + n > blockSize) return err = L"read across blocks", false;
+    if (within + n > blockSize) return err = Tr(L"read across blocks"), false;
     uint64_t entry = 0;
-    if (!ReadAt(h, batOff + (block + block / chunkRatio) * 8, &entry, 8)) return err = L"can't read the block table", false;
+    if (!ReadAt(h, batOff + (block + block / chunkRatio) * 8, &entry, 8)) return err = Tr(L"can't read the block table"), false;
     uint64_t state = entry & 7;
     if (state != 6 && state != 7) {  // not fully/partially present: never written
         memset(out, 0, n);
         return true;
     }
-    if (!ReadAt(h, (entry >> 20) * (1ull << 20) + within, out, n)) return err = L"can't read the VHDX", false;
+    if (!ReadAt(h, (entry >> 20) * (1ull << 20) + within, out, n)) return err = Tr(L"can't read the VHDX"), false;
     return true;
 }
 
@@ -245,16 +246,16 @@ bool ReadVhdxExt4(const std::wstring& vhdx, uint64_t& used, uint64_t& total, std
     bool ok = ReadVirtual(h, 1024, sb, sizeof(sb), err);
     CloseHandle(h);
     if (!ok) return false;
-    if (Get<uint16_t>(sb + 0x38) != 0xEF53) return err = L"no ext4 file system (or never formatted)", false;
+    if (Get<uint16_t>(sb + 0x38) != 0xEF53) return err = Tr(L"no ext4 file system (or never formatted)"), false;
     uint32_t logBlock = Get<uint32_t>(sb + 0x18);
-    if (logBlock > 6) return err = L"unexpected ext4 block size", false;
+    if (logBlock > 6) return err = Tr(L"unexpected ext4 block size"), false;
     uint64_t bs = 1024ull << logBlock;
     uint64_t blocks = Get<uint32_t>(sb + 0x04), freeBlocks = Get<uint32_t>(sb + 0x0C);
     if (Get<uint32_t>(sb + 0x60) & 0x80) {  // INCOMPAT_64BIT: high halves
         blocks |= static_cast<uint64_t>(Get<uint32_t>(sb + 0x150)) << 32;
         freeBlocks |= static_cast<uint64_t>(Get<uint32_t>(sb + 0x158)) << 32;
     }
-    if (freeBlocks > blocks) return err = L"inconsistent ext4 superblock", false;
+    if (freeBlocks > blocks) return err = Tr(L"inconsistent ext4 superblock"), false;
     used = (blocks - freeBlocks) * bs;
     total = blocks * bs;
     return true;
@@ -283,8 +284,8 @@ std::vector<VDisk> FindVDisks() {
             d.name = d.distro;
             d.mount = L"/";
             d.docker = d.distro.rfind(L"docker-desktop", 0) == 0;
-            if (d.distro == L"docker-desktop") d.name = L"Docker Desktop (system)";
-            if (d.distro == L"docker-desktop-data") d.name = L"Docker Desktop data";
+            if (d.distro == L"docker-desktop") d.name = N_(L"Docker Desktop (system)");
+            if (d.distro == L"docker-desktop-data") d.name = N_(L"Docker Desktop data");
             out.push_back(std::move(d));
         }
         RegCloseKey(lxss);
@@ -305,7 +306,7 @@ std::vector<VDisk> FindVDisks() {
             for (auto& d : out) known = known || _wcsicmp(d.path.c_str(), p.c_str()) == 0;
             if (known) continue;
             VDisk d;
-            d.name = L"Docker Desktop data";
+            d.name = N_(L"Docker Desktop data");
             d.distro = L"docker-desktop";
             d.mount = L"/mnt/docker-desktop-disk";
             d.path = p;
@@ -393,7 +394,7 @@ DockerInfo QueryDocker() {
     int code = RunTool(docker, L"system df --format \"{{json .}}\"", out, 60000);
     if (code == 0) info.rows = ParseDockerDf(out);
     info.running = code == 0 && !info.rows.empty();
-    if (!info.running) info.error = code == -2 ? L"Docker didn't answer in time" : LastLine(out);
+    if (!info.running) info.error = code == -2 ? Tr(L"Docker didn't answer in time") : LastLine(out);
     return info;
 }
 
@@ -410,8 +411,8 @@ DockerPruneResult DockerPrune(bool buildCache, bool images, std::atomic<bool>& c
         const wchar_t* args;
         const wchar_t* label;
     };
-    const Job jobs[] = {{buildCache, L"Build Cache", L"builder prune -a -f", L"Docker build cache"},
-                        {images, L"Images", L"image prune -a -f", L"Docker images no container uses"}};
+    const Job jobs[] = {{buildCache, L"Build Cache", L"builder prune -a -f", N_(L"Docker build cache")},
+                        {images, L"Images", L"image prune -a -f", N_(L"Docker images no container uses")}};
     for (auto& j : jobs) {
         if (!j.on || cancel) continue;
         // What Docker itself reports before and after: the data lives inside its virtual disk.
@@ -424,7 +425,7 @@ DockerPruneResult DockerPrune(bool buildCache, bool images, std::atomic<bool>& c
         uint64_t freed = b && a && b->size > a->size ? b->size - a->size : 0;
         res.freed += freed;
         std::wstring cmd = std::wstring(L"docker ") + j.args;
-        if (code != 0) res.errors.push_back(cmd + L": " + (code == -2 ? L"cancelled" : LastLine(out)));
+        if (code != 0) res.errors.push_back(cmd + L": " + (code == -2 ? Tr(L"cancelled") : LastLine(out)));
         JournalEntry je;
         je.action = JournalAction::Clean;
         je.bytes = freed;
@@ -461,7 +462,7 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
     for (auto& d : disks) {
         if (cancel) return res;
         if (!d.running) continue;
-        status(L"Trimming free space in " + d.name);
+        status(TrF(L"Trimming free space in {0}", Tr(d.name)));
         out.clear();
         RunTool(wsl, L"-d " + d.distro + L" -u root -- fstrim " + d.mount, out, 10 * 60000, &cancel);
     }
@@ -470,17 +471,17 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
     bool dockerStopped = false;
     if (ProcessRunning(L"Docker Desktop.exe")) {
         std::wstring docker = FindOnPath(L"docker.exe");
-        status(L"Stopping Docker Desktop");
+        status(Tr(L"Stopping Docker Desktop"));
         out.clear();
         if (docker.empty() || RunTool(docker, L"desktop stop", out, 5 * 60000, &cancel) != 0) {
-            res.errors.push_back(L"Couldn't stop Docker Desktop (" + (docker.empty() ? std::wstring(L"docker not found") : LastLine(out)) +
-                                 L"). Quit it, then compact again.");
+            res.errors.push_back(TrF(L"Couldn't stop Docker Desktop ({0}). Quit it, then compact again.",
+                                     docker.empty() ? Tr(L"docker not found") : LastLine(out)));
             return res;
         }
         dockerStopped = true;
     }
     // 3. Shut WSL down; the disks are detached once it has stopped.
-    status(L"Shutting down WSL");
+    status(Tr(L"Shutting down WSL"));
     out.clear();
     RunTool(wsl, L"--shutdown", out, 3 * 60000);
     std::vector<std::wstring> paths;
@@ -489,7 +490,7 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
     for (auto& d : disks) {
         while (InUse(d.path) && GetTickCount64() - start < 60000 && !cancel) Sleep(500);
         if (InUse(d.path)) {
-            res.errors.push_back(d.name + L": still in use after WSL shut down");
+            res.errors.push_back(TrF(L"{0}: still in use after WSL shut down", Tr(d.name)));
             continue;
         }
         paths.push_back(d.path);
@@ -502,8 +503,7 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
     }
     // 4. diskpart, as administrator.
     if (!paths.empty() && !cancel) {
-        status(L"Compacting " + std::to_wstring(paths.size()) + (paths.size() == 1 ? L" virtual disk" : L" virtual disks") +
-               L" (this can take a while)");
+        status(TrN(paths.size(), L"Compacting {0} virtual disk (this can take a while)", L"Compacting {0} virtual disks (this can take a while)"));
         std::wstring script = TempDir() + L"winncdu-compact-" + std::to_wstring(GetCurrentProcessId()) + L".txt";
         std::string text = DiskpartScript(paths);
         HANDLE f = CreateFileW(script.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
@@ -517,11 +517,11 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
         written = f != INVALID_HANDLE_VALUE && ReadFile(f, check.data(), static_cast<DWORD>(check.size()), &n, nullptr) &&
                   n == text.size() && check.compare(0, n, text) == 0;
         if (!written) {
-            res.errors.push_back(L"Couldn't write " + script);
+            res.errors.push_back(TrF(L"Couldn't write {0}", script));
         } else {
             AdminRun r = RunAsAdmin(Quote(SystemTool(L"diskpart.exe")) + L" /s " + Quote(script));  // never interrupted
             if (!r.error.empty())
-                res.errors.push_back(r.declined ? L"Administrator permission was declined: nothing was compacted" : r.error);
+                res.errors.push_back(r.declined ? Tr(L"Administrator permission was declined: nothing was compacted") : r.error);
             else if (r.code != 0)
                 res.errors.push_back(L"diskpart: " + LastLine(r.out));
         }
@@ -542,11 +542,11 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
     }
     // 5. Docker Desktop back as it was.
     if (dockerStopped) {
-        status(L"Starting Docker Desktop again");
+        status(Tr(L"Starting Docker Desktop again"));
         std::wstring docker = FindOnPath(L"docker.exe");
         out.clear();
         res.dockerRestarted = RunTool(docker, L"desktop start", out, 5 * 60000) == 0;
-        if (!res.dockerRestarted) res.errors.push_back(L"Docker Desktop didn't start again: start it yourself");
+        if (!res.dockerRestarted) res.errors.push_back(Tr(L"Docker Desktop didn't start again: start it yourself"));
     }
     return res;
 }

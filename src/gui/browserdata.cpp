@@ -9,6 +9,7 @@
 
 #include "../fsops.h"
 #include "../tree.h"
+#include "../i18n.h"
 #include "../util.h"
 #include "sqlite3.h"
 
@@ -340,7 +341,7 @@ std::vector<BrowserDb> InspectProfile(const std::wstring& dir, BrowserData kind,
         DbKind k = KindOf(file);
         Db db;
         if (!OpenSnapshot(file, db) || !SchemaOk(db.h, k)) {
-            if (err) *err = file + L": not a browser database this version of WinNCDU knows (" + LastError(db.h) + L")";
+            if (err) *err = TrF(L"{0}: not a browser database this version of WinNCDU knows ({1})", file, LastError(db.h));
             continue;
         }
         BrowserDb b;
@@ -416,7 +417,7 @@ bool CleanBrowserDb(const std::wstring& file, BrowserData kind, const std::vecto
     DbKind k = KindOf(file);
     bool cookies = k == DbKind::ChromiumCookies || k == DbKind::FirefoxCookies;
     if (k == DbKind::Unknown || cookies != (kind == BrowserData::Cookies) || kind == BrowserData::None) {
-        err = L"not a cookie or history database";
+        err = Tr(L"not a cookie or history database");
         return false;
     }
     if (k == DbKind::ChromiumHistory) {
@@ -424,7 +425,7 @@ bool CleanBrowserDb(const std::wstring& file, BrowserData kind, const std::vecto
         {
             Db db;
             if (!OpenSnapshot(file, db) || !SchemaOk(db.h, k)) {
-                err = L"not a Chromium history database";
+                err = Tr(L"not a Chromium history database");
                 return false;
             }
             int64_t n = Count(db.h, "SELECT COUNT(*) FROM visits");
@@ -454,18 +455,18 @@ bool CleanBrowserDb(const std::wstring& file, BrowserData kind, const std::vecto
     int rc = OpenForWriting(file, db);
     if (rc != SQLITE_OK) {
         r.busy = Busy(rc) || (rc & 0xFF) == SQLITE_CANTOPEN;
-        err = L"couldn't open it: " + LastError(db.h);
+        err = TrF(L"couldn't open it: {0}", LastError(db.h));
         return false;
     }
     if (!SchemaOk(db.h, k)) {
         r.busy = Busy(sqlite3_errcode(db.h));
-        err = r.busy ? L"the browser has it open" : L"not the database WinNCDU expected; left alone";
+        err = r.busy ? Tr(L"the browser has it open") : Tr(L"not the database WinNCDU expected; left alone");
         return false;
     }
     rc = sqlite3_exec(db.h, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr);
     if (rc != SQLITE_OK) {
         r.busy = Busy(rc);
-        err = r.busy ? L"the browser has it open" : LastError(db.h);
+        err = r.busy ? Tr(L"the browser has it open") : LastError(db.h);
         return false;
     }
     bool ok = true;

@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <string>
 
+#include "../i18n.h"
+
 inline D2D1_COLOR_F Hex(uint32_t rgb, float a = 1.0f) {
     return D2D1::ColorF(((rgb >> 16) & 0xFF) / 255.0f, ((rgb >> 8) & 0xFF) / 255.0f, (rgb & 0xFF) / 255.0f, a);
 }
@@ -83,9 +85,10 @@ inline Palette LightPalette() {
 // File categories used for the treemap colors and the file type summary.
 enum Category { CAT_VIDEO, CAT_IMAGE, CAT_AUDIO, CAT_DOCUMENT, CAT_ARCHIVE, CAT_CODE, CAT_EXECUTABLE, CAT_SYSTEM, CAT_OTHER, CAT_COUNT };
 
-inline const wchar_t* CategoryName(int c) {
-    static const wchar_t* names[] = {L"Video", L"Images", L"Audio", L"Documents", L"Archives", L"Code", L"Programs", L"System", L"Other"};
-    return names[c];
+inline std::wstring CategoryName(int c) {
+    static const wchar_t* names[] = {N_(L"Video"),    N_(L"Images"),   N_(L"Audio"),  N_(L"Documents"), N_(L"Archives"),
+                                     N_(L"Code"),     N_(L"Programs"), N_(L"System"), N_(L"Other")};
+    return Tr(names[c]);
 }
 
 inline uint32_t CategoryRgb(int c) {

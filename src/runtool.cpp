@@ -7,6 +7,7 @@
 #include <cstring>
 #include <vector>
 
+#include "i18n.h"
 #include "util.h"
 
 namespace {
@@ -160,7 +161,7 @@ AdminRun RunAsAdmin(const std::wstring& commandLine) {
     if (!ShellExecuteExW(&sei) || !sei.hProcess) {
         DWORD e = GetLastError();
         r.declined = e == ERROR_CANCELLED;
-        r.error = r.declined ? L"Administrator permission was declined" : L"Couldn't start: " + util::Win32ErrorMessage(e);
+        r.error = r.declined ? Tr(L"Administrator permission was declined") : TrF(L"Couldn't start: {0}", util::Win32ErrorMessage(e));
         return r;
     }
     WaitForSingleObject(sei.hProcess, INFINITE);

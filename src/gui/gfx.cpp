@@ -200,7 +200,7 @@ IDWriteTextFormat* Gfx::Format(const TextStyle& st) {
                                                                 : uiFont_;
     IDWriteTextFormat* f = nullptr;
     dw_->CreateTextFormat(family.c_str(), nullptr, st.weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, st.size,
-                          L"", &f);
+                          locale_.c_str(), &f);
     if (!f) return nullptr;
     f->SetTextAlignment(st.align == Align::Left    ? DWRITE_TEXT_ALIGNMENT_LEADING
                         : st.align == Align::Right ? DWRITE_TEXT_ALIGNMENT_TRAILING
@@ -216,6 +216,13 @@ IDWriteTextFormat* Gfx::Format(const TextStyle& st) {
     }
     formats_[key] = f;
     return f;
+}
+
+void Gfx::SetLocale(const std::wstring& name) {
+    if (name == locale_) return;
+    locale_ = name;
+    for (auto& kv : formats_) kv.second->Release();
+    formats_.clear();
 }
 
 void Gfx::Text(const std::wstring& s, const RectF& r, D2D1_COLOR_F c, const TextStyle& st) {

@@ -45,6 +45,8 @@ for %t in (build\winncdu-*-test.exe) do %t
 | `winncdu-startup-test` | `StartupApproved` values, command lines, impact; changes nothing |
 | `winncdu-apps-test` | which Uninstall entries are listed, which folders count as leftovers |
 | `winncdu-phash-test` | similar photos: hashes of re-encoded and rotated images, grouping, cache |
+| `winncdu-uia-test` | accessibility tree: element identity across frames, reading order, names, patterns |
+| `winncdu-i18n-test` | translations: `.lang` parsing, placeholders, plural rules, pseudo-language, every `res/lang` file |
 
 The devjunk test builds its fixture next to the test program, so it finds nothing (and fails) when
 the build folder sits inside a dot folder such as `.claude\worktrees\...`.
@@ -53,8 +55,9 @@ The tests work in `%TEMP%` and in a folder next to the test program, and remove 
 Two of them move a test folder to the Recycle Bin and take it out again; the protect test rewrites
 `protect.txt` for a moment and restores it.
 
-Before a pull request: the build is warning-free at `/W4`, all tests pass, and the README describes
-what changed for users. Match the style of the code around your change.
+Before a pull request: the build is warning-free at `/W4`, all tests pass, the translation template
+is current (`python -I tools/extract_strings.py`, see [below](#texts-in-the-code)), and the README
+describes what changed for users. Match the style of the code around your change.
 
 ## Add a protected location
 
@@ -139,6 +142,55 @@ Try it first without building: put the section in `%LOCALAPPDATA%\WinNCDU\cleane
 `tests/cleanup_test.cpp` checks that the shipped file parses without errors and lists every category
 id in order; add your id to that list (and update the count, and any index-based checks after it).
 Add the app to the Cleanup paragraph of the README.
+
+## Translate WinNCDU
+
+A translation is one UTF-8 file, `res/lang/<code>.lang`, named after the language code Windows uses
+(`de`, `fr`, `pt-BR`, `zh-Hans`, ...). The format is explained at the top of
+[res/lang/template.lang](res/lang/template.lang), which lists every text the windowed app shows, each
+with the source lines that use it.
+
+1. Start the file: `python -I tools/extract_strings.py --new de --name Deutsch` (Python 3, nothing
+   to install). Check `@plural`: left empty, the usual rule for the code is used.
+2. Translate line by line; the right side of `=` is yours. Keep every `{0}`, `{1}`, ... (they are
+   sizes, names and counts) and move them where your sentence needs them. Leave a line empty to
+   show the English text. Keep it short where the English is short (buttons, column headers,
+   chips): about a third longer still fits, much more gets cut off with "…".
+3. Try it without building: copy the file into a `lang` folder next to `winncdu.exe`, restart
+   WinNCDU and choose it under `⋯` > *Language* (or start it with `WINNCDU_LANG=de`). Mistakes in
+   the file show up as a message at the bottom of the window.
+4. Check it: `python -I tools/extract_strings.py` reports placeholders that don't match the English,
+   and `build\winncdu-i18n-test.exe` loads every file in `res/lang`.
+5. Send a pull request with the file. It is built into `winncdu.exe` from then on, and appears in
+   the *Language* menu; Windows' display language picks it automatically.
+
+When the code changes, `python -I tools/extract_strings.py --update res/lang/de.lang` brings your
+file into the template's order: new texts are added empty, texts the code no longer has move to the
+end as comments.
+
+Not translated, on purpose: the terminal app, the journal (`journal.log`), `cleanup.log`, paths,
+registry keys, command lines and cleanup rule ids. Numbers and dates already follow the Windows
+region settings, so translations don't change them.
+
+### Texts in the code
+
+Every text the windowed app shows goes through `src/i18n.h`:
+
+- `Tr(L"Scan a folder")` for a fixed text; the English text is the key.
+- `TrF(L"Moved {0} to the Recycle Bin", size)` with numbered values: never build a sentence by
+  adding pieces together, as other languages need a different order.
+- `TrN(count, L"{0} item", L"{0} items")` for counts; `{0}` is the formatted count, `{1}`... the
+  further arguments.
+- `N_(L"...")` marks a text that is stored or compared in English (a name kept in a struct, a
+  journal note) and translated with `Tr` where it is shown. The journal and logs are written inside
+  an `i18n::EnglishScope`, which keeps them English whatever the language.
+
+Names from the system or from data (paths, file and app names, distro and model names) stay as they
+are. Cleaner names and descriptions from `res/cleaners.ini` are translated when shown. After
+changing texts, run `python -I tools/extract_strings.py` to regenerate `res/lang/template.lang`;
+CI fails when it is out of date, or when a `TrF`/`TrN` call passes fewer values than its text uses.
+Check new layouts with `⋯` > *Language* > *Pseudo-language*, which makes every text about 40%
+longer and adds accents.
 
 ## Releases
 

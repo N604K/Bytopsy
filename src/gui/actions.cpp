@@ -487,12 +487,12 @@ uint64_t App::AiSelectedBytes() const {
 }
 
 void App::StartAiDelete() {
-    if (aiSel_.empty()) return Toast(L"Select the models to delete first", 2);
+    if (aiSel_.empty()) return Toast(Tr(L"Select the models to delete first"), 2);
     Dialog d;
     size_t n = aiSel_.size();
-    d.title = L"Delete " + util::FormatCount(n) + (n == 1 ? L" model (" : L" models (") + util::FormatSizeShort(AiSelectedBytes()) + L")?";
-    d.message = L"The model files are deleted permanently, not moved to the Recycle Bin. Chats, history, settings and sign-in "
-                L"tokens are not touched.";
+    d.title = TrN(n, L"Delete {0} model ({1})?", L"Delete {0} models ({1})?", util::FormatSizeShort(AiSelectedBytes()));
+    d.message = Tr(L"The model files are deleted permanently, not moved to the Recycle Bin. Chats, history, settings and sign-in "
+                   L"tokens are not touched.");
     std::vector<std::wstring> restore;
     size_t shown = 0;
     for (auto& [s, i] : aiSel_) {
@@ -502,16 +502,16 @@ void App::StartAiDelete() {
         std::wstring name = it.parent >= 0 ? ai_[s].items[static_cast<size_t>(it.parent)].name + L" " + it.name : it.name;
         d.lines.push_back(util::FormatSizeShort(it.bytes) + L"\t" + name);
     }
-    if (n > 8) d.lines.push_back(L"\t… and " + util::FormatCount(n - 8) + L" more");
+    if (n > 8) d.lines.push_back(L"\t" + TrN(n - 8, L"… and {0} more", L"… and {0} more"));
     if (restore.size() <= 3) {
-        d.message += L"\n\nTo get " + std::wstring(n == 1 ? L"it" : L"them") + L" back:";
-        for (auto& r : restore) d.message += L"\n" + r;
+        d.message += L"\n\n" + (n == 1 ? Tr(L"To get it back:") : Tr(L"To get them back:"));
+        for (auto& r : restore) d.message += L"\n" + Tr(r);
     } else {
-        d.message += L" Recently deleted lists how to download each one again.";
+        d.message += L" " + Tr(L"Recently deleted lists how to download each one again.");
     }
     d.icon = 0xE74D;
     d.tone = 1;
-    d.buttons = {L"Cancel", L"Delete permanently"};
+    d.buttons = {Tr(L"Cancel"), Tr(L"Delete permanently")};
     d.primary = 1;
     d.danger = 1;
     d.onClose = [this](int b, bool) {
@@ -534,19 +534,18 @@ void App::StartAiDelete() {
         }
         if (st->stores.empty()) return;
         auto t = std::make_unique<Task>();
-        t->title = L"Deleting models";
+        t->title = Tr(L"Deleting models");
         t->lines = [st] {
             size_t i = std::min(st->index.load(), st->stores.size() - 1);
-            return std::vector<std::pair<std::wstring, std::wstring>>{{L"From", st->stores[i].name}};
+            return std::vector<std::pair<std::wstring, std::wstring>>{{Tr(L"From"), Tr(st->stores[i].name)}};
         };
         t->progress = [st] { return static_cast<double>(st->index) / st->stores.size(); };
         t->cancel = [st] { st->cancel = true; };
         t->onDone = [this, st] {
             const AiDeleteResult& r = st->total;
-            std::wstring msg = L"Deleted " + util::FormatCount(r.deleted) + (r.deleted == 1 ? L" model" : L" models") + L", freed " +
-                               util::FormatSizeShort(r.freed);
+            std::wstring msg = TrN(r.deleted, L"Deleted {0} model, freed {1}", L"Deleted {0} models, freed {1}", util::FormatSizeShort(r.freed));
             if (!r.lockedBy.empty())
-                msg += L" · some files are in use (close " + AppNames(r.lockedBy) + L" and try again)";
+                msg += L" · " + TrF(L"some files are in use (close {0} and try again)", AppNames(r.lockedBy));
             else if (!r.errors.empty())
                 msg += L" · " + r.errors[0];
             Toast(msg, r.errors.empty() ? 0 : 1);
@@ -585,9 +584,9 @@ void App::LoadWsl() {
     };
     auto st = std::make_shared<State>();
     auto t = std::make_unique<Task>();
-    t->title = L"Looking at WSL and Docker";
+    t->title = Tr(L"Looking at WSL and Docker");
     t->lines = [] {
-        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Asking running distros and Docker how much they use"}};
+        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", Tr(L"Asking running distros and Docker how much they use")}};
     };
     t->onDone = [this, st] {
         vdisks_ = std::move(st->disks);
@@ -622,7 +621,7 @@ void App::ToggleWslRow(int row) {
 }
 
 void App::StartWslFree() {
-    if (wslSel_.empty()) return Toast(L"Select disks to compact or Docker data to remove first", 2);
+    if (wslSel_.empty()) return Toast(Tr(L"Select disks to compact or Docker data to remove first"), 2);
     std::vector<VDisk> disks;
     bool build = wslSel_.count(kWslDocker) > 0, images = wslSel_.count(kWslDocker + 1) > 0;
     uint64_t total = 0;
@@ -630,34 +629,33 @@ void App::StartWslFree() {
         total += WslRowBytes(id);
         if (id < static_cast<int>(vdisks_.size())) disks.push_back(vdisks_[id]);
     }
-    if ((build || images) && !docker_.running) return Toast(L"Docker isn't running: start Docker Desktop first", 2);
+    if ((build || images) && !docker_.running) return Toast(Tr(L"Docker isn't running: start Docker Desktop first"), 2);
     bool anyRunning = false;
     for (auto& d : vdisks_) anyRunning = anyRunning || d.running;
     Dialog d;
-    d.title = L"Free up to " + util::FormatSizeShort(total) + L"?";
+    d.title = TrF(L"Free up to {0}?", util::FormatSizeShort(total));
     if (build || images) {
-        d.message = L"Docker removes ";
-        d.message += build && images ? L"its build cache and the images no container uses: the next build or docker pull brings them back."
-                     : build         ? L"its build cache: the next build brings it back."
-                                     : L"the images no container uses: docker pull brings them back when needed.";
-        d.message += L" Containers and volumes are kept.";
+        d.message = build && images ? Tr(L"Docker removes its build cache and the images no container uses: the next build or docker pull brings them back.")
+                    : build         ? Tr(L"Docker removes its build cache: the next build brings it back.")
+                                    : Tr(L"Docker removes the images no container uses: docker pull brings them back when needed.");
+        d.message += L" " + Tr(L"Containers and volumes are kept.");
     }
     if (!disks.empty()) {
         if (!d.message.empty()) d.message += L"\n\n";
-        d.message += L"Compacting gives the free space inside each disk back to Windows. ";
-        d.message += anyRunning ? L"WSL is shut down first, so every running Linux distro stops: save your work there. " : L"";
-        d.message += docker_.desktopRunning ? L"Docker Desktop is stopped and started again. " : L"";
-        d.message += L"Windows asks for administrator permission to run diskpart, and large disks can take several minutes.";
+        d.message += Tr(L"Compacting gives the free space inside each disk back to Windows.") + L" ";
+        d.message += anyRunning ? Tr(L"WSL is shut down first, so every running Linux distro stops: save your work there.") + L" " : L"";
+        d.message += docker_.desktopRunning ? Tr(L"Docker Desktop is stopped and started again.") + L" " : L"";
+        d.message += Tr(L"Windows asks for administrator permission to run diskpart, and large disks can take several minutes.");
     }
     for (int id : wslSel_) {
-        std::wstring name = id < static_cast<int>(vdisks_.size()) ? L"Compact " + vdisks_[id].name
-                            : id == kWslDocker                   ? L"Docker build cache"
-                                                                 : L"Docker images no container uses";
+        std::wstring name = id < static_cast<int>(vdisks_.size()) ? TrF(L"Compact {0}", vdisks_[id].name)
+                            : id == kWslDocker                   ? Tr(L"Docker build cache")
+                                                                 : Tr(L"Docker images no container uses");
         d.lines.push_back(util::FormatSizeShort(WslRowBytes(id)) + L"\t" + name);
     }
     d.icon = 0xE74D;
     d.tone = 2;
-    d.buttons = {L"Cancel", L"Free up space"};
+    d.buttons = {Tr(L"Cancel"), Tr(L"Free up space")};
     d.primary = 1;
     d.onClose = [this, disks, build, images](int b, bool) {
         if (b != 1) return;
@@ -675,21 +673,21 @@ void App::StartWslFree() {
         st->build = build;
         st->images = images;
         auto t = std::make_unique<Task>();
-        t->title = L"Freeing up space";
+        t->title = Tr(L"Freeing up space");
         t->lines = [st] {
             std::lock_guard<std::mutex> lk(st->m);
-            return std::vector<std::pair<std::wstring, std::wstring>>{{L"Now", st->status}};
+            return std::vector<std::pair<std::wstring, std::wstring>>{{Tr(L"Now"), Tr(st->status)}};
         };
         t->cancel = [st] { st->cancel = true; };
         t->onDone = [this, st] {
             const CompactResult& c = st->compact;
-            std::vector<std::wstring> msgs;
-            if (st->build || st->images) msgs.push_back(L"Docker removed " + util::FormatSizeShort(st->prune.freed));
-            if (!st->disks.empty())
-                msgs.push_back(L"compacting gave " + util::FormatSizeShort(c.before > c.after ? c.before - c.after : 0) + L" back to Windows");
-            std::wstring msg;
-            for (auto& m : msgs) msg += (msg.empty() ? L"" : L", ") + m;
-            if (!msg.empty()) msg[0] = static_cast<wchar_t>(towupper(msg[0]));
+            std::wstring pruned = util::FormatSizeShort(st->prune.freed);
+            std::wstring compacted = util::FormatSizeShort(c.before > c.after ? c.before - c.after : 0);
+            bool docker = st->build || st->images, compact = !st->disks.empty();
+            std::wstring msg = docker && compact ? TrF(L"Docker removed {0}, compacting gave {1} back to Windows", pruned, compacted)
+                               : docker          ? TrF(L"Docker removed {0}", pruned)
+                               : compact         ? TrF(L"Compacting gave {0} back to Windows", compacted)
+                                                 : L"";
             std::vector<std::wstring> errors = st->prune.errors;
             errors.insert(errors.end(), c.errors.begin(), c.errors.end());
             if (!errors.empty()) msg += L" · " + errors[0];
@@ -704,7 +702,7 @@ void App::StartWslFree() {
                 st->status = s;
             };
             if (st->build || st->images) {
-                status(L"Docker is removing what comes back by itself");
+                status(N_(L"Docker is removing what comes back by itself"));
                 st->prune = DockerPrune(st->build, st->images, st->cancel);
             }
             if (!st->disks.empty() && !st->cancel) st->compact = CompactVDisks(st->disks, st->cancel, status);
@@ -720,8 +718,8 @@ void App::LoadWinTools() {
     if (task_) return;
     auto st = std::make_shared<WinToolsInfo>();
     auto t = std::make_unique<Task>();
-    t->title = L"Looking at Windows";
-    t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Drivers, System Restore, hibernation, event logs"}}; };
+    t->title = Tr(L"Looking at Windows");
+    t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", Tr(L"Drivers, System Restore, hibernation, event logs")}}; };
     t->onDone = [this, st] {
         st->store = win_.store;  // DISM's analysis takes minutes: kept until something changes it
         st->storeAnalyzed = win_.storeAnalyzed;
@@ -739,8 +737,9 @@ void App::LoadWinTools() {
 }
 
 // Runs one of Windows' own tools as administrator, then says what it freed on the system drive.
+// journalName and done are English (the journal is); doneShown is done as the toast says it.
 void App::RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
-                     std::function<AdminRun()> work) {
+                     std::function<AdminRun()> work, const std::wstring& doneShown) {
     struct State {
         AdminRun r;
         uint64_t before = 0, after = 0;
@@ -752,16 +751,17 @@ void App::RunWinTool(const std::wstring& title, const std::wstring& journalName,
     auto t = std::make_unique<Task>();
     t->title = title;
     t->lines = [] {
-        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Windows' own tool is working; this can take several minutes"}};
+        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", Tr(L"Windows' own tool is working; this can take several minutes")}};
     };
-    t->onDone = [this, st, title, journalName, done] {
+    std::wstring shown = doneShown.empty() ? Tr(done) : doneShown;
+    t->onDone = [this, st, title, journalName, done, shown] {
         uint64_t freed = st->after > st->before ? st->after - st->before : 0;
         if (!st->r.error.empty()) {
-            Toast(title + L": " + st->r.error, st->r.declined ? 2 : 1);
+            Toast(TrF(L"{0}: {1}", title, st->r.error), st->r.declined ? 2 : 1);
         } else {
             bool ok = st->r.code == 0;
-            Toast(ok ? done + (freed ? L" · " + util::FormatSizeShort(freed) + L" more free space" : L"")
-                     : title + L" failed: " + LastLine(st->r.out),
+            Toast(ok ? shown + (freed ? L" · " + TrF(L"{0} more free space", util::FormatSizeShort(freed)) : L"")
+                     : TrF(L"{0} failed: {1}", title, LastLine(st->r.out)),
                   ok ? 0 : 1);
             JournalEntry je;
             je.action = JournalAction::Clean;
@@ -786,10 +786,10 @@ void App::WinToolAction(int action) {
     Dialog d;
     d.icon = 0xE770;
     d.tone = 2;
-    d.buttons = {L"Cancel", L""};
+    d.buttons = {Tr(L"Cancel"), L""};
     d.primary = 1;
     std::function<void()> run;
-    std::wstring admin = elevated_ ? L"" : L" Windows asks for administrator permission.";
+    std::wstring admin = elevated_ ? L"" : L" " + Tr(L"Windows asks for administrator permission.");
     switch (action) {
         case WA_ANALYZE: {
             struct State {
@@ -797,10 +797,10 @@ void App::WinToolAction(int action) {
             };
             auto st = std::make_shared<State>();
             auto t = std::make_unique<Task>();
-            t->title = L"Analyzing the component store";
-            t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"DISM takes a few minutes"}}; };
+            t->title = Tr(L"Analyzing the component store");
+            t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", Tr(L"DISM takes a few minutes")}}; };
             t->onDone = [this, st] {
-                if (!st->cs.ok) return Toast(L"Component store: " + st->cs.error, 1);
+                if (!st->cs.ok) return Toast(TrF(L"Component store: {0}", st->cs.error), 1);
                 win_.store = st->cs;
                 win_.storeAnalyzed = true;
                 Invalidate();
@@ -809,12 +809,12 @@ void App::WinToolAction(int action) {
             return;
         }
         case WA_CLEAN_STORE:
-            d.title = L"Clean up the component store?";
-            d.message = L"DISM removes the Windows components that newer updates replaced. Installed updates can still be "
-                        L"uninstalled afterwards. This takes several minutes and can't be interrupted." + admin;
-            d.buttons[1] = L"Clean up";
+            d.title = Tr(L"Clean up the component store?");
+            d.message = Tr(L"DISM removes the Windows components that newer updates replaced. Installed updates can still be "
+                           L"uninstalled afterwards. This takes several minutes and can't be interrupted.") + admin;
+            d.buttons[1] = Tr(L"Clean up");
             run = [this] {
-                RunWinTool(L"Cleaning up the component store", L"Component store (WinSxS)", L"Component store cleaned up", [] {
+                RunWinTool(Tr(L"Cleaning up the component store"), N_(L"Component store (WinSxS)"), N_(L"Component store cleaned up"), [] {
                     return CleanComponentStore();
                 });
                 win_.storeAnalyzed = false;
@@ -829,17 +829,16 @@ void App::WinToolAction(int action) {
                     bytes += p.bytes;
                 }
             if (old.empty()) return;
-            d.title = L"Remove " + util::FormatCount(old.size()) + (old.size() == 1 ? L" old driver package (" : L" old driver packages (") +
-                      util::FormatSizeShort(bytes) + L")?";
-            d.message = L"Newer versions of these drivers are installed, and no device uses these ones. pnputil removes them from the "
-                        L"driver store; it refuses any that a device starts using." + admin;
+            d.title = TrN(old.size(), L"Remove {0} old driver package ({1})?", L"Remove {0} old driver packages ({1})?", util::FormatSizeShort(bytes));
+            d.message = Tr(L"Newer versions of these drivers are installed, and no device uses these ones. pnputil removes them from the "
+                           L"driver store; it refuses any that a device starts using.") + admin;
             for (size_t i = 0; i < old.size() && i < 8; ++i)
                 d.lines.push_back(util::FormatSizeShort(old[i].bytes) + L"\t" + old[i].provider.substr(0, old[i].provider.find(L' ')) +
                                   L"  " + old[i].originalInf + L"  " + old[i].version);
-            if (old.size() > 8) d.lines.push_back(L"\t… and " + util::FormatCount(old.size() - 8) + L" more");
-            d.buttons[1] = L"Remove";
+            if (old.size() > 8) d.lines.push_back(L"\t" + TrN(old.size() - 8, L"… and {0} more", L"… and {0} more"));
+            d.buttons[1] = Tr(L"Remove");
             run = [this, old] {
-                RunWinTool(L"Removing old drivers", L"Old driver packages", L"Old driver packages removed", [old] { return DeleteDriverPackages(old); });
+                RunWinTool(Tr(L"Removing old drivers"), N_(L"Old driver packages"), N_(L"Old driver packages removed"), [old] { return DeleteDriverPackages(old); });
             };
             break;
         }
@@ -850,64 +849,64 @@ void App::WinToolAction(int action) {
             ShadowStorage s = win_.shadows[0];
             for (auto& x : win_.shadows)
                 if (_wcsnicmp(x.forDrive.c_str(), win, 2) == 0) s = x;
-            d.title = L"Limit System Restore on " + s.forDrive + L"?";
-            d.message = L"Restore points may then use at most this share of " + s.onDrive +
-                        L". When they need more, Windows deletes the oldest ones first." + admin;
-            d.buttons = {L"Cancel", L"3%", L"5%", L"10%"};
+            d.title = TrF(L"Limit System Restore on {0}?", s.forDrive);
+            d.message = TrF(L"Restore points may then use at most this share of {0}. When they need more, Windows deletes the oldest ones first.",
+                            s.onDrive) + admin;
+            d.buttons = {Tr(L"Cancel"), L"3%", L"5%", L"10%"};
             d.primary = 2;
             d.onClose = [this, s](int b, bool) {
                 if (b < 1 || b > 3) return;
                 int pct = b == 1 ? 3 : b == 2 ? 5 : 10;
-                RunWinTool(L"Limiting System Restore", L"System Restore storage on " + s.forDrive,
+                RunWinTool(Tr(L"Limiting System Restore"), L"System Restore storage on " + s.forDrive,
                            L"System Restore limited to " + std::to_wstring(pct) + L"% of " + s.onDrive,
-                           [s, pct] { return LimitShadowStorage(s, pct); });
+                           [s, pct] { return LimitShadowStorage(s, pct); }, TrF(L"System Restore limited to {0}% of {1}", pct, s.onDrive));
             };
             ShowDialog(std::move(d));
             return;
         }
         case WA_HIBER_OFF:
-            d.title = L"Turn hibernation off?";
-            d.message = L"Deletes hiberfil.sys (" + util::FormatSizeShort(win_.hiber.bytes) +
-                        L"). Hibernate and Fast Startup stop working until you turn it on again here." + admin;
-            d.buttons[1] = L"Turn off";
-            run = [this] { RunWinTool(L"Turning hibernation off", L"Hibernation file", L"Hibernation is off", [] { return SetHibernation(L"off"); }); };
+            d.title = Tr(L"Turn hibernation off?");
+            d.message = TrF(L"Deletes hiberfil.sys ({0}). Hibernate and Fast Startup stop working until you turn it on again here.",
+                            util::FormatSizeShort(win_.hiber.bytes)) + admin;
+            d.buttons[1] = Tr(L"Turn off");
+            run = [this] { RunWinTool(Tr(L"Turning hibernation off"), N_(L"Hibernation file"), N_(L"Hibernation is off"), [] { return SetHibernation(L"off"); }); };
             break;
         case WA_HIBER_REDUCED:
-            d.title = L"Reduce the hibernation file?";
-            d.message = L"hiberfil.sys keeps only what Fast Startup needs (about half the size). Hibernate from the power menu stops "
-                        L"working; Fast Startup keeps working." + admin;
-            d.buttons[1] = L"Reduce";
+            d.title = Tr(L"Reduce the hibernation file?");
+            d.message = Tr(L"hiberfil.sys keeps only what Fast Startup needs (about half the size). Hibernate from the power menu stops "
+                           L"working; Fast Startup keeps working.") + admin;
+            d.buttons[1] = Tr(L"Reduce");
             run = [this] {
-                RunWinTool(L"Reducing the hibernation file", L"Hibernation file", L"Hibernation file reduced", [] { return SetHibernation(L"reduced"); });
+                RunWinTool(Tr(L"Reducing the hibernation file"), N_(L"Hibernation file"), N_(L"Hibernation file reduced"), [] { return SetHibernation(L"reduced"); });
             };
             break;
         case WA_HIBER_ON:
-            d.title = L"Turn hibernation on?";
-            d.message = L"Windows creates hiberfil.sys again (about 40% of your memory) for Hibernate and Fast Startup." + admin;
+            d.title = Tr(L"Turn hibernation on?");
+            d.message = Tr(L"Windows creates hiberfil.sys again (about 40% of your memory) for Hibernate and Fast Startup.") + admin;
             d.tone = 0;
-            d.buttons[1] = L"Turn on";
-            run = [this] { RunWinTool(L"Turning hibernation on", L"Hibernation file", L"Hibernation is on", [] { return SetHibernation(L"on"); }); };
+            d.buttons[1] = Tr(L"Turn on");
+            run = [this] { RunWinTool(Tr(L"Turning hibernation on"), N_(L"Hibernation file"), N_(L"Hibernation is on"), [] { return SetHibernation(L"on"); }); };
             break;
         case WA_COMPACT_ON:
-            d.title = L"Turn on Compact OS?";
-            d.message = L"Windows stores its own files compressed, usually saving 2 GB or more. It takes 10 to 20 minutes and uses the "
-                        L"processor while it runs; afterwards the cost is barely noticeable. You can turn it off again here." + admin;
+            d.title = Tr(L"Turn on Compact OS?");
+            d.message = Tr(L"Windows stores its own files compressed, usually saving 2 GB or more. It takes 10 to 20 minutes and uses the "
+                           L"processor while it runs; afterwards the cost is barely noticeable. You can turn it off again here.") + admin;
             d.tone = 0;
-            d.buttons[1] = L"Turn on";
-            run = [this] { RunWinTool(L"Compressing Windows", L"Compact OS", L"Compact OS is on", [] { return SetCompactOs(true); }); };
+            d.buttons[1] = Tr(L"Turn on");
+            run = [this] { RunWinTool(Tr(L"Compressing Windows"), N_(L"Compact OS"), N_(L"Compact OS is on"), [] { return SetCompactOs(true); }); };
             break;
         case WA_COMPACT_OFF:
-            d.title = L"Turn off Compact OS?";
-            d.message = L"Windows stores its own files uncompressed again, which takes back the space it saved." + admin;
-            d.buttons[1] = L"Turn off";
-            run = [this] { RunWinTool(L"Decompressing Windows", L"Compact OS", L"Compact OS is off", [] { return SetCompactOs(false); }); };
+            d.title = Tr(L"Turn off Compact OS?");
+            d.message = Tr(L"Windows stores its own files uncompressed again, which takes back the space it saved.") + admin;
+            d.buttons[1] = Tr(L"Turn off");
+            run = [this] { RunWinTool(Tr(L"Decompressing Windows"), N_(L"Compact OS"), N_(L"Compact OS is off"), [] { return SetCompactOs(false); }); };
             break;
         case WA_LOGS:
-            d.title = L"Clear the event logs?";
-            d.message = L"Every Windows event log except Security is emptied. The history that helps troubleshoot crashes and errors "
-                        L"is gone afterwards; new events are logged as usual." + admin;
-            d.buttons[1] = L"Clear";
-            run = [this] { RunWinTool(L"Clearing event logs", L"Event logs", L"Event logs cleared", [] { return ClearEventLogs(); }); };
+            d.title = Tr(L"Clear the event logs?");
+            d.message = Tr(L"Every Windows event log except Security is emptied. The history that helps troubleshoot crashes and errors "
+                           L"is gone afterwards; new events are logged as usual.") + admin;
+            d.buttons[1] = Tr(L"Clear");
+            run = [this] { RunWinTool(Tr(L"Clearing event logs"), N_(L"Event logs"), N_(L"Event logs cleared"), [] { return ClearEventLogs(); }); };
             break;
         default: return;
     }
@@ -925,9 +924,9 @@ void App::LoadStartup() {
     if (task_) return;
     auto st = std::make_shared<StartupList>();
     auto t = std::make_unique<Task>();
-    t->title = L"Looking at what starts with Windows";
+    t->title = Tr(L"Looking at what starts with Windows");
     t->lines = [] {
-        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Run keys, Startup folders, scheduled tasks, services"}};
+        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", Tr(L"Run keys, Startup folders, scheduled tasks, services")}};
     };
     t->onDone = [this, st] {
         startup_ = std::move(*st);
@@ -951,7 +950,7 @@ bool App::StartupVisible(const StartupEntry& e) const {
 void App::OnStartupSwitch(int index) {
     if (task_ || index < 0 || index >= static_cast<int>(startup_.entries.size())) return;
     const StartupEntry& e = startup_.entries[index];
-    if (!e.canToggle) return Toast(e.cantToggle, 2);
+    if (!e.canToggle) return Toast(Tr(e.cantToggle), 2);
     bool enable = !e.enabled;
     bool admin = StartupNeedsAdmin(e);
     // This user's Run keys and Startup folder items flip at once, as in Task Manager; anything that
@@ -960,29 +959,30 @@ void App::OnStartupSwitch(int index) {
     Dialog d;
     d.icon = 0xE7E8;
     d.tone = enable ? 0 : 2;
-    d.title = std::wstring(enable ? L"Turn on " : L"Turn off ") + e.display + L" at startup?";
-    std::wstring adminNote = admin ? L" Windows asks for administrator permission." : L"";
+    d.title = enable ? TrF(L"Turn on {0} at startup?", e.display) : TrF(L"Turn off {0} at startup?", e.display);
+    std::wstring adminNote = admin ? L" " + Tr(L"Windows asks for administrator permission.") : L"";
     switch (e.kind) {
         case StartupKind::Task:
-            d.message = std::wstring(enable ? L"The task is enabled again in Task Scheduler." : L"The task is disabled in Task Scheduler, not deleted: it stops running at log on or startup until it is turned on again here or in Task Scheduler.") +
-                        L" If Task Scheduler doesn't let this account change it, Windows asks for administrator permission.";
+            d.message = (enable ? Tr(L"The task is enabled again in Task Scheduler.")
+                                : Tr(L"The task is disabled in Task Scheduler, not deleted: it stops running at log on or startup until it is turned on again here or in Task Scheduler.")) +
+                        L" " + Tr(L"If Task Scheduler doesn't let this account change it, Windows asks for administrator permission.");
             break;
-        case StartupKind::Service:
-            d.message = enable ? L"Its start type is set back to " +
-                                     std::wstring(e.restoreStart == L"delayed-auto" ? L"Automatic (delayed start)" : L"Automatic") +
-                                     L", so it starts with Windows again." + adminNote
-                               : L"Its start type changes from " + std::wstring(e.delayed ? L"Automatic (delayed start)" : L"Automatic") +
-                                     L" to Manual: it no longer starts with Windows, but programs that need it can still start it. "
-                                     L"The previous start type is kept in the journal, so it can be set back here." + adminNote;
+        case StartupKind::Service: {
+            std::wstring automatic = (enable ? e.restoreStart == L"delayed-auto" : e.delayed) ? Tr(L"Automatic (delayed start)") : Tr(L"Automatic");
+            d.message = enable ? TrF(L"Its start type is set back to {0}, so it starts with Windows again.", automatic) + adminNote
+                               : TrF(L"Its start type changes from {0} to Manual: it no longer starts with Windows, but programs that need it can still start it. "
+                                     L"The previous start type is kept in the journal, so it can be set back here.",
+                                     automatic) + adminNote;
             break;
+        }
         default:
-            d.message = std::wstring(enable ? L"It is marked as enabled again" : L"It is marked as disabled") +
-                        L" in StartupApproved, exactly as Task Manager does it; the entry itself stays where it is." +
-                        std::wstring(e.machine ? L" It applies to every user of this PC." : L"") + adminNote;
+            d.message = (enable ? Tr(L"It is marked as enabled again in StartupApproved, exactly as Task Manager does it; the entry itself stays where it is.")
+                                : Tr(L"It is marked as disabled in StartupApproved, exactly as Task Manager does it; the entry itself stays where it is.")) +
+                        (e.machine ? L" " + Tr(L"It applies to every user of this PC.") : L"") + adminNote;
     }
-    d.lines.push_back(std::wstring(StartupKindName(e.kind)) + L"\t" + (e.kind == StartupKind::Task || e.kind == StartupKind::Service ? e.name : e.where));
-    if (!e.command.empty()) d.lines.push_back(L"Runs\t" + e.command);
-    d.buttons = {L"Cancel", enable ? L"Turn on" : L"Turn off"};
+    d.lines.push_back(Tr(StartupKindName(e.kind)) + L"\t" + (e.kind == StartupKind::Task || e.kind == StartupKind::Service ? e.name : e.where));
+    if (!e.command.empty()) d.lines.push_back(Tr(L"Runs") + L"\t" + e.command);
+    d.buttons = {Tr(L"Cancel"), enable ? Tr(L"Turn on") : Tr(L"Turn off")};
     d.primary = 1;
     std::wstring name = e.name;
     d.onClose = [this, index, enable, name](int b, bool) {
@@ -1000,10 +1000,10 @@ void App::ApplyStartupChange(int index, bool enable) {
     auto st = std::make_shared<State>();
     st->e = startup_.entries[index];
     auto t = std::make_unique<Task>();
-    t->title = enable ? L"Turning on at startup" : L"Turning off at startup";
+    t->title = enable ? Tr(L"Turning on at startup") : Tr(L"Turning off at startup");
     t->lines = [st] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", st->e.display}}; };
     t->onDone = [this, st, index, enable] {
-        if (!st->r.ok) return Toast(st->r.error, st->r.declined ? 2 : 1);
+        if (!st->r.ok) return Toast(Tr(st->r.error), st->r.declined ? 2 : 1);
         if (index < static_cast<int>(startup_.entries.size()) && startup_.entries[index].name == st->e.name) {
             StartupEntry& e = startup_.entries[index];
             e.enabled = enable;
@@ -1019,8 +1019,8 @@ void App::ApplyStartupChange(int index, bool enable) {
                 }
             }
         }
-        Toast(std::wstring(enable ? L"Turned on at startup: " : L"Turned off at startup: ") + st->e.display +
-                  (enable ? L"" : L" · turn it on again here any time"),
+        Toast(enable ? TrF(L"Turned on at startup: {0}", st->e.display)
+                     : TrF(L"Turned off at startup: {0}", st->e.display) + L" · " + Tr(L"turn it on again here any time"),
               0);
     };
     StartTask(std::move(t), [st, enable] { st->r = SetStartupEnabled(st->e, enable); });
@@ -1033,7 +1033,7 @@ void App::LoadGames() {
     if (task_) return;
     auto st = std::make_shared<std::vector<Game>>();
     auto t = std::make_unique<Task>();
-    t->title = L"Looking for games";
+    t->title = Tr(L"Looking for games");
     t->lines = [] {
         return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net, Xbox"}};
     };
@@ -1076,22 +1076,22 @@ void App::OnGameRow(int row) {
 }
 
 void App::StartGameUninstall() {
-    if (gameChosen_ < 0 || gameChosen_ >= static_cast<int>(games_.size())) return Toast(L"Choose a game first", 2);
+    if (gameChosen_ < 0 || gameChosen_ >= static_cast<int>(games_.size())) return Toast(Tr(L"Choose a game first"), 2);
     Game g = games_[gameChosen_];
     Dialog d;
-    d.title = L"Uninstall " + g.name + L" (" + util::FormatSizeShort(g.bytes) + L")?";
-    d.message = g.uninstallHow + L", just as from its own library. WinNCDU deletes nothing itself here; press Refresh when it is done.";
+    d.title = TrF(L"Uninstall {0} ({1})?", g.name, util::FormatSizeShort(g.bytes));
+    d.message = TrF(L"{0}, just as from its own library. WinNCDU deletes nothing itself here; press Refresh when it is done.", Tr(g.uninstallHow));
     d.icon = 0xE7FC;
     d.tone = 1;
-    d.buttons = {L"Cancel", L"Uninstall"};
+    d.buttons = {Tr(L"Cancel"), Tr(L"Uninstall")};
     d.primary = 1;
     d.onClose = [this, g](int b, bool) {
         if (b != 1) return;
         std::wstring err;
         if (StartUninstall(g, err))
-            Toast(L"Finish in " + g.launcher + L", then press Refresh", 0);
+            Toast(TrF(L"Finish in {0}, then press Refresh", g.launcher), 0);
         else
-            Toast(err, 1);
+            Toast(Tr(err), 1);
     };
     ShowDialog(std::move(d));
 }
@@ -1106,15 +1106,15 @@ void App::StartGameLeftoversDelete() {
         }
     if (chosen.empty()) return;
     Dialog d;
-    d.title = L"Move " + util::FormatCount(chosen.size()) + (chosen.size() == 1 ? L" leftover (" : L" leftovers (") +
-              util::FormatSizeShort(bytes) + L") to the Recycle Bin?";
-    d.message = L"No launcher has these games installed any more. If a game still keeps saves or settings in its folder, you can "
-                L"restore it from Recently deleted.";
+    d.title = TrN(chosen.size(), L"Move {0} leftover ({1}) to the Recycle Bin?", L"Move {0} leftovers ({1}) to the Recycle Bin?",
+                  util::FormatSizeShort(bytes));
+    d.message = Tr(L"No launcher has these games installed any more. If a game still keeps saves or settings in its folder, you can "
+                   L"restore it from Recently deleted.");
     for (size_t i = 0; i < chosen.size() && i < 8; ++i) d.lines.push_back(util::FormatSizeShort(chosen[i].bytes) + L"\t" + chosen[i].folder);
-    if (chosen.size() > 8) d.lines.push_back(L"\t… and " + util::FormatCount(chosen.size() - 8) + L" more");
+    if (chosen.size() > 8) d.lines.push_back(L"\t" + TrN(chosen.size() - 8, L"… and {0} more", L"… and {0} more"));
     d.icon = 0xE74D;
     d.tone = 1;
-    d.buttons = {L"Cancel", L"Move to Recycle Bin"};
+    d.buttons = {Tr(L"Cancel"), Tr(L"Move to Recycle Bin")};
     d.primary = 1;
     d.onClose = [this, chosen](int b, bool) {
         if (b != 1) return;
@@ -1127,14 +1127,14 @@ void App::StartGameLeftoversDelete() {
         auto st = std::make_shared<State>();
         st->items = chosen;
         auto t = std::make_unique<Task>();
-        t->title = L"Moving leftovers to the Recycle Bin";
+        t->title = Tr(L"Moving leftovers to the Recycle Bin");
         t->lines = [st] {
             size_t i = std::min(st->index.load(), st->items.size() - 1);
             return std::vector<std::pair<std::wstring, std::wstring>>{{L"", st->items[i].folder}};
         };
         t->progress = [st] { return static_cast<double>(st->index) / st->items.size(); };
         t->onDone = [this, st] {
-            Toast(st->errors.empty() ? L"Moved " + util::FormatSizeShort(st->freed) + L" of leftovers to the Recycle Bin"
+            Toast(st->errors.empty() ? TrF(L"Moved {0} of leftovers to the Recycle Bin", util::FormatSizeShort(st->freed))
                                      : st->errors[0],
                   st->errors.empty() ? 0 : 1);
             LoadGames();
@@ -1147,7 +1147,7 @@ void App::StartGameLeftoversDelete() {
                 const Game& g = st->items[i];
                 ProtectReport pr = CheckProtection(g.folder);
                 if (pr.level == Protect::Important || pr.level == Protect::Blocked) {
-                    st->errors.push_back(g.folder + L" is protected and was left alone");
+                    st->errors.push_back(TrF(L"{0} is protected and was left alone", g.folder));
                     continue;
                 }
                 std::wstring err;
@@ -1193,8 +1193,8 @@ void App::LoadDiskHealth() {
     };
     auto st = std::make_shared<State>();
     auto t = std::make_unique<Task>();
-    t->title = L"Asking the disks";
-    t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Health, wear, temperature and TRIM (read-only)"}}; };
+    t->title = Tr(L"Asking the disks");
+    t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", Tr(L"Health, wear, temperature and TRIM (read-only)")}}; };
     t->onDone = [this, st] {
         disk_ = std::move(st->rep);
         diskTrends_ = std::move(st->trends);
@@ -1254,14 +1254,12 @@ namespace {
 std::vector<std::pair<std::wstring, std::wstring>> ScanLines(ScanStats& s, ULONGLONG start) {
     double secs = (GetTickCount64() - start) / 1000.0;
     std::vector<std::pair<std::wstring, std::wstring>> l;
-    l.push_back({L"Files", util::FormatCount(s.files)});
-    l.push_back({L"Folders", util::FormatCount(s.dirs)});
-    l.push_back({L"Size", util::FormatSizeShort(s.bytes)});
-    wchar_t rate[64];
-    swprintf(rate, 64, L"%s  ·  %.0f items/s", util::FormatDuration(secs).c_str(),
-             secs > 0.2 ? (s.files + s.dirs) / secs : 0.0);
-    l.push_back({L"Elapsed", rate});
-    if (s.errors) l.push_back({L"Skipped", util::FormatCount(s.errors) + L" unreadable folders"});
+    l.push_back({Tr(L"Files"), util::FormatCount(s.files)});
+    l.push_back({Tr(L"Folders"), util::FormatCount(s.dirs)});
+    l.push_back({Tr(L"Size"), util::FormatSizeShort(s.bytes)});
+    uint64_t rate = secs > 0.2 ? static_cast<uint64_t>((s.files + s.dirs) / secs + 0.5) : 0;
+    l.push_back({Tr(L"Elapsed"), util::FormatDuration(secs) + L"  ·  " + TrF(L"{0} items/s", util::FormatCount(rate))});
+    if (s.errors) l.push_back({Tr(L"Skipped"), TrN(s.errors, L"{0} unreadable folder", L"{0} unreadable folders")});
     l.push_back({L"", s.GetCurrent()});
     return l;
 }
@@ -1282,10 +1280,10 @@ ScanOptions MakeOptions(const Settings& s) {
 void App::ConfirmNewScan(const std::wstring& path) {
     if (!root_ || readOnly_) return StartScan(path);
     Dialog d;
-    d.title = L"Start a new scan?";
-    d.message = L"Scan " + path + L". The current results will be replaced (they stay in History).";
+    d.title = Tr(L"Start a new scan?");
+    d.message = TrF(L"Scan {0}. The current results will be replaced (they stay in History).", path);
     d.icon = 0xE721;
-    d.buttons = {L"Cancel", L"Scan"};
+    d.buttons = {Tr(L"Cancel"), Tr(L"Scan")};
     d.primary = 1;
     d.onClose = [this, path](int b, bool) {
         if (b == 1) StartScan(path);
@@ -1298,11 +1296,11 @@ void App::StartScan(const std::wstring& input) {
     std::wstring path = NormalizeDirPath(input, err);
     if (path.empty()) {
         Dialog d;
-        d.title = L"Can't scan this location";
-        d.message = input + L"\n" + err;
+        d.title = Tr(L"Can't scan this location");
+        d.message = input + L"\n" + Tr(err);
         d.icon = 0xE7BA;
         d.tone = 1;
-        d.buttons = {L"OK"};
+        d.buttons = {Tr(L"OK")};
         d.primary = 0;
         ShowDialog(std::move(d));
         return;
@@ -1314,7 +1312,7 @@ void App::StartScan(const std::wstring& input) {
     ReadNodeMeta(n, path);
     auto stats = std::make_shared<ScanStats>();
     auto t = std::make_unique<Task>();
-    t->title = L"Scanning " + path;
+    t->title = TrF(L"Scanning {0}", path);
     ULONGLONG start = GetTickCount64();
     t->lines = [stats, start] { return ScanLines(*stats, start); };
     t->cancel = [stats] { stats->cancel = true; };
@@ -1324,8 +1322,8 @@ void App::StartScan(const std::wstring& input) {
         scanErrors_ = stats->errors.load();
         scanSeconds_ = (GetTickCount64() - start) / 1000.0;
         LoadHistory();
-        Toast(incomplete_ ? L"Scan stopped — showing partial results"
-                          : L"Scanned " + util::FormatCount(root_->items) + L" items in " + util::FormatDuration(scanSeconds_),
+        Toast(incomplete_ ? Tr(L"Scan stopped — showing partial results")
+                          : TrN(root_->items, L"Scanned {0} item in {1}", L"Scanned {0} items in {1}", util::FormatDuration(scanSeconds_)),
               incomplete_ ? 2 : 0);
     };
     ScanOptions opt = MakeOptions(settings_);
@@ -1341,7 +1339,7 @@ void App::StartScan(const std::wstring& input) {
 }
 
 void App::StartRescan(std::vector<Node*> dirs) {
-    if (readOnly_) return Toast(L"Imported scans can't be rescanned", 1);
+    if (readOnly_) return Toast(Tr(L"Imported scans can't be rescanned"), 1);
     struct Job {
         Node* target;
         std::wstring path;
@@ -1354,7 +1352,7 @@ void App::StartRescan(std::vector<Node*> dirs) {
     if (jobs->empty()) return;
     auto stats = std::make_shared<ScanStats>();
     auto t = std::make_unique<Task>();
-    t->title = jobs->size() == 1 ? L"Rescanning " + (*jobs)[0].path : L"Rescanning " + std::to_wstring(jobs->size()) + L" folders";
+    t->title = jobs->size() == 1 ? TrF(L"Rescanning {0}", (*jobs)[0].path) : TrN(jobs->size(), L"Rescanning {0} folder", L"Rescanning {0} folders");
     ULONGLONG start = GetTickCount64();
     t->lines = [stats, start] { return ScanLines(*stats, start); };
     t->cancel = [stats] { stats->cancel = true; };
@@ -1386,7 +1384,7 @@ void App::StartRescan(std::vector<Node*> dirs) {
             }
         }
         PostMutation();
-        Toast(cancelled ? L"Rescan cancelled" : L"Rescan complete", cancelled ? 2 : 0);
+        Toast(cancelled ? Tr(L"Rescan cancelled") : Tr(L"Rescan complete"), cancelled ? 2 : 0);
     };
     ScanOptions opt = MakeOptions(settings_);
     StartTask(std::move(t), [jobs, stats, opt] {
@@ -1409,7 +1407,7 @@ namespace {
 std::wstring HitLine(const ProtectHit& h) {
     ProtectHit c = h;
     c.group.clear();
-    return h.group + L"\t" + DescribeHit(c);
+    return Tr(h.group) + L"\t" + DescribeHit(c);
 }
 
 }  // namespace
@@ -1419,7 +1417,7 @@ std::wstring HitLine(const ProtectHit& h) {
 //   Important -> an extra warning step, and the Recycle Bin is preselected
 //   Caution   -> a heads-up inside the normal delete dialog
 void App::RequestDelete(bool permanent) {
-    if (readOnly_) return Toast(L"Deleting isn't available for imported scans", 1);
+    if (readOnly_) return Toast(Tr(L"Deleting isn't available for imported scans"), 1);
     auto targets = NormalizeTargets(SelectedNodes());
     if (targets.empty()) {
         if (Node* f = FocusNode()) targets = NormalizeTargets({f});
@@ -1438,8 +1436,8 @@ void App::RequestDelete(bool permanent) {
         if (rep.level == Protect::Blocked) {
             for (auto& h : rep.hits) {
                 if (h.level != Protect::Blocked) continue;
-                if (firstBlockedReason.empty()) firstBlockedReason = h.reason;
-                if (blockedLines.size() < 6) blockedLines.push_back(h.group + L"\t" + NodePath(n) + L" \u00B7 " + h.name);
+                if (firstBlockedReason.empty()) firstBlockedReason = Tr(h.reason);
+                if (blockedLines.size() < 6) blockedLines.push_back(Tr(h.group) + L"\t" + NodePath(n) + L" · " + Tr(h.name));
                 break;
             }
             continue;
@@ -1455,22 +1453,22 @@ void App::RequestDelete(bool permanent) {
                     important.push_back(h);
                 }
             } else if (h.level == Protect::Caution) {
-                if (heads.empty()) heads = h.name + L": " + h.reason;
+                if (heads.empty()) heads = TrF(L"{0}: {1}", Tr(h.name), Tr(h.reason));
                 if (std::find(notes.begin(), notes.end(), line) == notes.end() && notes.size() < 3) notes.push_back(line);
             }
         }
     }
-    for (auto& l : blockedLines) notes.insert(notes.begin(), L"Skipped" + l.substr(l.find(L'\t')));
+    for (auto& l : blockedLines) notes.insert(notes.begin(), Tr(L"Skipped") + l.substr(l.find(L'\t')));
 
     if (allowed.empty()) {
         Dialog d;
         d.icon = 0xEA18;
         d.tone = 1;
-        d.title = targets.size() == 1 ? L"This location is protected" : L"These locations are protected";
-        d.message = firstBlockedReason + L"\n\nWinNCDU never deletes system folders. Edit protect.txt only if you are sure "
-                                         L"(menu \u22EF \u2192 Protected locations).";
+        d.title = targets.size() == 1 ? Tr(L"This location is protected") : Tr(L"These locations are protected");
+        d.message = firstBlockedReason + L"\n\n" + Tr(L"WinNCDU never deletes system folders. Edit protect.txt only if you are sure "
+                                                      L"(menu ⋯ → Protected locations).");
         d.lines = blockedLines;
-        d.buttons = {L"OK"};
+        d.buttons = {Tr(L"OK")};
         d.primary = 0;
         ShowDialog(std::move(d));
         return;
@@ -1484,15 +1482,15 @@ void App::RequestDelete(bool permanent) {
     Dialog d;
     d.icon = 0xEA18;
     d.tone = 2;
-    d.title = ai ? L"This deletes AI assistant data" : L"This contains data you may not get back";
-    d.message = important[0].reason;
+    d.title = ai ? Tr(L"This deletes AI assistant data") : Tr(L"This contains data you may not get back");
+    d.message = Tr(important[0].reason);
     if (important.size() > 1)
-        d.message += L" (+" + std::to_wstring(important.size() - 1) + L" more below)";
-    d.message += L"\n\nIf you continue, the Recycle Bin is preselected so you can still restore it.";
+        d.message += L" " + TrN(important.size() - 1, L"(+{0} more below)", L"(+{0} more below)");
+    d.message += L"\n\n" + Tr(L"If you continue, the Recycle Bin is preselected so you can still restore it.");
     if (!blockedLines.empty())
-        d.message += L" " + std::to_wstring(blockedLines.size()) + L" protected system item(s) will be skipped.";
+        d.message += L" " + TrN(blockedLines.size(), L"{0} protected system item will be skipped.", L"{0} protected system items will be skipped.");
     d.lines = warnLines;
-    d.buttons = {L"Cancel", L"Continue\u2026"};
+    d.buttons = {Tr(L"Cancel"), Tr(L"Continue…")};
     d.primary = 0;  // Enter and Escape both cancel
     d.cancel = 0;
     d.danger = 1;
@@ -1511,22 +1509,30 @@ void App::ShowDeleteDialog(std::vector<Node*> targets, bool permanent, Protect w
     // Protected data always starts out going to the Recycle Bin.
     d.checked = worst >= Protect::Important ? false : (permanent || settings_.permanentDefault);
     d.hasCheck = true;
-    d.checkText = L"Delete permanently (skip the Recycle Bin)";
+    d.checkText = Tr(L"Delete permanently (skip the Recycle Bin)");
     size_t shown = notes.empty() ? 6 : 4;
     for (size_t i = 0; i < targets.size() && i < shown; ++i)
         d.lines.push_back(util::FormatSizeShort(Val(targets[i])) + L"\t" + NodePath(targets[i]));
-    if (targets.size() > shown) d.lines.push_back(L"\t… and " + util::FormatCount(targets.size() - shown) + L" more");
+    if (targets.size() > shown) d.lines.push_back(L"\t" + TrN(targets.size() - shown, L"… and {0} more", L"… and {0} more"));
     for (auto& n : notes) d.lines.push_back(n);
-    std::wstring what = targets.size() == 1 ? (targets[0]->IsDir() ? L"this folder" : L"this file")
-                                            : util::FormatCount(targets.size()) + L" items";
-    if (!heads.empty()) heads = L"\nHeads-up \u2014 " + heads;
-    auto refresh = [what, total, worst, heads](Dialog& dd) {
-        dd.title = dd.checked ? L"Permanently delete " + what + L"?" : L"Move " + what + L" to the Recycle Bin?";
-        dd.message = dd.checked ? util::FormatSizeShort(total) + L" will be freed. This can't be undone."
-                                : util::FormatSizeShort(total) + L" · you can restore it from the Recycle Bin.";
+    // Whole sentences per case: in other languages "this folder" and "3 items" change the words around them.
+    size_t count = targets.size();
+    bool folder = count == 1 && targets[0]->IsDir();
+    if (!heads.empty()) heads = L"\n" + TrF(L"Heads-up — {0}", heads);
+    auto refresh = [count, folder, total, worst, heads](Dialog& dd) {
+        if (dd.checked)
+            dd.title = count > 1 ? TrN(count, L"Permanently delete {0} item?", L"Permanently delete {0} items?")
+                       : folder  ? Tr(L"Permanently delete this folder?")
+                                 : Tr(L"Permanently delete this file?");
+        else
+            dd.title = count > 1 ? TrN(count, L"Move {0} item to the Recycle Bin?", L"Move {0} items to the Recycle Bin?")
+                       : folder  ? Tr(L"Move this folder to the Recycle Bin?")
+                                 : Tr(L"Move this file to the Recycle Bin?");
+        dd.message = dd.checked ? TrF(L"{0} will be freed. This can't be undone.", util::FormatSizeShort(total))
+                                : TrF(L"{0} · you can restore it from the Recycle Bin.", util::FormatSizeShort(total));
         dd.message += heads;
         dd.tone = dd.checked ? 1 : (worst != Protect::None ? 2 : 0);
-        dd.buttons = {L"Cancel", dd.checked ? L"Delete permanently" : L"Move to Recycle Bin"};
+        dd.buttons = {Tr(L"Cancel"), dd.checked ? Tr(L"Delete permanently") : Tr(L"Move to Recycle Bin")};
         dd.danger = dd.checked ? 1 : -1;
     };
     refresh(d);
@@ -1543,11 +1549,11 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     targets.erase(std::remove_if(targets.begin(), targets.end(),
                                  [](Node* n) { return CheckProtection(NodePath(n)).level == Protect::Blocked; }),
                   targets.end());
-    if (targets.empty()) return Toast(L"Protected locations are never deleted", 1);
+    if (targets.empty()) return Toast(Tr(L"Protected locations are never deleted"), 1);
     struct State {
         std::vector<std::wstring> paths, errors;
         std::vector<int64_t> times;  // when each item was done (for the journal)
-        std::vector<std::wstring> lockedBy;  // apps holding files of items that failed
+        std::vector<std::vector<std::wstring>> lockedBy;  // apps holding files of items that failed
         std::atomic<size_t> index{0}, attempted{0};
         std::atomic<uint64_t> removed{0};
         std::atomic<bool> cancel{false};
@@ -1558,12 +1564,12 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
     st->times.resize(targets.size());
     st->lockedBy.resize(targets.size());
     auto t = std::make_unique<Task>();
-    t->title = permanent ? L"Deleting" : L"Moving to the Recycle Bin";
+    t->title = permanent ? Tr(L"Deleting") : Tr(L"Moving to the Recycle Bin");
     t->lines = [st, permanent] {
         std::vector<std::pair<std::wstring, std::wstring>> l;
         size_t i = std::min(st->index.load(), st->paths.size() - 1);
-        l.push_back({L"Item", std::to_wstring(i + 1) + L" of " + std::to_wstring(st->paths.size())});
-        if (permanent) l.push_back({L"Removed", util::FormatCount(st->removed) + L" files and folders"});
+        l.push_back({Tr(L"Item"), TrF(L"{0} of {1}", util::FormatCount(i + 1), util::FormatCount(st->paths.size()))});
+        if (permanent) l.push_back({Tr(L"Removed"), TrN(st->removed, L"{0} file or folder", L"{0} files and folders")});
         l.push_back({L"", st->paths[i]});
         return l;
     };
@@ -1590,33 +1596,34 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
                 ++deleted;
                 graveyard_.push_back(DetachNode(n));
             } else if (i < st->attempted.load()) {
-                if (permanent) {  // some of it is gone for good: that belongs in the journal too
-                    je.note = L"partly deleted: " + st->errors[i] + (st->lockedBy[i].empty() ? L"" : L" (in use by " + st->lockedBy[i] + L")");
+                if (permanent) {  // some of it is gone for good: that belongs in the journal too (in English)
+                    i18n::EnglishScope english;
+                    je.note = L"partly deleted: " + st->errors[i] + (st->lockedBy[i].empty() ? L"" : L" (in use by " + AppNames(st->lockedBy[i]) + L")");
                     JournalAppend(je);
                 }
                 partial.push_back(n);
             }
             if (!st->errors[i].empty() && errs.size() < 8) {
                 errs.push_back(st->errors[i]);
-                if (!st->lockedBy[i].empty()) errs.push_back(L"In use by " + st->lockedBy[i]);
+                if (!st->lockedBy[i].empty()) errs.push_back(TrF(L"In use by {0}", AppNames(st->lockedBy[i])));
             }
-            if (!st->lockedBy[i].empty()) apps.push_back(st->lockedBy[i]);
+            for (auto& a : st->lockedBy[i])
+                if (std::find(apps.begin(), apps.end(), a) == apps.end()) apps.push_back(a);
         }
         PostMutation();
         if (deleted)
-            Toast((permanent ? L"Deleted " : L"Moved to Recycle Bin: ") + util::FormatCount(deleted) +
-                      (deleted == 1 ? L" item · " : L" items · ") + util::FormatSizeShort(freed) +
-                      (permanent ? L" freed" : L""),
+            Toast(permanent ? TrN(deleted, L"Deleted {0} item · {1} freed", L"Deleted {0} items · {1} freed", util::FormatSizeShort(freed))
+                            : TrN(deleted, L"Moved to Recycle Bin: {0} item · {1}", L"Moved to Recycle Bin: {0} items · {1}", util::FormatSizeShort(freed)),
                   0);
         if (!errs.empty()) {
             Dialog d;
-            d.title = L"Some items could not be deleted";
-            d.message = apps.empty() ? L"They may be in use or need administrator rights."
-                                     : L"Close " + AppNames(apps) + L", then try again.";
+            d.title = Tr(L"Some items could not be deleted");
+            d.message = apps.empty() ? Tr(L"They may be in use or need administrator rights.")
+                                     : TrF(L"Close {0}, then try again.", AppNames(apps));
             d.lines = errs;
             d.icon = 0xE7BA;
             d.tone = 2;
-            d.buttons = {L"OK"};
+            d.buttons = {Tr(L"OK")};
             d.primary = 0;
             ShowDialog(std::move(d));
         }
@@ -1631,12 +1638,10 @@ void App::StartDelete(std::vector<Node*> targets, bool permanent) {
             std::wstring err;
             bool ok = permanent ? DeletePermanently(st->paths[i], st->cancel, st->removed, err)
                                 : DeleteToRecycleBin(st->paths[i], err);
-            if (!ok) st->errors[i] = err.empty() ? st->paths[i] + L": failed" : err;
+            if (!ok) st->errors[i] = err.empty() ? TrF(L"{0}: failed", st->paths[i]) : err;
             st->times[i] = util::NowFileTime();
             if (!ok && PathExists(st->paths[i])) {
-                std::vector<std::wstring> names;
-                for (auto& a : AppsUsing(st->paths[i])) names.push_back(a.name);
-                st->lockedBy[i] = AppNames(names);
+                for (auto& a : AppsUsing(st->paths[i])) st->lockedBy[i].push_back(a.name);
             }
         }
         if (!permanent) CoUninitialize();
@@ -1648,18 +1653,18 @@ void App::StartImport(const std::wstring& file) {
     auto result = std::make_shared<std::unique_ptr<Node>>();
     auto err = std::make_shared<std::wstring>();
     auto t = std::make_unique<Task>();
-    t->title = L"Opening saved scan";
+    t->title = Tr(L"Opening saved scan");
     t->lines = [count, file] {
-        return std::vector<std::pair<std::wstring, std::wstring>>{{L"Items", util::FormatCount(*count)}, {L"", file}};
+        return std::vector<std::pair<std::wstring, std::wstring>>{{Tr(L"Items"), util::FormatCount(*count)}, {L"", file}};
     };
     t->onDone = [this, result, err] {
         if (!*result) {
             Dialog d;
-            d.title = L"Can't open this file";
+            d.title = Tr(L"Can't open this file");
             d.message = *err;
             d.icon = 0xE7BA;
             d.tone = 1;
-            d.buttons = {L"OK"};
+            d.buttons = {Tr(L"OK")};
             d.primary = 0;
             ShowDialog(std::move(d));
             return;
@@ -1667,7 +1672,7 @@ void App::StartImport(const std::wstring& file) {
         SetRoot(std::move(*result), true);
         incomplete_ = false;
         scanErrors_ = 0;
-        Toast(L"Opened " + util::FormatCount(root_->items) + L" items (read-only)", 2);
+        Toast(TrN(root_->items, L"Opened {0} item (read-only)", L"Opened {0} items (read-only)"), 2);
     };
     StartTask(std::move(t), [count, result, err, file] { *result = ImportNcduJson(file, *count, *err); });
 }
@@ -1687,16 +1692,16 @@ void App::StartExport(bool csv) {
     uint64_t total = root_->items + 1;
     Node* r = root_.get();
     auto t = std::make_unique<Task>();
-    t->title = csv ? L"Exporting CSV" : L"Saving scan";
+    t->title = csv ? Tr(L"Exporting CSV") : Tr(L"Saving scan");
     t->lines = [count, file] {
-        return std::vector<std::pair<std::wstring, std::wstring>>{{L"Written", util::FormatCount(*count) + L" items"}, {L"", file}};
+        return std::vector<std::pair<std::wstring, std::wstring>>{{Tr(L"Written"), TrN(*count, L"{0} item", L"{0} items")}, {L"", file}};
     };
     t->progress = [count, total] { return static_cast<double>(*count) / total; };
     t->onDone = [this, ok, err, file] {
         if (*ok)
-            Toast(L"Saved " + file, 0);
+            Toast(TrF(L"Saved {0}", file), 0);
         else
-            Toast(L"Export failed: " + *err, 1);
+            Toast(TrF(L"Export failed: {0}", *err), 1);
     };
     StartTask(std::move(t), [csv, file, r, count, err, ok] {
         *ok = csv ? ExportCsv(r, file, *count, *err) : ExportNcduJson(r, file, *count, *err);
@@ -1708,13 +1713,13 @@ void App::StartDuplicates() {
     auto prog = std::make_shared<DupProgress>();
     auto result = std::make_shared<std::vector<DupGroup>>();
     auto t = std::make_unique<Task>();
-    t->title = L"Looking for duplicate files";
+    t->title = Tr(L"Looking for duplicate files");
     t->lines = [prog] {
-        static const wchar_t* stages[] = {L"Grouping files by size", L"Quick check (first 64 KB)", L"Comparing contents (SHA-256)"};
+        static const wchar_t* stages[] = {N_(L"Grouping files by size"), N_(L"Quick check (first 64 KB)"), N_(L"Comparing contents (SHA-256)")};
         return std::vector<std::pair<std::wstring, std::wstring>>{
-            {L"Stage", stages[std::clamp(prog->stage.load(), 0, 2)]},
-            {L"Files", util::FormatCount(prog->filesDone) + L" / " + util::FormatCount(prog->filesTotal)},
-            {L"Read", util::FormatSizeShort(prog->bytesDone) + L" / " + util::FormatSizeShort(prog->bytesTotal)}};
+            {Tr(L"Stage"), Tr(stages[std::clamp(prog->stage.load(), 0, 2)])},
+            {Tr(L"Files"), util::FormatCount(prog->filesDone) + L" / " + util::FormatCount(prog->filesTotal)},
+            {Tr(L"Read"), util::FormatSizeShort(prog->bytesDone) + L" / " + util::FormatSizeShort(prog->bytesTotal)}};
     };
     t->progress = [prog] {
         uint64_t tot = prog->bytesTotal;
@@ -1722,12 +1727,12 @@ void App::StartDuplicates() {
     };
     t->cancel = [prog] { prog->cancel = true; };
     t->onDone = [this, prog, result] {
-        if (prog->cancel) return Toast(L"Duplicate search cancelled", 2);
+        if (prog->cancel) return Toast(Tr(L"Duplicate search cancelled"), 2);
         dups_ = std::move(*result);
         dupsDone_ = true;
         rowsDirty_ = true;
         lists_[static_cast<int>(View::Duplicates)] = ListState{};
-        if (dups_.empty()) Toast(L"No duplicate files found", 0);
+        if (dups_.empty()) Toast(Tr(L"No duplicate files found"), 0);
     };
     Node* scope = root_.get();
     uint64_t minSize = dupMin_;
@@ -1741,14 +1746,14 @@ void App::StartSimilarPhotos() {
     auto prog = std::make_shared<PhotoProgress>();
     auto result = std::make_shared<std::vector<PhotoGroup>>();
     auto t = std::make_unique<Task>();
-    t->title = L"Looking for similar photos";
+    t->title = Tr(L"Looking for similar photos");
     t->lines = [prog] {
-        static const wchar_t* stages[] = {L"Finding images", L"Reading images (small, read-only)", L"Comparing pictures"};
+        static const wchar_t* stages[] = {N_(L"Finding images"), N_(L"Reading images (small, read-only)"), N_(L"Comparing pictures")};
         std::vector<std::pair<std::wstring, std::wstring>> l = {
-            {L"Stage", stages[std::clamp(prog->stage.load(), 0, 2)]},
-            {L"Images", util::FormatCount(prog->filesDone) + L" / " + util::FormatCount(prog->filesTotal)}};
-        if (prog->cached) l.push_back({L"Remembered", util::FormatCount(prog->cached) + L" unchanged since an earlier search"});
-        if (prog->failed) l.push_back({L"Unreadable", util::FormatCount(prog->failed) + L" (no decoder, damaged or offline)"});
+            {Tr(L"Stage"), Tr(stages[std::clamp(prog->stage.load(), 0, 2)])},
+            {Tr(L"Images"), util::FormatCount(prog->filesDone) + L" / " + util::FormatCount(prog->filesTotal)}};
+        if (prog->cached) l.push_back({Tr(L"Remembered"), TrF(L"{0} unchanged since an earlier search", util::FormatCount(prog->cached))});
+        if (prog->failed) l.push_back({Tr(L"Unreadable"), TrF(L"{0} (no decoder, damaged or offline)", util::FormatCount(prog->failed))});
         return l;
     };
     t->progress = [prog] {
@@ -1757,7 +1762,7 @@ void App::StartSimilarPhotos() {
     };
     t->cancel = [prog] { prog->cancel = true; };
     t->onDone = [this, prog, result] {
-        if (prog->cancel) return Toast(L"Photo search cancelled", 2);
+        if (prog->cancel) return Toast(Tr(L"Photo search cancelled"), 2);
         photos_ = std::move(*result);
         photosDone_ = true;
         photoImages_ = prog->filesTotal;
@@ -1765,7 +1770,7 @@ void App::StartSimilarPhotos() {
         sel_.clear();
         rowsDirty_ = true;
         lists_[static_cast<int>(View::Duplicates)] = ListState{};
-        if (photos_.empty()) Toast(photoImages_ ? L"No similar photos found" : L"No images in this scan", 0);
+        if (photos_.empty()) Toast(photoImages_ ? Tr(L"No similar photos found") : Tr(L"No images in this scan"), 0);
     };
     Node* scope = root_.get();
     uint64_t minSize = photoMin_;
@@ -1805,7 +1810,7 @@ void App::MeasureCleanup() {
     cleanup_ = std::move(fresh);
     rowsDirty_ = true;
     if (!errs.empty())
-        Toast(errs[0] + (errs.size() > 1 ? L"  (+" + std::to_wstring(errs.size() - 1) + L" more)" : L""), 1);
+        Toast(errs[0] + (errs.size() > 1 ? L"  " + TrN(errs.size() - 1, L"(+{0} more)", L"(+{0} more)") : L""), 1);
     cleanupMeasuring_ = true;
     auto* copy = new std::vector<CleanCategory>(cleanup_);
     HWND hwnd = hwnd_;
@@ -1855,29 +1860,29 @@ void App::StartCleanup() {
             chosen.push_back(i);
             total += cleanup_[i].ToClean();
         }
-    if (chosen.empty()) return Toast(L"Select at least one category with something to clean", 2);
+    if (chosen.empty()) return Toast(Tr(L"Select at least one category with something to clean"), 2);
     Dialog d;
-    d.title = L"Clean up " + util::FormatSizeShort(total) + L"?";
-    d.message = L"Exactly the files listed under Review are deleted, permanently. Files that are in use, or "
-                L"that changed since they were measured, are skipped.";
+    d.title = TrF(L"Clean up {0}?", util::FormatSizeShort(total));
+    d.message = Tr(L"Exactly the files listed under Review are deleted, permanently. Files that are in use, or "
+                   L"that changed since they were measured, are skipped.");
     bool commands = false;
     for (size_t i : chosen) {
         size_t kept = cleanup_[i].KeptCount();
         const std::wstring& cmd = cleanup_[i].command;
         commands = commands || !cmd.empty();
-        std::wstring extra = !cmd.empty() ? L"  (runs " + cmd + L")" : kept ? L"  (" + util::FormatCount(kept) + L" kept)" : L"";
+        std::wstring extra = !cmd.empty() ? L"  " + TrF(L"(runs {0})", cmd) : kept ? L"  " + TrN(kept, L"({0} kept)", L"({0} kept)") : L"";
         if (cleanup_[i].browserData == BrowserData::Cookies)
-            extra = L"  (you stay signed in to " + util::FormatCount(cleanup_[i].keep.size()) + L" listed sites)";
-        d.lines.push_back(util::FormatSizeShort(cleanup_[i].ToClean()) + L"\t" + cleanup_[i].name + extra);
+            extra = L"  " + TrN(cleanup_[i].keep.size(), L"(you stay signed in to {0} listed site)", L"(you stay signed in to {0} listed sites)");
+        d.lines.push_back(util::FormatSizeShort(cleanup_[i].ToClean()) + L"\t" + CatName(cleanup_[i]) + extra);
     }
-    if (commands) d.message += L" Categories marked “runs” are cleaned by that tool's own command instead.";
+    if (commands) d.message += L" " + Tr(L"Categories marked “runs” are cleaned by that tool's own command instead.");
     bool browser = std::any_of(chosen.begin(), chosen.end(), [&](size_t i) { return cleanup_[i].browserData != BrowserData::None; });
     if (browser)
-        d.message += L" Cookies and history are removed inside the browsers' own databases; close the browsers first, "
-                     L"or they are skipped.";
+        d.message += L" " + Tr(L"Cookies and history are removed inside the browsers' own databases; close the browsers first, "
+                               L"or they are skipped.");
     d.icon = 0xE74D;
     d.tone = 1;
-    d.buttons = {L"Cancel", L"Clean up"};
+    d.buttons = {Tr(L"Cancel"), Tr(L"Clean up")};
     d.primary = 1;
     d.danger = 1;
     // System-level categories (Windows temp, updates) can come with a restore point first.
@@ -1886,7 +1891,7 @@ void App::StartCleanup() {
     if (system && elevated_) {
         d.hasCheck = true;
         d.checked = true;
-        d.checkText = L"Create a System Restore point first";
+        d.checkText = Tr(L"Create a System Restore point first");
         d.checkDanger = false;
     }
     d.onClose = [this, chosen, offered = d.hasCheck](int b, bool restorePoint) {
@@ -1907,34 +1912,34 @@ void App::StartCleanup() {
         st->restorePoint = restorePoint && offered;
         for (size_t i : chosen) st->cats.push_back(cleanup_[i]);
         auto t = std::make_unique<Task>();
-        t->title = L"Cleaning up";
+        t->title = Tr(L"Cleaning up");
         t->lines = [st] {
             size_t i = std::min(st->index.load(), st->cats.size() - 1);
             std::lock_guard<std::mutex> lk(st->m);
             return std::vector<std::pair<std::wstring, std::wstring>>{
-                {L"Category", st->cats[i].name}, {L"Freed", util::FormatSizeShort(st->freed)}, {L"", st->current}};
+                {Tr(L"Category"), CatName(st->cats[i])}, {Tr(L"Freed"), util::FormatSizeShort(st->freed)}, {L"", st->current}};
         };
         t->progress = [st] { return static_cast<double>(st->index) / st->cats.size(); };
         t->cancel = [st] { st->cancel = true; };
         t->onDone = [this, st] {
             if (!st->restoreErr.empty()) {
                 Dialog e;
-                e.title = L"No restore point, so nothing was cleaned";
-                e.message = st->restoreErr + L"\n\nClean up again without the restore point option, or turn System Protection on first.";
+                e.title = Tr(L"No restore point, so nothing was cleaned");
+                e.message = st->restoreErr + L"\n\n" + Tr(L"Clean up again without the restore point option, or turn System Protection on first.");
                 e.icon = 0xE7BA;
                 e.tone = 2;
-                e.buttons = {L"OK"};
+                e.buttons = {Tr(L"OK")};
                 e.primary = 0;
                 ShowDialog(std::move(e));
                 return;
             }
+            std::wstring freed = TrF(L"Cleanup freed {0}", util::FormatSizeShort(st->freed));
             if (!st->errors.empty())
-                Toast(L"Cleanup freed " + util::FormatSizeShort(st->freed) + L" · " + st->errors[0], 1);
+                Toast(freed + L" · " + st->errors[0], 1);
             else
-                Toast(L"Cleanup freed " + util::FormatSizeShort(st->freed) +
-                          (st->failed ? L" · " + util::FormatCount(st->failed) + L" items in use were skipped" +
-                                            (st->lockedBy.empty() ? L"" : L" (close " + AppNames(st->lockedBy) + L")")
-                                      : L""),
+                Toast(freed + (st->failed ? L" · " + TrN(st->failed, L"{0} item in use was skipped", L"{0} items in use were skipped") +
+                                                (st->lockedBy.empty() ? L"" : L" " + TrF(L"(close {0})", AppNames(st->lockedBy)))
+                                          : L""),
                       0);
             // Refresh the affected folders of the current scan.
             std::vector<Node*> touched;
@@ -1950,7 +1955,7 @@ void App::StartCleanup() {
             if (st->restorePoint) {
                 {
                     std::lock_guard<std::mutex> lk(st->m);
-                    st->current = L"Creating a System Restore point…";
+                    st->current = Tr(L"Creating a System Restore point…");
                 }
                 CoInitializeEx(nullptr, COINIT_MULTITHREADED);
                 std::wstring err;
@@ -1968,7 +1973,7 @@ void App::StartCleanup() {
                 st->freed += r.freed;
                 st->failed += r.failed;
                 st->lockedBy.insert(st->lockedBy.end(), r.lockedBy.begin(), r.lockedBy.end());
-                if (!r.error.empty()) st->errors.push_back(c.name + L": " + r.error);
+                if (!r.error.empty()) st->errors.push_back(TrF(L"{0}: {1}", CatName(c), r.error));
             }
         });
     };
@@ -1999,12 +2004,12 @@ void App::ShowScheduleDialog() {
     for (auto& c : cleanup_) {
         if (!c.selected || c.external) continue;
         if (c.needsAdmin)
-            leftOut.push_back(c.name + L" (needs administrator rights)");
+            leftOut.push_back(TrF(L"{0} (needs administrator rights)", CatName(c)));
         else if (c.imported)
-            leftOut.push_back(c.name + L" (winapp2.ini rules are reviewed by hand)");
+            leftOut.push_back(TrF(L"{0} (winapp2.ini rules are reviewed by hand)", CatName(c)));
         else {
             ids.push_back(c.id);
-            lines.push_back((c.measured ? util::FormatSizeShort(c.ToClean()) : L"…") + L"\t" + c.name);
+            lines.push_back((c.measured ? util::FormatSizeShort(c.ToClean()) : L"…") + L"\t" + CatName(c));
         }
     }
     bool exists = schedule_.exists;
@@ -2012,13 +2017,13 @@ void App::ShowScheduleDialog() {
         ids = schedule_.spec.ids;  // nothing checked: keep what the schedule cleans
         for (auto& id : ids) {
             auto it = std::find_if(cleanup_.begin(), cleanup_.end(), [&](const CleanCategory& c) { return c.id == id; });
-            lines.push_back(L"\t" + (it != cleanup_.end() ? it->name : id));
+            lines.push_back(L"\t" + (it != cleanup_.end() ? CatName(*it) : id));
         }
     }
-    if (ids.empty() && !exists) return Toast(L"Check the categories to clean on a schedule first", 2);
+    if (ids.empty() && !exists) return Toast(Tr(L"Check the categories to clean on a schedule first"), 2);
     std::wstring exe = ExePath();
     std::wstring cli = exe.substr(0, exe.find_last_of(L"\\/") + 1) + L"winncdu-cli.exe";
-    if (!PathExists(cli)) return Toast(L"winncdu-cli.exe was not found next to winncdu.exe", 1);
+    if (!PathExists(cli)) return Toast(Tr(L"winncdu-cli.exe was not found next to winncdu.exe"), 1);
 
     ScheduleSpec spec;
     spec.freq = ScheduleFreq::Weekly;
@@ -2026,25 +2031,25 @@ void App::ShowScheduleDialog() {
     spec.hour = 12;
     if (exists && schedule_.specKnown) spec = schedule_.spec;
     Dialog d;
-    d.title = exists ? L"Scheduled cleanup" : L"Schedule cleanup";
+    d.title = exists ? Tr(L"Scheduled cleanup") : Tr(L"Schedule cleanup");
     d.icon = 0xE787;  // calendar
-    d.message = L"Windows runs “winncdu-cli " + CleanArguments(ids) +
-                L"” as you, without administrator rights, only while you're signed in and never on battery; a missed run starts as "
-                L"soon as possible. Each run deletes what these categories list at that moment, permanently. Protected items are "
-                L"never touched, but items unchecked under Review are not remembered. Every run is journaled and logged in "
-                L"cleanup.log.";
+    d.message = TrF(L"Windows runs “winncdu-cli {0}” as you, without administrator rights, only while you're signed in and never on battery; a missed run starts as "
+                    L"soon as possible. Each run deletes what these categories list at that moment, permanently. Protected items are "
+                    L"never touched, but items unchecked under Review are not remembered. Every run is journaled and logged in "
+                    L"cleanup.log.",
+                    CleanArguments(ids));
     if (!leftOut.empty()) {
         std::wstring s;
         for (auto& l : leftOut) s += (s.empty() ? L"" : L", ") + l;
-        d.message += L"\n\nLeft out: " + s + L".";
+        d.message += L"\n\n" + TrF(L"Left out: {0}.", s);
     }
-    if (ids.empty()) d.message = L"No categories are checked. Remove the schedule, or check categories and come back to change it.";
+    if (ids.empty()) d.message = Tr(L"No categories are checked. Remove the schedule, or check categories and come back to change it.");
     d.lines = lines;
-    DialogChoice repeat{L"Repeat", {L"Daily", L"Weekly", L"Monthly", L"At logon"}, static_cast<int>(spec.freq)};
-    DialogChoice day{L"Day", {L"Sun", L"Mon", L"Tue", L"Wed", L"Thu", L"Fri", L"Sat"}, std::clamp(spec.weekday, 0, 6)};
-    DialogChoice mday{L"Day", {}, std::clamp(spec.monthDay, 1, 28) - 1, true};
-    for (int i = 1; i <= 28; ++i) mday.options.push_back(L"day " + std::to_wstring(i));
-    DialogChoice time{L"Time", {}, spec.hour * 2 + (spec.minute >= 30 ? 1 : 0), true};
+    DialogChoice repeat{Tr(L"Repeat"), {Tr(L"Daily"), Tr(L"Weekly"), Tr(L"Monthly"), Tr(L"At logon")}, static_cast<int>(spec.freq)};
+    DialogChoice day{Tr(L"Day"), {Tr(L"Sun"), Tr(L"Mon"), Tr(L"Tue"), Tr(L"Wed"), Tr(L"Thu"), Tr(L"Fri"), Tr(L"Sat")}, std::clamp(spec.weekday, 0, 6)};
+    DialogChoice mday{Tr(L"Day"), {}, std::clamp(spec.monthDay, 1, 28) - 1, true};
+    for (int i = 1; i <= 28; ++i) mday.options.push_back(TrF(L"day {0}", i));
+    DialogChoice time{Tr(L"Time"), {}, spec.hour * 2 + (spec.minute >= 30 ? 1 : 0), true};
     for (int i = 0; i < 48; ++i) {
         wchar_t t[8];
         swprintf(t, 8, L"%02d:%02d", i / 2, i % 2 ? 30 : 0);
@@ -2060,11 +2065,11 @@ void App::ShowScheduleDialog() {
     d.onChoice(d);
     if (ids.empty()) d.choices.clear();
     if (exists) {
-        d.buttons = ids.empty() ? std::vector<std::wstring>{L"Cancel", L"Remove schedule"}
-                                : std::vector<std::wstring>{L"Cancel", L"Remove schedule", L"Save"};
+        d.buttons = ids.empty() ? std::vector<std::wstring>{Tr(L"Cancel"), Tr(L"Remove schedule")}
+                                : std::vector<std::wstring>{Tr(L"Cancel"), Tr(L"Remove schedule"), Tr(L"Save")};
         d.primary = ids.empty() ? -1 : 2;
     } else {
-        d.buttons = {L"Cancel", L"Schedule"};
+        d.buttons = {Tr(L"Cancel"), Tr(L"Schedule")};
         d.primary = 1;
     }
     d.cancel = 0;
@@ -2075,7 +2080,7 @@ void App::ShowScheduleDialog() {
         if (exists && b == 1) {
             if (TaskRemove(ScheduleFolder(), kScheduleTask, err)) {
                 CleanLogAppend(L"schedule removed (" + where + L")");
-                Toast(L"Scheduled cleanup removed", 0);
+                Toast(Tr(L"Scheduled cleanup removed"), 0);
             } else {
                 Toast(err, 1);
             }
@@ -2093,9 +2098,14 @@ void App::ShowScheduleDialog() {
         std::wstring desc = L"WinNCDU cleanup of " + JoinIds(ids) + L" (deleted permanently, protected items never). Change or remove it in "
                             L"WinNCDU: Cleanup, Schedule.";
         if (TaskSave(ScheduleFolder(), kScheduleTask, s, cli, CleanArguments(ids), desc, err)) {
-            CleanLogAppend(L"schedule " + std::wstring(exists ? L"changed: " : L"set: ") + DescribeSchedule(s) + L", --clean " + JoinIds(ids) +
+            std::wstring english;  // cleanup.log is kept in English
+            {
+                i18n::EnglishScope en;
+                english = DescribeSchedule(s);
+            }
+            CleanLogAppend(L"schedule " + std::wstring(exists ? L"changed: " : L"set: ") + english + L", --clean " + JoinIds(ids) +
                            L" (" + where + L")");
-            Toast(L"Cleanup scheduled: " + DescribeSchedule(s), 0);
+            Toast(TrF(L"Cleanup scheduled: {0}", DescribeSchedule(s)), 0);
         } else {
             Toast(err, 1);
         }
@@ -2137,7 +2147,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
         v != View::Wsl && v != View::WinTools && v != View::Games && v != View::Startup && v != View::Apps && v != View::CleanReview && v != View::DiskHealth && !root_)
-        return Toast(L"Scan a drive or folder first", 2);
+        return Toast(Tr(L"Scan a drive or folder first"), 2);
     if (v != view_) sel_.clear();
     view_ = v;
     switch (v) {
@@ -2189,7 +2199,7 @@ void App::ShowView(View v) {
 }
 
 void App::RunSearchQuery(const std::wstring& text) {
-    if (!root_) return Toast(L"Scan a drive or folder first", 2);
+    if (!root_) return Toast(Tr(L"Scan a drive or folder first"), 2);
     std::wstring trimmed = text;
     while (!trimmed.empty() && trimmed.back() == L' ') trimmed.pop_back();
     if (trimmed.empty()) return;
@@ -2238,14 +2248,14 @@ void App::OpenRow(int row) {
             if (e.programFound)
                 RevealInExplorer(e.program);
             else
-                Toast(e.program.empty() ? L"No program to show" : L"Not found: " + e.program, 2);
+                Toast(e.program.empty() ? Tr(L"No program to show") : TrF(L"Not found: {0}", e.program), 2);
         }
         return;
     }
     if (view_ == View::Apps) {
         if (r.kind == RK_APP && r.idx < static_cast<int>(apps_.size())) {
             const std::wstring& f = apps_[r.idx].folder;
-            if (f.empty() || !PathExists(f)) return Toast(L"No install folder is known for " + apps_[r.idx].e.displayName, 2);
+            if (f.empty() || !PathExists(f)) return Toast(TrF(L"No install folder is known for {0}", apps_[r.idx].e.displayName), 2);
             OpenWithDefault(f);
         } else if (r.kind == RK_APPLEFT && r.idx < static_cast<int>(appLeft_.size())) {
             OpenWithDefault(appLeft_[r.idx].path);
@@ -2277,9 +2287,9 @@ void App::CompareSnapshot(size_t index) {
     if (index >= snapshots_.size() || !root_) return;
     std::unordered_map<std::wstring, DirSize> old;
     SnapshotInfo info;
-    if (!LoadSnapshot(snapshots_[index].file, old, info)) return Toast(L"Could not read this snapshot", 1);
+    if (!LoadSnapshot(snapshots_[index].file, old, info)) return Toast(Tr(L"Could not read this snapshot"), 1);
     if (_wcsicmp(info.root.c_str(), root_->name.c_str()) != 0)
-        return Toast(L"This snapshot belongs to " + info.root + L" — scan it to compare", 2);
+        return Toast(TrF(L"This snapshot belongs to {0} — scan it to compare", info.root), 2);
     diff_ = CompareWithSnapshot(root_.get(), old, !settings_.apparent);
     diffInfo_ = info;
     lists_[static_cast<int>(View::Compare)] = ListState{};
@@ -2314,18 +2324,18 @@ void App::RestoreDeleted(int index) {
     std::wstring err;
     if (!RestoreRecycled(it, err)) {
         Dialog d;
-        d.title = L"Can't restore this item";
-        d.message = err;
+        d.title = Tr(L"Can't restore this item");
+        d.message = Tr(err);
         d.icon = 0xE7BA;
         d.tone = 2;
-        d.buttons = {L"OK"};
+        d.buttons = {Tr(L"OK")};
         d.primary = 0;
         ShowDialog(std::move(d));
         LoadDeleted();
         return;
     }
     size_t slash = it.original.find_last_of(L'\\');
-    Toast(L"Restored " + (slash == std::wstring::npos ? it.original : it.original.substr(slash + 1)), 0);
+    Toast(TrF(L"Restored {0}", slash == std::wstring::npos ? it.original : it.original.substr(slash + 1)), 0);
     LoadDeleted();
     // Show it in the current scan too: rescan the closest folder of the scan that holds it.
     if (root_ && !readOnly_ && !task_) {
@@ -2375,18 +2385,18 @@ void App::ShowProtectedLocations() {
         for (auto& h : all) {
             if (h.group != g) continue;
             if (lines.size() < 12)
-                lines.push_back(h.group + L"\t" + h.name + L" \u00B7 " + h.path);
+                lines.push_back(Tr(h.group) + L"\t" + Tr(h.name) + L" · " + h.path);
             else
                 ++more;
         }
-    if (more) lines.push_back(L"\t… and " + util::FormatCount(more) + L" more");
+    if (more) lines.push_back(L"\t" + TrN(more, L"… and {0} more", L"… and {0} more"));
     Dialog d;
     d.icon = 0xEA18;
-    d.title = L"Protected locations";
-    d.message = L"System folders are never deleted. For the data below (and Git repositories, password databases, keys "
-                L"and wallets anywhere) WinNCDU asks twice and preselects the Recycle Bin. Add your own rules in protect.txt.";
-    d.lines = lines.empty() ? std::vector<std::wstring>{L"\tNo AI, key, wallet or synced folders found on this PC."} : lines;
-    d.buttons = {L"Edit protect.txt", L"OK"};
+    d.title = Tr(L"Protected locations");
+    d.message = Tr(L"System folders are never deleted. For the data below (and Git repositories, password databases, keys "
+                   L"and wallets anywhere) WinNCDU asks twice and preselects the Recycle Bin. Add your own rules in protect.txt.");
+    d.lines = lines.empty() ? std::vector<std::wstring>{L"\t" + Tr(L"No AI, key, wallet or synced folders found on this PC.")} : lines;
+    d.buttons = {Tr(L"Edit protect.txt"), Tr(L"OK")};
     d.primary = 1;
     d.cancel = 1;
     d.onClose = [](int b, bool) {
@@ -2408,13 +2418,12 @@ void App::ShowDialog(Dialog d) {
 void App::ShowAbout() {
     Dialog d;
     d.title = L"WinNCDU " WINNCDU_VERSION;
-    d.message =
-        L"A fast disk usage analyzer for Windows, inspired by ncdu.\n\n"
-        L"Shortcuts:  Enter open · Backspace up · Del delete · Shift+Del delete permanently · "
-        L"Ctrl+F search · Ctrl+E show in Explorer · Ctrl+C copy path · F5 rescan · Alt+←/→ back/forward.\n\n"
-        L"Search syntax:  *.iso   >1G   <10M   older:1y   newer:7d   type:f   type:d   ext:mp4,mkv   empty";
+    d.message = Tr(L"A fast disk usage analyzer for Windows, inspired by ncdu.") + L"\n\n" +
+                Tr(L"Shortcuts:  Enter open · Backspace up · Del delete · Shift+Del delete permanently · "
+                   L"Ctrl+F search · Ctrl+E show in Explorer · Ctrl+C copy path · F5 rescan · Alt+←/→ back/forward.") +
+                L"\n\n" + Tr(L"Search syntax:") + L"  *.iso   >1G   <10M   older:1y   newer:7d   type:f   type:d   ext:mp4,mkv   empty";
     d.icon = 0xE946;
-    d.buttons = {L"Close"};
+    d.buttons = {Tr(L"Close")};
     d.primary = 0;
     ShowDialog(std::move(d));
 }
@@ -2431,23 +2440,24 @@ void App::ShowContextMenu(int sx, int sy) {
     Node* n = nodes.front();
     bool single = nodes.size() == 1;
     HMENU m = CreatePopupMenu();
+    auto add = [&](UINT flags, UINT_PTR id, const std::wstring& text) { AppendMenuW(m, flags, id, text.c_str()); };
     if (single) {
-        if (n->CanEnter() && view_ == View::Browse) AppendMenuW(m, MF_STRING, CMD_OPEN, L"Open\tEnter");
-        if (view_ != View::Browse) AppendMenuW(m, MF_STRING, CMD_GOTO, L"Go to in folder view");
-        AppendMenuW(m, MF_STRING, CMD_OPEN_DEFAULT, n->IsDir() ? L"Open in Explorer" : L"Open with default app");
-        AppendMenuW(m, MF_STRING, CMD_REVEAL, L"Show in Explorer\tCtrl+E");
+        if (n->CanEnter() && view_ == View::Browse) add(MF_STRING, CMD_OPEN, Tr(L"Open\tEnter"));
+        if (view_ != View::Browse) add(MF_STRING, CMD_GOTO, Tr(L"Go to in folder view"));
+        add(MF_STRING, CMD_OPEN_DEFAULT, n->IsDir() ? Tr(L"Open in Explorer") : Tr(L"Open with default app"));
+        add(MF_STRING, CMD_REVEAL, Tr(L"Show in Explorer\tCtrl+E"));
     }
-    AppendMenuW(m, MF_STRING, CMD_COPY_PATH, single ? L"Copy path\tCtrl+C" : L"Copy paths\tCtrl+C");
+    add(MF_STRING, CMD_COPY_PATH, single ? Tr(L"Copy path\tCtrl+C") : Tr(L"Copy paths\tCtrl+C"));
     if (single) {
-        AppendMenuW(m, MF_STRING, CMD_TERMINAL, L"Open terminal here");
-        AppendMenuW(m, MF_STRING, CMD_PROPERTIES, L"Properties");
+        add(MF_STRING, CMD_TERMINAL, Tr(L"Open terminal here"));
+        add(MF_STRING, CMD_PROPERTIES, Tr(L"Properties"));
     }
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     if (!readOnly_) {
-        AppendMenuW(m, MF_STRING, CMD_RESCAN_ITEM, L"Rescan");
+        add(MF_STRING, CMD_RESCAN_ITEM, Tr(L"Rescan"));
         AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(m, MF_STRING, CMD_DELETE, L"Move to Recycle Bin\tDel");
-        AppendMenuW(m, MF_STRING, CMD_DELETE_PERM, L"Delete permanently\tShift+Del");
+        add(MF_STRING, CMD_DELETE, Tr(L"Move to Recycle Bin\tDel"));
+        add(MF_STRING, CMD_DELETE_PERM, Tr(L"Delete permanently\tShift+Del"));
     }
     int cmd = TrackPopupMenuEx(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, hwnd_, nullptr);
     DestroyMenu(m);
@@ -2457,30 +2467,44 @@ void App::ShowContextMenu(int sx, int sy) {
 void App::ShowMoreMenu() {
     HMENU m = CreatePopupMenu();
     HMENU theme = CreatePopupMenu();
-    AppendMenuW(theme, MF_STRING | (settings_.theme == 0 ? MF_CHECKED : 0), CMD_SET_THEME_SYS, L"Use Windows setting");
-    AppendMenuW(theme, MF_STRING | (settings_.theme == 1 ? MF_CHECKED : 0), CMD_SET_THEME_LIGHT, L"Light");
-    AppendMenuW(theme, MF_STRING | (settings_.theme == 2 ? MF_CHECKED : 0), CMD_SET_THEME_DARK, L"Dark");
-    AppendMenuW(m, MF_STRING, CMD_SCAN_FOLDER, L"Scan a folder…\tCtrl+O");
-    AppendMenuW(m, MF_STRING, CMD_OPEN_SCAN, L"Open saved scan…");
-    AppendMenuW(m, MF_STRING | (root_ ? 0 : MF_GRAYED), CMD_EXPORT_JSON, L"Save scan as JSON…\tCtrl+S");
-    AppendMenuW(m, MF_STRING | (root_ ? 0 : MF_GRAYED), CMD_EXPORT_CSV, L"Export as CSV…");
+    HMENU lang = CreatePopupMenu();
+    auto add = [](HMENU menu, UINT flags, UINT_PTR id, const std::wstring& text) { AppendMenuW(menu, flags, id, text.c_str()); };
+    add(theme, MF_STRING | (settings_.theme == 0 ? MF_CHECKED : 0), CMD_SET_THEME_SYS, Tr(L"Use Windows setting"));
+    add(theme, MF_STRING | (settings_.theme == 1 ? MF_CHECKED : 0), CMD_SET_THEME_LIGHT, Tr(L"Light"));
+    add(theme, MF_STRING | (settings_.theme == 2 ? MF_CHECKED : 0), CMD_SET_THEME_DARK, Tr(L"Dark"));
+    // Language: Windows' display language (when WinNCDU has it), every language found, and the
+    // pseudo-language that shows untranslated and cut-off text.
+    langMenu_ = i18n::AvailableLanguages();
+    std::wstring winCode = i18n::WindowsLanguage(langMenu_), winName = L"English";
+    for (auto& l : langMenu_)
+        if (l.code == winCode) winName = l.name;
+    add(lang, MF_STRING | (settings_.language.empty() ? MF_CHECKED : 0), CMD_LANG, TrF(L"Windows default ({0})", winName));
+    AppendMenuW(lang, MF_SEPARATOR, 0, nullptr);
+    for (size_t i = 0; i < langMenu_.size() && i < 150; ++i)
+        add(lang, MF_STRING | (_wcsicmp(settings_.language.c_str(), langMenu_[i].code.c_str()) == 0 ? MF_CHECKED : 0),
+            CMD_LANG + 2 + i, langMenu_[i].name);
+    AppendMenuW(lang, MF_SEPARATOR, 0, nullptr);
+    add(lang, MF_STRING | (settings_.language == i18n::kPseudoCode ? MF_CHECKED : 0), CMD_LANG + 1, Tr(L"Pseudo-language (layout test)"));
+    add(m, MF_STRING, CMD_SCAN_FOLDER, Tr(L"Scan a folder…\tCtrl+O"));
+    add(m, MF_STRING, CMD_OPEN_SCAN, Tr(L"Open saved scan…"));
+    add(m, MF_STRING | (root_ ? 0 : MF_GRAYED), CMD_EXPORT_JSON, Tr(L"Save scan as JSON…\tCtrl+S"));
+    add(m, MF_STRING | (root_ ? 0 : MF_GRAYED), CMD_EXPORT_CSV, Tr(L"Export as CSV…"));
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m, MF_POPUP, reinterpret_cast<UINT_PTR>(theme), L"Theme");
-    AppendMenuW(m, MF_STRING | (settings_.si ? MF_CHECKED : 0), CMD_SET_SI, L"Decimal units (GB instead of GiB)");
-    AppendMenuW(m, MF_STRING | (settings_.showHidden ? MF_CHECKED : 0), CMD_SET_HIDDEN, L"Show hidden && system files");
-    AppendMenuW(m, MF_STRING | (settings_.hardlinks ? MF_CHECKED : 0), CMD_SET_HARDLINKS, L"Count hard links once (slower scans)");
-    AppendMenuW(m, MF_STRING | (settings_.permanentDefault ? MF_CHECKED : 0), CMD_SET_PERMANENT,
-                L"Delete permanently by default");
-    AppendMenuW(m, MF_STRING | (IsShellIntegrated() ? MF_CHECKED : 0), CMD_SET_SHELL,
-                L"Add “Analyze with WinNCDU” to Explorer");
-    AppendMenuW(m, MF_STRING, CMD_PROTECTED, L"Protected locations…");
-    AppendMenuW(m, MF_STRING, CMD_CLEANERS, L"Cleanup rules…");
-    AppendMenuW(m, MF_STRING, CMD_KEEP_SIGNED_IN, L"Keep me signed in to…");
-    AppendMenuW(m, MF_STRING, CMD_WINAPP2, L"Import winapp2.ini…");
-    if (PathExists(Winapp2File())) AppendMenuW(m, MF_STRING, CMD_WINAPP2_REMOVE, L"Remove winapp2.ini cleaners");
+    add(m, MF_POPUP, reinterpret_cast<UINT_PTR>(theme), Tr(L"Theme"));
+    add(m, MF_POPUP, reinterpret_cast<UINT_PTR>(lang), Tr(L"Language"));
+    add(m, MF_STRING | (settings_.si ? MF_CHECKED : 0), CMD_SET_SI, Tr(L"Decimal units (GB instead of GiB)"));
+    add(m, MF_STRING | (settings_.showHidden ? MF_CHECKED : 0), CMD_SET_HIDDEN, Tr(L"Show hidden && system files"));
+    add(m, MF_STRING | (settings_.hardlinks ? MF_CHECKED : 0), CMD_SET_HARDLINKS, Tr(L"Count hard links once (slower scans)"));
+    add(m, MF_STRING | (settings_.permanentDefault ? MF_CHECKED : 0), CMD_SET_PERMANENT, Tr(L"Delete permanently by default"));
+    add(m, MF_STRING | (IsShellIntegrated() ? MF_CHECKED : 0), CMD_SET_SHELL, Tr(L"Add “Analyze with WinNCDU” to Explorer"));
+    add(m, MF_STRING, CMD_PROTECTED, Tr(L"Protected locations…"));
+    add(m, MF_STRING, CMD_CLEANERS, Tr(L"Cleanup rules…"));
+    add(m, MF_STRING, CMD_KEEP_SIGNED_IN, Tr(L"Keep me signed in to…"));
+    add(m, MF_STRING, CMD_WINAPP2, Tr(L"Import winapp2.ini…"));
+    if (PathExists(Winapp2File())) add(m, MF_STRING, CMD_WINAPP2_REMOVE, Tr(L"Remove winapp2.ini cleaners"));
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    if (!elevated_) AppendMenuW(m, MF_STRING, CMD_ADMIN, L"Restart as administrator");
-    AppendMenuW(m, MF_STRING, CMD_ABOUT, L"About && shortcuts\tF1");
+    if (!elevated_) add(m, MF_STRING, CMD_ADMIN, Tr(L"Restart as administrator"));
+    add(m, MF_STRING, CMD_ABOUT, Tr(L"About && shortcuts\tF1"));
     RECT rc;
     GetClientRect(hwnd_, &rc);
     POINT pt{rc.right - Dip2Px(12), Dip2Px(50)};
@@ -2492,6 +2516,12 @@ void App::ShowMoreMenu() {
 
 void App::OnCommand(int cmd) {
     if (cmd >= CMD_WIN_ACT && cmd < CMD_WIN_ACT + static_cast<int>(WA_COUNT)) return WinToolAction(cmd - CMD_WIN_ACT);
+    if (cmd >= CMD_LANG && cmd < CMD_LANG + 2 + static_cast<int>(langMenu_.size())) {
+        settings_.language = cmd == CMD_LANG ? L"" : cmd == CMD_LANG + 1 ? std::wstring(i18n::kPseudoCode) : langMenu_[cmd - CMD_LANG - 2].code;
+        ApplyLanguage(true);
+        SaveSettings(settings_);
+        return;
+    }
     Node* single = nullptr;
     {
         auto s = SelectedNodes();
@@ -2501,7 +2531,7 @@ void App::OnCommand(int cmd) {
     switch (cmd) {
         case CMD_HOME: view_ = View::Home; LoadHistory(); drives_ = ListDrives(); break;
         case CMD_SCAN_FOLDER: {
-            std::wstring p = PickFolder(hwnd_, L"Choose a folder to analyze");
+            std::wstring p = PickFolder(hwnd_, Tr(L"Choose a folder to analyze"));
             if (!p.empty()) ConfirmNewScan(p);
             break;
         }
@@ -2574,8 +2604,8 @@ void App::OnCommand(int cmd) {
                     sel_.insert(g.photos[i].node);
                     bytes += Val(g.photos[i].node);
                 }
-            Toast(L"Selected " + util::FormatCount(sel_.size()) + L" photos (" + util::FormatSizeShort(bytes) +
-                      L") — the suggested photo of each group is kept. Review before deleting.",
+            Toast(TrN(sel_.size(), L"Selected {0} photo ({1}) — the suggested photo of each group is kept. Review before deleting.",
+                      L"Selected {0} photos ({1}) — the suggested photo of each group is kept. Review before deleting.", util::FormatSizeShort(bytes)),
                   2);
             break;
         }
@@ -2587,8 +2617,8 @@ void App::OnCommand(int cmd) {
                     sel_.insert(g.files[i]);
                     bytes += Val(g.files[i]);
                 }
-            Toast(L"Selected " + util::FormatCount(sel_.size()) + L" extra copies (" + util::FormatSizeShort(bytes) +
-                      L") — the oldest copy of each file is kept",
+            Toast(TrN(sel_.size(), L"Selected {0} extra copy ({1}) — the oldest copy of each file is kept",
+                      L"Selected {0} extra copies ({1}) — the oldest copy of each file is kept", util::FormatSizeShort(bytes)),
                   2);
             break;
         }
@@ -2599,7 +2629,7 @@ void App::OnCommand(int cmd) {
             for (auto& p : devJunk_)
                 if (p.lastChange && p.lastChange < cutoff)
                     for (auto& a : p.artifacts) sel_.insert(a.node);
-            if (sel_.empty()) Toast(L"Every project here was changed in the last three months", 0);
+            if (sel_.empty()) Toast(Tr(L"Every project here was changed in the last three months"), 0);
             break;
         }
         case CMD_AI_REFRESH: LoadAiModels(); break;
@@ -2614,7 +2644,7 @@ void App::OnCommand(int cmd) {
                         ++n;
                     }
                 }
-            if (!n) Toast(L"Every revision here is still referenced by a branch, tag or PR", 0);
+            if (!n) Toast(Tr(L"Every revision here is still referenced by a branch, tag or PR"), 0);
             break;
         }
         case CMD_AI_DELETE: StartAiDelete(); break;
@@ -2671,7 +2701,7 @@ void App::OnCommand(int cmd) {
             if (single) RevealInBrowse(single);
             break;
         case CMD_OPEN_DEFAULT:
-            if (single && !OpenWithDefault(NodePath(single))) Toast(L"Couldn't open " + single->name, 1);
+            if (single && !OpenWithDefault(NodePath(single))) Toast(TrF(L"Couldn't open {0}", single->name), 1);
             break;
         case CMD_REVEAL:
             if (single) RevealInExplorer(NodePath(single));
@@ -2683,7 +2713,7 @@ void App::OnCommand(int cmd) {
             if (nodes.empty() && single) nodes.push_back(single);
             for (Node* n : nodes) text += (text.empty() ? L"" : L"\r\n") + NodePath(n);
             if (!text.empty() && CopyTextToClipboard(text))
-                Toast(nodes.size() == 1 ? L"Copied: " + text : L"Copied " + std::to_wstring(nodes.size()) + L" paths", 2);
+                Toast(nodes.size() == 1 ? TrF(L"Copied: {0}", text) : TrN(nodes.size(), L"Copied {0} path", L"Copied {0} paths"), 2);
             break;
         }
         case CMD_TERMINAL:
@@ -2712,14 +2742,14 @@ void App::OnCommand(int cmd) {
             break;
         case CMD_SET_HARDLINKS:
             settings_.hardlinks = !settings_.hardlinks;
-            Toast(settings_.hardlinks ? L"Hard links will be counted once from the next scan" : L"Hard link detection off", 2);
+            Toast(settings_.hardlinks ? Tr(L"Hard links will be counted once from the next scan") : Tr(L"Hard link detection off"), 2);
             break;
         case CMD_SET_PERMANENT: settings_.permanentDefault = !settings_.permanentDefault; break;
         case CMD_SET_SHELL: {
             std::wstring err;
             bool on = !IsShellIntegrated();
             if (SetShellIntegration(on, err))
-                Toast(on ? L"Added “Analyze with WinNCDU” to the Explorer right-click menu" : L"Removed from the Explorer menu", 0);
+                Toast(on ? Tr(L"Added “Analyze with WinNCDU” to the Explorer right-click menu") : Tr(L"Removed from the Explorer menu"), 0);
             else
                 Toast(err, 1);
             break;
@@ -2735,8 +2765,8 @@ void App::OnCommand(int cmd) {
             break;
         case CMD_CLEANERS: {
             std::wstring f = UserCleanersFile(true);
-            if (f.empty() || !OpenWithDefault(f)) return Toast(L"Can't open " + f, 1);
-            Toast(L"Add your own cleanup categories, then click Measure in Cleanup", 2);
+            if (f.empty() || !OpenWithDefault(f)) return Toast(TrF(L"Can't open {0}", f), 1);
+            Toast(Tr(L"Add your own cleanup categories, then click Measure in Cleanup"), 2);
             break;
         }
         case CMD_KEEP_SIGNED_IN: {
@@ -2749,12 +2779,12 @@ void App::OnCommand(int cmd) {
                         for (auto& d : ExpandedPaths(c)) dirs.push_back(d);
                 CreateKeepList(f, MostVisitedSites(dirs, 15));
             }
-            if (f.empty() || !OpenWithDefault(f)) return Toast(L"Can't open " + f, 1);
-            Toast(L"One site per line; cookies of these sites stay. Save, then click Measure in Cleanup", 2);
+            if (f.empty() || !OpenWithDefault(f)) return Toast(TrF(L"Can't open {0}", f), 1);
+            Toast(Tr(L"One site per line; cookies of these sites stay. Save, then click Measure in Cleanup"), 2);
             break;
         }
         case CMD_WINAPP2: {
-            std::wstring f = PickOpenFile(hwnd_, L"Import winapp2.ini", L"winapp2.ini", L"*.ini");
+            std::wstring f = PickOpenFile(hwnd_, Tr(L"Import winapp2.ini"), L"winapp2.ini", L"*.ini");
             if (f.empty()) break;
             Winapp2Stats st;
             std::wstring err;
@@ -2762,9 +2792,9 @@ void App::OnCommand(int cmd) {
             bool busy = cleanupMeasuring_;
             if (!busy) MeasureCleanup();
             ShowView(View::Cleanup);
-            Toast(busy ? L"Imported. Click Measure in a moment to include it."
-                       : L"Imported " + util::FormatCount(st.usable) + L" app cleaners (" + util::FormatCount(st.personal) +
-                             L" about personal data left out)",
+            Toast(busy ? Tr(L"Imported. Click Measure in a moment to include it.")
+                       : TrN(st.usable, L"Imported {0} app cleaner ({1} about personal data left out)",
+                             L"Imported {0} app cleaners ({1} about personal data left out)", util::FormatCount(st.personal)),
                   2);
             break;
         }
@@ -2773,11 +2803,11 @@ void App::OnCommand(int cmd) {
             bool busy = cleanupMeasuring_;
             if (!busy) MeasureCleanup();
             ShowView(View::Cleanup);
-            Toast(busy ? L"Removed. Click Measure in a moment to update the list." : L"winapp2.ini cleaners removed", 2);
+            Toast(busy ? Tr(L"Removed. Click Measure in a moment to update the list.") : Tr(L"winapp2.ini cleaners removed"), 2);
             break;
         }
         case CMD_OPEN_JOURNAL:
-            if (!PathExists(JournalFile())) return Toast(L"Nothing has been deleted yet", 2);
+            if (!PathExists(JournalFile())) return Toast(Tr(L"Nothing has been deleted yet"), 2);
             OpenWithDefault(JournalFile());
             break;
     }
