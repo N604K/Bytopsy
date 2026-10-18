@@ -73,8 +73,12 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       estimates; disable (reversible) rather than delete.
 - [ ] **Uninstaller with leftovers**: list apps from the Uninstall registry keys, run their uninstaller,
       then offer leftover folders (checked against the protection rules).
-- [ ] **Disk health**: SMART/wear via `MSFT_PhysicalDisk` and `MSFT_StorageReliabilityCounter`, TRIM
+- [x] **Disk health**: SMART/wear via `MSFT_PhysicalDisk` and `MSFT_StorageReliabilityCounter`, TRIM
       status, free-space trend from scan history.
+      *Done: Disk health view and `winncdu-cli --disks` (`src/diskhealth.cpp`), read-only. NVMe
+      drives' own health log fills in wear and temperature without administrator rights; the trend
+      uses free space noted on each view load and scan (`freespace.log`), else earlier scans of the
+      drive. The administrator path of the reliability counters has not been run on a real PC yet.*
 - [ ] **Scheduled cleanup**: `winncdu-cli --clean temp,browser,dev --yes` plus a Task Scheduler entry
       from the GUI.
 - [ ] Duplicate photos with a perceptual hash (not only byte-identical files).

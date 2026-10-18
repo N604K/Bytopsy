@@ -9,6 +9,7 @@
 #include "export.h"
 #include "fsops.h"
 #include "aimodels.h"
+#include "diskhealth.h"
 #include "games.h"
 #include "journal.h"
 #include "protect.h"
@@ -18,6 +19,7 @@
 #include "vdisks.h"
 #include "version.h"
 #include "wintools.h"
+#include "gui/history.h"
 
 namespace {
 
@@ -54,6 +56,8 @@ void PrintUsage() {
         "                        Restore, event logs) and exit\n"
         "  --games               List installed games of every launcher (size, last played)\n"
         "                        and leftovers of uninstalled ones, and exit\n"
+        "  --disks               List physical disks (health, wear, temperature, TRIM, drive\n"
+        "                        letters) and each drive's used-space trend, and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -249,6 +253,83 @@ int ListGames() {
     return 0;
 }
 
+int ListDisks() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    DiskHealthReport rep = QueryDiskHealth();
+    std::wstring out = L"Physical disks (read-only: the disks are only queried, never written to).\n\n";
+    if (!rep.error.empty()) out += L"  " + rep.error + L"\n";
+    if (rep.disks.empty() && rep.error.empty()) out += L"  None found.\n";
+    bool denied = false;
+    auto num = [](int64_t n) { return util::FormatCount(static_cast<uint64_t>(n)); };
+    for (auto& d : rep.disks) {
+        DiskVerdict v = AssessDisk(d);
+        out += L"  Disk " + std::to_wstring(d.number) + L"  " + d.model + L"  ·  " + MediaName(d) + L"  ·  " + util::FormatSizeShort(d.size) +
+               L"  ·  " + HealthLevelName(v.level) + L"\n";
+        std::wstring drives;
+        for (size_t i = 0; i < d.drives.size(); ++i)
+            drives += (i ? L", " : L"") + d.drives[i] + (d.fileSystems[i].empty() ? L"" : L" (" + d.fileSystems[i] + L")");
+        out += L"      Drives       " + (drives.empty() ? std::wstring(L"none with a letter") : drives) + L"\n";
+        std::wstring status;
+        for (int s : d.opStatus) status += (status.empty() ? L"" : L", ") + OpStatusName(s);
+        if (!status.empty()) out += L"      Status       " + status + L"\n";
+        if (d.wear >= 0) out += L"      Wear         " + std::to_wstring(d.wear) + L"% of its rated endurance used\n";
+        if (d.temperature > 0)
+            out += L"      Temperature  " + std::to_wstring(d.temperature) + L" °C" +
+                   (d.temperatureMax > 0 ? L" (rated for " + std::to_wstring(d.temperatureMax) + L" °C)" : L"") + L"\n";
+        if (d.powerOnHours >= 0) out += L"      Powered on   " + num(d.powerOnHours) + L" hours\n";
+        if (d.availableSpare >= 0)
+            out += L"      Spare        " + std::to_wstring(d.availableSpare) + L"% (warns at " + std::to_wstring(d.spareThreshold) + L"%)\n";
+        if (d.bytesWritten) out += L"      Written      " + util::FormatSizeShort(d.bytesWritten) + L" over its life\n";
+        std::wstring errs;
+        auto addErr = [&](int64_t n, const wchar_t* what) {
+            if (n >= 0) errs += (errs.empty() ? L"" : L", ") + num(n) + what;
+        };
+        addErr(d.mediaErrors, L" media errors");
+        addErr(d.readErrorsUncorrected, L" uncorrected read errors");
+        addErr(d.writeErrorsUncorrected, L" uncorrected write errors");
+        addErr(d.unsafeShutdowns, L" unsafe shutdowns");
+        if (!errs.empty()) out += L"      Errors       " + errs + L"\n";
+        if (d.Ssd()) {
+            std::wstring trim;
+            for (auto& fs : d.fileSystems) {
+                int t = TrimFor(rep.trim, fs);
+                if (t >= 0 && trim.find(fs) == std::wstring::npos) trim += (trim.empty() ? L"" : L", ") + fs + (t ? L" on" : L" OFF");
+            }
+            if (!trim.empty()) out += L"      TRIM         " + trim + L"\n";
+        }
+        if (!d.HasCounters() && d.countersDenied) denied = true;
+        for (auto& p : v.problems) out += L"      !  " + p + L"\n";
+        for (auto& n : v.notes) out += L"      i  " + n + L"\n";
+        out += L"\n";
+    }
+    if (denied) out += L"Wear and temperature of some disks need administrator rights: run this from an elevated prompt.\n\n";
+    out += L"TRIM (fsutil behavior query DisableDeleteNotify): NTFS " +
+           std::wstring(rep.trim.ntfs < 0 ? L"unknown" : rep.trim.ntfs ? L"on" : L"off") + L", ReFS " +
+           std::wstring(rep.trim.refs < 0 ? L"not set" : rep.trim.refs ? L"on" : L"off") + L"\n\n";
+
+    out += L"Used space over time:\n";
+    auto log = LoadFreeSpaceLog();
+    auto snaps = ListSnapshots();
+    int64_t now = util::NowFileTime();
+    for (auto& d : ListDrives()) {
+        if (d.type != DRIVE_FIXED || !d.ready) continue;
+        std::vector<UsagePoint> scans;
+        for (auto& s : snaps)
+            if (s.root.size() >= 2 && s.root.size() <= 3 && s.root[1] == L':' && towupper(s.root[0]) == towupper(d.root[0]))
+                scans.push_back({s.time, s.disk});
+        DriveTrend t = BuildDriveTrend(d, VolumeSerial(d.root), log, scans, now);
+        out += L"  " + t.drive + L"  " + util::FormatSizeShort(d.total - d.free) + L" of " + util::FormatSizeShort(d.total) + L" used  ·  " +
+               t.text + (t.trend.ok ? L" (" + util::FormatCount(t.samples) + (t.fromScans ? L" scans)" : L" samples)") : L"") + L"\n";
+    }
+    out += L"\nThe windowed app notes each drive's free space when Disk health opens or a scan finishes.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
 int Fail(const std::wstring& msg) {
     fwprintf(stderr, L"winncdu-cli: %s\n", msg.c_str());
     return 2;
@@ -370,6 +451,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListWindowsTools();
         } else if (a == L"--games") {
             return ListGames();
+        } else if (a == L"--disks") {
+            return ListDisks();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {

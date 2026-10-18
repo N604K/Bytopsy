@@ -1025,6 +1025,46 @@ void App::RebuildOld() {
 }
 
 // =============================================================================================
+// Disk health: physical disks, TRIM and used space over time (works without a scan; read-only).
+
+void App::LoadDiskHealth() {
+    if (task_) return;
+    struct State {
+        DiskHealthReport rep;
+        std::vector<DriveTrend> trends;
+    };
+    auto st = std::make_shared<State>();
+    auto t = std::make_unique<Task>();
+    t->title = L"Asking the disks";
+    t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Health, wear, temperature and TRIM (read-only)"}}; };
+    t->onDone = [this, st] {
+        disk_ = std::move(st->rep);
+        diskTrends_ = std::move(st->trends);
+        diskLoaded_ = true;
+        Invalidate();
+    };
+    StartTask(std::move(t), [st] {
+        std::vector<DriveInfo> drives = ListDrives();
+        std::vector<std::wstring> roots;
+        for (auto& d : drives)
+            if (d.ready && d.type == DRIVE_FIXED) roots.push_back(d.root);
+        RecordFreeSpace(roots);
+        st->rep = QueryDiskHealth();
+        auto log = LoadFreeSpaceLog();
+        auto snaps = ListSnapshots();
+        int64_t now = util::NowFileTime();
+        for (auto& d : drives) {
+            if (!d.ready || d.type != DRIVE_FIXED) continue;
+            std::vector<UsagePoint> scans;  // earlier scans of the drive root
+            for (auto& s : snaps)
+                if (s.root.size() >= 2 && s.root.size() <= 3 && s.root[1] == L':' && towupper(s.root[0]) == towupper(d.root[0]))
+                    scans.push_back({s.time, s.disk});
+            st->trends.push_back(BuildDriveTrend(d, VolumeSerial(d.root), log, scans, now));
+        }
+    });
+}
+
+// =============================================================================================
 // Tasks
 
 void App::StartTask(std::unique_ptr<Task> t, std::function<void()> work) {
@@ -1138,6 +1178,7 @@ void App::StartScan(const std::wstring& input) {
             std::wstring err2;
             SaveSnapshot(n, err2);
         }
+        RecordFreeSpace({path});  // Disk health's used-space trend
     });
 }
 
@@ -1773,7 +1814,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
-        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::CleanReview && !root_)
+        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::CleanReview && v != View::DiskHealth && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -1807,6 +1848,9 @@ void App::ShowView(View v) {
             break;
         case View::Games:
             if (!gamesLoaded_) LoadGames();
+            break;
+        case View::DiskHealth:
+            if (!diskLoaded_) LoadDiskHealth();
             break;
         default: break;
     }
@@ -2212,6 +2256,7 @@ void App::OnCommand(int cmd) {
         case CMD_GAMES_REFRESH: LoadGames(); break;
         case CMD_GAME_UNINSTALL: StartGameUninstall(); break;
         case CMD_GAMES_DELETE: StartGameLeftoversDelete(); break;
+        case CMD_DISK_REFRESH: LoadDiskHealth(); break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE: MeasureCleanup(); break;
         case CMD_ADMIN: {
