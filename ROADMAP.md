@@ -241,7 +241,7 @@ databases, and every install through Windows' or the app's own mechanism.
       checks size and SHA-256, unpacks with Windows' `tar.exe`, compares the publisher once
       releases are signed, swaps the programs with a full rollback, journals it and restarts; a
       folder Bytopsy can't write to (Program Files) gets "restart as administrator" instead. The
-      public key in `src/updatekey.h` is still a placeholder (no checks until it is generated).*
+      project's public key is in `src/updatekey.h`; the private key is the release secret.*
 
 Later, maybe:
 

@@ -709,7 +709,7 @@ src/                  core engine + terminal app
   phash.cpp           similar photos: WIC decoding, dHash/pHash, hash index, grouping, cache
   i18n.cpp            translations: Tr/TrF/TrN, .lang files, plural rules, pseudo-language
   update.cpp          self-update: signed update.json, WinHTTP download, SHA-256, unpack, file swap
-  updatekey.h         the public key update.json is checked with (placeholder until generated)
+  updatekey.h         the public key update.json is checked with
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
