@@ -1,4 +1,5 @@
 build/
+packaging/out/
 out/
 .vs/
 *.user

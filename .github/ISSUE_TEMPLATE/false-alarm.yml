@@ -1,0 +1,52 @@
+name: False alarm
+description: WinNCDU warns about, or blocks, something that is safe to delete.
+title: "False alarm: "
+labels: ["protection", "false alarm"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping keep the protection rules accurate. Replace your user name in paths with
+        `{HOME}` or `%USERPROFILE%` if you prefer.
+  - type: input
+    id: path
+    attributes:
+      label: Path
+      description: The file or folder that is flagged.
+      placeholder: "{HOME}\\AppData\\Roaming\\SomeApp\\Cache"
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Shown as
+      options:
+        - Blocked (red)
+        - Important (orange)
+        - Caution (grey)
+    validations:
+      required: true
+  - type: textarea
+    id: rule
+    attributes:
+      label: What WinNCDU says
+      description: The reason in the delete dialog or the shield's tooltip, or the matching line of `winncdu-cli --protected`.
+    validations:
+      required: true
+  - type: textarea
+    id: why-safe
+    attributes:
+      label: Why it is safe to delete
+      description: What the folder holds and what happens after deleting it (the app re-creates it, downloads it again, ...). A link to the app's documentation helps.
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: App and version
+      description: The app that owns the folder, if you know it.
+  - type: input
+    id: version
+    attributes:
+      label: WinNCDU version
+      description: Shown in About (F1) or by `winncdu-cli --version`.

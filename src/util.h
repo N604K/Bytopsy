@@ -47,4 +47,14 @@ int64_t FileTimeToUnix(int64_t filetime);
 // Starts a native thread with a large stack (deep recursion over trees is fine).
 HANDLE StartThread(std::function<void()> fn, size_t stackSize = 16u << 20);
 
+// The folder for everything WinNCDU writes (settings, history, journal, protect.txt,
+// cleaners.ini, winapp2.ini): %LOCALAPPDATA%\WinNCDU, or in portable mode, when a file named
+// "winncdu.portable" is next to the exe, the "WinNCDU-data" folder next to the exe. Decided once
+// per run; not created here. Empty if it can't be determined.
+std::wstring DataDir();
+bool PortableMode();
+// The rule itself, for a given exe folder and %LOCALAPPDATA% (tests).
+std::wstring DataDirFor(const std::wstring& exeDir, const std::wstring& localAppData);
+extern const wchar_t* const kPortableMarker;  // "winncdu.portable"
+
 }  // namespace util

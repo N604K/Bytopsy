@@ -46,8 +46,11 @@ static std::wstring Names(const AiStore& s) {
 static std::string Hex(char c) { return std::string(64, c); }
 
 int main() {
-    wchar_t b[MAX_PATH];
-    std::wstring tmp(b, GetTempPathW(MAX_PATH, b));
+    // With long names: on GitHub's runners %TEMP% is C:\Users\RUNNER~1\..., and Windows reports
+    // where a symlinked snapshot leads with long names.
+    wchar_t b[MAX_PATH], lb[MAX_PATH];
+    DWORD tn = GetTempPathW(MAX_PATH, b), ln = tn ? GetLongPathNameW(b, lb, MAX_PATH) : 0;
+    std::wstring tmp = ln && ln < MAX_PATH ? std::wstring(lb, ln) : std::wstring(b, tn);
     std::wstring dir = tmp + L"winncdu-aimodels-test-" + std::to_wstring(GetCurrentProcessId());
     std::wstring journal = dir + L"-journal.log";
     SetEnvironmentVariableW(L"WINNCDU_JOURNAL", journal.c_str());

@@ -1,0 +1,47 @@
+name: Missing protected folder
+description: Something that holds data you can't get back is not protected.
+title: "Protect: "
+labels: ["protection"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For example an AI assistant's sessions, an app's keys or saves, or a sync folder. Replace your
+        user name in paths with `{HOME}` or `%USERPROFILE%` if you prefer.
+  - type: input
+    id: path
+    attributes:
+      label: Path
+      description: The file or folder that should be protected. Use `*` for parts that differ between PCs.
+      placeholder: "{HOME}\\.newapp or %APPDATA%\\NewApp\\sessions"
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: App
+      description: The app that owns it, with a link if it is not well known.
+    validations:
+      required: true
+  - type: textarea
+    id: lost
+    attributes:
+      label: What would be lost
+      description: What the folder holds (history, keys, saves, settings, ...) and whether it can be downloaded or recreated.
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Suggested level
+      options:
+        - Important (data that can't be recovered)
+        - Caution (large or easy to delete by mistake, but recoverable)
+        - Blocked (deleting it breaks Windows or the app)
+    validations:
+      required: true
+  - type: textarea
+    id: safe-parts
+    attributes:
+      label: Safe parts
+      description: Subfolders inside it that are only caches and should stay deletable, if any.

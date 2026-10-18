@@ -108,8 +108,11 @@ static std::wstring Listing(const std::wstring& dir) {
 static std::wstring W(const std::string& s) { return util::Utf8ToWide(s); }
 
 int main() {
-    wchar_t b[MAX_PATH];
-    std::wstring tmp(b, GetTempPathW(MAX_PATH, b));
+    // With long names: on GitHub's runners %TEMP% is C:\Users\RUNNER~1\..., and the Recycle Bin
+    // reports long paths.
+    wchar_t b[MAX_PATH], lb[MAX_PATH];
+    DWORD tn = GetTempPathW(MAX_PATH, b), ln = tn ? GetLongPathNameW(b, lb, MAX_PATH) : 0;
+    std::wstring tmp = ln && ln < MAX_PATH ? std::wstring(lb, ln) : std::wstring(b, tn);
     std::wstring pid = std::to_wstring(GetCurrentProcessId());
     std::wstring dir = tmp + L"winncdu-cleanup-test-" + pid;
     std::wstring journal = dir + L"-journal.log";  // restores are journaled; keep yours untouched

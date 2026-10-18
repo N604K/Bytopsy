@@ -1,7 +1,7 @@
 #pragma once
 
 // Deletion journal: every delete, cleanup and restore is appended to
-// %LOCALAPPDATA%\WinNCDU\journal.log (UTF-8, one tab-separated line per action), so people can see
+// journal.log in util::DataDir() (UTF-8, one tab-separated line per action), so people can see
 // later what WinNCDU removed, and bring back what is still in the Recycle Bin.
 
 #include <cstdint>

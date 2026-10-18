@@ -90,7 +90,7 @@ std::wstring FindTool(const std::wstring& command);
 int RunCommand(const std::wstring& command, std::atomic<bool>& cancel, std::wstring& err);
 
 // Categories come from res/cleaners.ini (built into the exe) merged with the user's
-// %LOCALAPPDATA%\WinNCDU\cleaners.ini, then the imported winapp2.ini; problems go to `errors`.
+// cleaners.ini in util::DataDir(), then the imported winapp2.ini; problems go to `errors`.
 std::vector<CleanCategory> BuildCleanupCategories(std::vector<std::wstring>* errors = nullptr);
 std::vector<CleanCategory> ParseCleaners(const std::wstring& text, std::vector<std::wstring>& errors);
 // The user's cleaners.ini; `create` writes a commented template if it doesn't exist yet.
@@ -108,7 +108,7 @@ struct Winapp2Stats {
     size_t regOnly = 0;   // skipped: registry only
 };
 std::vector<CleanCategory> ParseWinapp2(const std::wstring& text, Winapp2Stats& stats);
-// %LOCALAPPDATA%\WinNCDU\winapp2.ini, where an import is kept.
+// winapp2.ini in util::DataDir() (%LOCALAPPDATA%\WinNCDU), where an import is kept.
 std::wstring Winapp2File();
 // Checks and copies a winapp2.ini into place.
 bool ImportWinapp2(const std::wstring& source, Winapp2Stats& stats, std::wstring& err);

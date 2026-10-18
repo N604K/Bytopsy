@@ -1,0 +1,147 @@
+# Build and self-tests on every push and pull request; on a tag "v*" also a GitHub release with a
+# zip of both programs and its SHA-256. See docs/RELEASING.md.
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Visual Studio developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $line = Select-String -Path src/version.h -Pattern '#define WINNCDU_VERSION_A\s+"([^"]+)"'
+          $version = $line.Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $tag = $env:GITHUB_REF_NAME.Substring(1)
+            if ($tag -ne $version) { throw "Tag v$tag does not match WINNCDU_VERSION_A ($version) in src/version.h" }
+          } else {
+            $version = "$version-$($env:GITHUB_SHA.Substring(0, 7))"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "Version: $version"
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      # Code signing through SignPath, for tags only, once the repository variable
+      # SIGNPATH_ORGANIZATION_ID and the secret SIGNPATH_API_TOKEN are set (docs/RELEASING.md).
+      # Without them, releases are published unsigned.
+      - name: Upload unsigned programs for signing
+        id: unsigned
+        if: startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned
+          path: |
+            build/winncdu.exe
+            build/winncdu-cli.exe
+          if-no-files-found: error
+
+      - name: Sign (SignPath)
+        id: sign
+        if: steps.unsigned.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'WinNCDU' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'initial' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Check signatures
+        if: steps.sign.outcome == 'success'
+        shell: pwsh
+        run: |
+          foreach ($f in 'signed/winncdu.exe', 'signed/winncdu-cli.exe') {
+            $s = Get-AuthenticodeSignature $f
+            "$f : $($s.Status) $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { throw "$f is not validly signed" }
+          }
+
+      - name: Package
+        shell: pwsh
+        env:
+          BIN: ${{ steps.sign.outcome == 'success' && 'signed' || 'build' }}
+        run: |
+          $name = "winncdu-${{ steps.version.outputs.version }}-x64"
+          New-Item -ItemType Directory -Force dist, "stage/$name" | Out-Null
+          Copy-Item "$env:BIN/winncdu.exe", "$env:BIN/winncdu-cli.exe", README.md "stage/$name"
+          if (Test-Path LICENSE) { Copy-Item LICENSE "stage/$name" }
+          Compress-Archive -Path "stage/$name/*" -DestinationPath "dist/$name.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 "dist/$name.zip").Hash.ToLowerInvariant()
+          # sha256sum format: "<hash>  <file>"; check with: sha256sum -c, or Get-FileHash.
+          [IO.File]::WriteAllText("$PWD/dist/$name.zip.sha256", "$hash  $name.zip`n")
+          Get-Content "dist/$name.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winncdu-${{ steps.version.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+
+      # winget, Scoop and Chocolatey manifests for this release, kept as a workflow artifact for
+      # submitting by hand (not attached to the release).
+      - name: Package manager manifests
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: >-
+          packaging/update-manifests.ps1 -Version "${{ steps.version.outputs.version }}"
+          -ZipPath "dist/winncdu-${{ steps.version.outputs.version }}-x64.zip" -OutDir manifests
+
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifests-${{ steps.version.outputs.version }}
+          path: manifests
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: winncdu-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Verify checksum
+        working-directory: dist
+        run: sha256sum -c *.sha256
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: WinNCDU ${{ needs.build.outputs.version }}
+          files: dist/*
+          generate_release_notes: true

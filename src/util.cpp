@@ -1,6 +1,7 @@
 #include "util.h"
 
 #include <windows.h>
+#include <shlobj.h>
 
 #include <cmath>
 #include <cstdio>
@@ -257,6 +258,50 @@ HANDLE StartThread(std::function<void()> fn, size_t stackSize) {
         (*owned)();
     }
     return h;
+}
+
+const wchar_t* const kPortableMarker = L"winncdu.portable";
+
+std::wstring DataDirFor(const std::wstring& exeDir, const std::wstring& localAppData) {
+    if (!exeDir.empty()) {
+        DWORD a = GetFileAttributesW((exeDir + L"\\" + kPortableMarker).c_str());
+        if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) return exeDir + L"\\WinNCDU-data";
+    }
+    return localAppData.empty() ? L"" : localAppData + L"\\WinNCDU";
+}
+
+namespace {
+
+std::wstring ExeDir() {
+    std::vector<wchar_t> buf(32768);
+    DWORD n = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+    if (!n || n >= buf.size()) return L"";
+    std::wstring p(buf.data(), n);
+    size_t slash = p.rfind(L'\\');
+    return slash == std::wstring::npos ? L"" : p.substr(0, slash);
+}
+
+std::wstring LocalAppData() {
+    PWSTR p = nullptr;
+    std::wstring out;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) out = p;
+    CoTaskMemFree(p);
+    return out;
+}
+
+}  // namespace
+
+std::wstring DataDir() {
+    static const std::wstring dir = DataDirFor(ExeDir(), LocalAppData());
+    return dir;
+}
+
+bool PortableMode() {
+    static const bool portable = [] {
+        std::wstring exe = ExeDir();
+        return !exe.empty() && DataDir() == exe + L"\\WinNCDU-data";
+    }();
+    return portable;
 }
 
 }  // namespace util

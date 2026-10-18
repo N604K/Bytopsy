@@ -1,0 +1,45 @@
+name: Bug report
+description: Something doesn't work as described.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: app
+    attributes:
+      label: Which app
+      options:
+        - winncdu.exe (windowed)
+        - winncdu-cli.exe (terminal)
+        - both
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: WinNCDU version
+      description: Shown in About (F1) or by `winncdu-cli --version`.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+  - type: checkboxes
+    id: admin
+    attributes:
+      label: Context
+      options:
+        - label: Running as administrator
+  - type: textarea
+    id: journal
+    attributes:
+      label: Journal lines
+      description: If a delete or cleanup went wrong, the matching lines of `%LOCALAPPDATA%\WinNCDU\journal.log` (or `winncdu-cli --journal`).
+      render: text

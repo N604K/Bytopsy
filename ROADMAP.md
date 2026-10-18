@@ -108,12 +108,26 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 ## 4. Open-source project health
 
 - [ ] Add a LICENSE file (MIT or GPL-3.0); without one, nobody may legally reuse or contribute.
-- [ ] GitHub Actions on `windows-latest`: build, `ctest`, upload release zips with SHA-256.
+- [x] GitHub Actions on `windows-latest`: build, `ctest`, upload release zips with SHA-256.
+      *Done: `.github/workflows/build.yml`; tags `v*` must match `src/version.h` and create a
+      release with the zip and its `.sha256` (docs/RELEASING.md). Not yet run on GitHub: the tests
+      were checked locally with `%TEMP%` set to an 8.3 short path like the runners'.*
 - [ ] Code signing for releases (SignPath offers free signing for open-source projects), so
       SmartScreen and antivirus don't flag a tool that deletes files.
-- [ ] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
-- [ ] CONTRIBUTING.md with a short guide "add a protected location / add a cleaner", and issue
+      *Prepared, not done: the release workflow signs through SignPath once the
+      `SIGNPATH_ORGANIZATION_ID` variable and `SIGNPATH_API_TOKEN` secret are set (docs/RELEASING.md,
+      `packaging/signpath/artifact-configuration.xml`). Left: a LICENSE, applying to SignPath
+      Foundation, and the SignPath project setup. Releases are unsigned until then.*
+- [x] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
+      *Done: portable mode (a `winncdu.portable` file next to the exe puts all data in
+      `WinNCDU-data` beside it; one place decides, `util::DataDir()`). Manifest templates in
+      `packaging/`, filled per release by `packaging/update-manifests.ps1` (docs/RELEASING.md).
+      Left: choosing the license for the manifests and submitting them to winget-pkgs, a Scoop
+      bucket and Chocolatey.*
+- [x] CONTRIBUTING.md with a short guide "add a protected location / add a cleaner", and issue
       templates for "false alarm" and "missing protected folder".
+      *Done: CONTRIBUTING.md (build, self-tests, both guides) and issue forms in
+      `.github/ISSUE_TEMPLATE` (false alarm, missing protected folder, bug report).*
 - [ ] Accessibility: the GUI is custom-drawn with Direct2D, so screen readers see nothing. Add a
       UI Automation provider for the list, buttons and dialogs.
 - [ ] Localization: move strings to a table; start with the languages of the first contributors.
@@ -122,4 +136,6 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       *Done: `tests/analysis_test.cpp`, `tests/export_test.cpp`, `tests/importfuzz_test.cpp` (5000
       mutated files, fixed seed). Fixed what they found: deep nesting crashed the importer (now
       capped at 16384 levels), `>`/`<` were inclusive, a sub-folder export lost its full path.*
-- [ ] Privacy statement: no telemetry, no network access (except an optional update check).
+- [x] Privacy statement: no telemetry, no network access (except an optional update check).
+      *Done: "Privacy" in the README, checked against the source (no networking APIs or libraries).
+      There is no update check, so the statement has no exception.*

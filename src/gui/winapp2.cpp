@@ -233,8 +233,8 @@ std::vector<CleanCategory> ParseWinapp2(const std::wstring& text, Winapp2Stats& 
 }
 
 std::wstring Winapp2File() {
-    std::wstring dir = KnownFolder(FOLDERID_LocalAppData);
-    return dir.empty() ? L"" : dir + L"\\WinNCDU\\winapp2.ini";
+    std::wstring dir = util::DataDir();
+    return dir.empty() ? L"" : dir + L"\\winapp2.ini";
 }
 
 bool ImportWinapp2(const std::wstring& source, Winapp2Stats& st, std::wstring& err) {

@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+# Template: packaging/update-manifests.ps1 fills in the version, download URL and SHA-256.
+# TODO(owner): set License (and LicenseUrl) once the repository has a LICENSE file.
+PackageIdentifier: N604K.WinNCDU
+PackageVersion: __VERSION__
+PackageLocale: en-US
+Publisher: N604K
+PublisherUrl: https://github.com/N604K
+PublisherSupportUrl: https://github.com/N604K/WinNCDU/issues
+PackageName: WinNCDU
+PackageUrl: https://github.com/N604K/WinNCDU
+License: LICENSE-PLACEHOLDER
+ShortDescription: Fast disk usage analyzer and cleaner for Windows, inspired by ncdu.
+Description: |-
+  WinNCDU shows what takes up space on a drive: a folder tree sorted by size, a treemap, largest
+  files, file types, duplicates, developer junk, AI models, WSL and Docker disks, and games. Cleanup
+  removes caches and temporary files after a review of exactly what is deleted, checks every item
+  against protected locations, and keeps a journal with Restore from the Recycle Bin.
+  Two programs: winncdu (windowed) and winncdu-cli (ncdu-style terminal app).
+Moniker: winncdu
+Tags:
+  - disk-usage
+  - disk-space
+  - ncdu
+  - treemap
+  - cleanup
+  - duplicates
+ReleaseNotesUrl: https://github.com/N604K/WinNCDU/releases/tag/v__VERSION__
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

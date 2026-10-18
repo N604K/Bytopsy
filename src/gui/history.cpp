@@ -100,11 +100,7 @@ bool ReadHeader(Reader& r, SnapshotInfo& info) {
 }  // namespace
 
 std::wstring AppDataDir() {
-    PWSTR p = nullptr;
-    std::wstring d;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p))) d = p;
-    CoTaskMemFree(p);
-    d += L"\\WinNCDU";
+    std::wstring d = util::DataDir();
     CreateDirectoryW(d.c_str(), nullptr);
     return d;
 }

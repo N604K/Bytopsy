@@ -282,7 +282,67 @@ administrator, WinNCDU also refuses a path that no longer leads where it did (a 
 swapped for a link), so nobody can redirect an elevated delete into, say, `C:\Windows`.
 
 `winncdu-cli --protected` lists the protected locations found on this PC.
-Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; pull requests welcome.
+Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; open an issue with the
+*False alarm* or *Missing protected folder* template, or see [CONTRIBUTING.md](CONTRIBUTING.md) to
+add a rule (or a cleaner) yourself.
+
+## Privacy
+
+WinNCDU has no telemetry and makes no network connections. It contains no networking code (no
+WinHTTP, WinINet, sockets or URL downloads), links no networking library, has no update check, and
+sends nothing anywhere. What it learns about your disk stays on your PC.
+
+**What it reads.** Names, sizes, times and attributes of what you scan. File contents only where a
+feature needs them: hashes for Duplicates, the ext4 superblock inside WSL disks, game launcher and
+AI model manifests, scans you import, and its rule files.
+
+**What it writes.** Everything lives in `%LOCALAPPDATA%\WinNCDU` (in
+[portable mode](#portable-mode), in `WinNCDU-data` next to the exe):
+
+| File | Contents |
+| --- | --- |
+| `settings.ini` | Window position, theme, view options and exclude patterns of the windowed app |
+| `history\` | Folder sizes of each completed scan, for *History & compare* |
+| `journal.log` (`journal.1.log` after 4 MB) | What was deleted or cleaned: time, path, size, Recycle Bin or permanent |
+| `protect.txt` | Your protection rules (created with commented examples) |
+| `cleaners.ini` | Your cleanup rules (created when you open *Cleanup rules…*) |
+| `winapp2.ini` | A copy of the winapp2.ini you imported |
+
+Outside that folder: exports where you save them; the Explorer menu entry, if you add it (three keys
+under `HKCU\Software\Classes`, removed by the same menu item); and short-lived files in `%TEMP%` (a
+`diskpart` script while compacting virtual disks, the output of tools run as administrator), deleted
+when the tool finishes. Deleting the `WinNCDU` folder removes everything else.
+
+**Programs it starts**, only from the views and actions that need them: Windows' own tools (DISM,
+`pnputil`, `vssadmin`, `powercfg`, `compact`, `wevtutil`, `diskpart`, PowerShell for System Restore
+storage and the Delivery Optimization cache, Disk Cleanup), `wsl.exe`, `docker`, the clean command of a
+`kind = command` cleanup rule (such as `conan remove`), and a game launcher's uninstall link
+(`steam://uninstall/...`). WinNCDU itself goes online for none of these, but the programs behave as
+they always do: Steam or Docker Desktop, for example, may connect on their own.
+
+## Install
+
+Download `winncdu-<version>-x64.zip` from the GitHub releases, check it against the `.sha256` file
+next to it (see [docs/RELEASING.md](docs/RELEASING.md#checking-a-download)), and unpack it anywhere.
+There is no installer; both programs run from any folder.
+
+Manifests for winget, Scoop and Chocolatey are prepared in [packaging/](packaging) but not yet
+published in those repositories.
+
+### Portable mode
+
+Put an empty file named `winncdu.portable` next to `winncdu.exe` / `winncdu-cli.exe`:
+
+```bat
+type nul > winncdu.portable
+```
+
+Both programs then keep everything they write (settings, history, journal, `protect.txt`,
+`cleaners.ini`, the imported `winapp2.ini`) in a `WinNCDU-data` folder next to the exe instead of
+`%LOCALAPPDATA%\WinNCDU`, so the folder can live on a USB stick. The folder must be writable.
+Nothing is moved over: copy the files from `%LOCALAPPDATA%\WinNCDU` into `WinNCDU-data` to keep them.
+The Explorer menu entry, if you add it, still goes to the registry (it points at that exe).
+The Scoop manifest installs in portable mode and keeps `WinNCDU-data` across updates.
 
 ## Build
 
@@ -302,6 +362,12 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps and phash self-tests
 ```
+
+GitHub Actions builds and runs the self-tests on every push and pull request
+([.github/workflows/build.yml](.github/workflows/build.yml)). A tag `v*` publishes a release with
+`winncdu-<version>-x64.zip` (both programs and this README) and its SHA-256 in a `.sha256` file; see
+[docs/RELEASING.md](docs/RELEASING.md). Releases are not code-signed yet, so SmartScreen may warn
+before the first start; the workflow is prepared for SignPath signing (same document).
 
 ## The terminal app (`winncdu-cli.exe`)
 
@@ -439,7 +505,7 @@ src/gui/              windowed app
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
 tests/protect_test.cpp  self-check of the protection rules (ctest)
-tests/journal_test.cpp  journal format and a real recycle + restore round trip (ctest)
+tests/journal_test.cpp  journal format, a real recycle + restore round trip, portable mode's data folder (ctest)
 tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list; kept sites' cookies and Firefox bookmarks survive (ctest)
 tests/delete_test.cpp   permanent delete: links, read-only, locked files, long paths (ctest)
 tests/devjunk_test.cpp  developer junk: project markers, grouping, app folders left alone (ctest)
@@ -458,6 +524,13 @@ tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, has
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified
+CONTRIBUTING.md       building, testing, adding a protected location or a cleaner
+.github/ISSUE_TEMPLATE  issue forms: false alarm, missing protected folder, bug report
+.github/workflows/build.yml  CI: build and self-tests; release zips with SHA-256 on tags
+docs/RELEASING.md     how releases are built, signed (once set up) and published
+packaging/signpath/   SignPath artifact configuration for code signing
+packaging/winget/, scoop/, chocolatey/  package manager manifests (templates)
+packaging/update-manifests.ps1  fills them in for a release
 ```
 
 ## Third-party code
