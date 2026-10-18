@@ -19,10 +19,10 @@
 #include "../fsops.h"
 #include "../games.h"
 #include "../journal.h"
+#include "../phash.h"
 #include "../protect.h"
 #include "../scanner.h"
 #include "../schedule.h"
-
 #include "../startup.h"
 #include "../vdisks.h"
 #include "../wintools.h"
@@ -108,6 +108,8 @@ enum Cmd : int {
     CMD_APP_STOPWAIT,
     CMD_APPS_DELETE,
     CMD_APP_LEFT_DONE,
+    CMD_PHOTO_FIND,
+    CMD_PHOTO_MARK,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 
@@ -332,6 +334,7 @@ private:
     void StartImport(const std::wstring& file);
     void StartExport(bool csv);
     void StartDuplicates();
+    void StartSimilarPhotos();
     void StartCleanup();
     void MeasureCleanup();
     void OnCleanupMeasured(std::vector<CleanCategory>* result);
@@ -371,6 +374,9 @@ private:
     void DrawResults(const RectF& area);
     void DrawTypes(const RectF& area);
     void DrawDuplicates(const RectF& area);
+    void DrawSimilarPhotos(const RectF& area, float top);
+    ID2D1Bitmap* Thumb(Node* n);  // photo preview for a row, decoded on demand (null: not yet / not possible)
+    void ClearThumbs();
     void DrawDevJunk(const RectF& area);
     void DrawAiModels(const RectF& area);
     void DrawWsl(const RectF& area);
@@ -389,7 +395,8 @@ private:
                    const std::function<void(int row, const RectF& r)>& fullRow = nullptr);
     void DrawTreemap(const RectF& area);
     void DrawViewHeader(const RectF& r, const std::wstring& title, const std::wstring& subtitle, wchar_t icon);
-    void DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, bool expanded, int row, bool sel);
+    void DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, bool expanded, int row, bool sel,
+                      ID2D1Bitmap* thumb = nullptr);
     const ProtectHit* Shield(Node* n);  // badge to show for a row, or null
     D2D1_COLOR_F ShieldColor(Protect p) const;
     void DrawUsageBar(const RectF& r, double frac, bool pct, double pctValue);
@@ -444,6 +451,18 @@ private:
     uint64_t catTotals_[CAT_COUNT] = {};
     std::vector<DupGroup> dups_;
     bool dupsDone_ = false;
+    // Similar photos (the Duplicates view's second mode)
+    bool dupPhotos_ = false;
+    std::vector<PhotoGroup> photos_;
+    bool photosDone_ = false;
+    uint64_t photoImages_ = 0, photoFailed_ = 0;  // images looked at / not decodable in the last search
+    PhotoMatch photoMatch_ = PhotoMatch::Normal;
+    uint64_t photoMin_ = 100 << 10;
+    std::shared_ptr<PhotoHashCache> photoCache_;
+    std::unordered_map<Node*, ID2D1Bitmap*> thumbs_;
+    unsigned thumbGen_ = 0;
+    ULONGLONG thumbDeadline_ = 0;  // stop decoding previews in this frame after this tick
+    bool thumbsPending_ = false;   // some visible previews still to decode: paint again
     std::vector<DevProject> devJunk_;
     bool devJunkDone_ = false;
     bool devJunkByAge_ = false;  // sort projects by last change (oldest first) instead of size

@@ -25,6 +25,9 @@ void App::SetRoot(std::unique_ptr<Node> r, bool readOnly) {
     typeFiles_.clear();
     dups_.clear();
     dupsDone_ = false;
+    photos_.clear();
+    photosDone_ = false;
+    ClearThumbs();
     devJunk_.clear();
     devJunkDone_ = false;
     types_.clear();
@@ -56,6 +59,17 @@ void App::PostMutation() {
         v->erase(std::remove_if(v->begin(), v->end(), dead), v->end());
     for (auto& g : dups_) g.files.erase(std::remove_if(g.files.begin(), g.files.end(), dead), g.files.end());
     dups_.erase(std::remove_if(dups_.begin(), dups_.end(), [](const DupGroup& g) { return g.files.size() < 2; }), dups_.end());
+    for (auto& g : photos_)
+        g.photos.erase(std::remove_if(g.photos.begin(), g.photos.end(), [&](const Photo& p) { return dead(p.node); }), g.photos.end());
+    photos_.erase(std::remove_if(photos_.begin(), photos_.end(), [](const PhotoGroup& g) { return g.photos.size() < 2; }), photos_.end());
+    for (auto it = thumbs_.begin(); it != thumbs_.end();) {
+        if (IsAlive(it->first)) {
+            ++it;
+            continue;
+        }
+        SafeRelease(it->second);
+        it = thumbs_.erase(it);
+    }
     for (auto& d : diff_)
         if (d.node && !IsAlive(d.node)) d.node = nullptr;
     if (!types_.empty()) RebuildTypes();
@@ -136,6 +150,13 @@ void App::BuildRows() {
             for (size_t i = 0; i < types_.size(); ++i) rows_.push_back({nullptr, 0, RK_TYPE, static_cast<int>(i)});
             break;
         case View::Duplicates:
+            if (dupPhotos_) {
+                for (size_t g = 0; g < photos_.size(); ++g) {
+                    rows_.push_back({nullptr, 0, RK_GROUP, static_cast<int>(g)});
+                    for (auto& p : photos_[g].photos) rows_.push_back({p.node, 1, RK_NODE, static_cast<int>(g)});
+                }
+                break;
+            }
             for (size_t g = 0; g < dups_.size(); ++g) {
                 rows_.push_back({nullptr, 0, RK_GROUP, static_cast<int>(g)});
                 for (Node* f : dups_[g].files) rows_.push_back({f, 1, RK_NODE, static_cast<int>(g)});
@@ -1714,6 +1735,48 @@ void App::StartDuplicates() {
     StartTask(std::move(t), [scope, minSize, threads, prog, result] { *result = FindDuplicates(scope, minSize, threads, *prog); });
 }
 
+void App::StartSimilarPhotos() {
+    if (!root_ || readOnly_) return;
+    if (!photoCache_) photoCache_ = std::make_shared<PhotoHashCache>(PhotoHashCache::DefaultFile());
+    auto prog = std::make_shared<PhotoProgress>();
+    auto result = std::make_shared<std::vector<PhotoGroup>>();
+    auto t = std::make_unique<Task>();
+    t->title = L"Looking for similar photos";
+    t->lines = [prog] {
+        static const wchar_t* stages[] = {L"Finding images", L"Reading images (small, read-only)", L"Comparing pictures"};
+        std::vector<std::pair<std::wstring, std::wstring>> l = {
+            {L"Stage", stages[std::clamp(prog->stage.load(), 0, 2)]},
+            {L"Images", util::FormatCount(prog->filesDone) + L" / " + util::FormatCount(prog->filesTotal)}};
+        if (prog->cached) l.push_back({L"Remembered", util::FormatCount(prog->cached) + L" unchanged since an earlier search"});
+        if (prog->failed) l.push_back({L"Unreadable", util::FormatCount(prog->failed) + L" (no decoder, damaged or offline)"});
+        return l;
+    };
+    t->progress = [prog] {
+        uint64_t tot = prog->filesTotal;
+        return tot && prog->stage == 1 ? static_cast<double>(prog->filesDone) / tot : -1.0;
+    };
+    t->cancel = [prog] { prog->cancel = true; };
+    t->onDone = [this, prog, result] {
+        if (prog->cancel) return Toast(L"Photo search cancelled", 2);
+        photos_ = std::move(*result);
+        photosDone_ = true;
+        photoImages_ = prog->filesTotal;
+        photoFailed_ = prog->failed;
+        sel_.clear();
+        rowsDirty_ = true;
+        lists_[static_cast<int>(View::Duplicates)] = ListState{};
+        if (photos_.empty()) Toast(photoImages_ ? L"No similar photos found" : L"No images in this scan", 0);
+    };
+    Node* scope = root_.get();
+    uint64_t minSize = photoMin_;
+    PhotoMatch match = photoMatch_;
+    int threads = MakeOptions(settings_).threads;
+    auto cache = photoCache_;
+    StartTask(std::move(t), [scope, minSize, match, threads, prog, result, cache] {
+        *result = FindSimilarPhotos(scope, minSize, match, threads, *prog, cache.get());
+    });
+}
+
 void App::MeasureCleanup() {
     if (cleanupMeasuring_) return;
     // Rules are read again every time, so edits to cleaners.ini show up on "Measure". Choices made
@@ -2499,6 +2562,21 @@ void App::OnCommand(int cmd) {
         case CMD_DELETE_PERM: RequestDelete(true); break;
         case CMD_CLEAR_SEL: sel_.clear(); break;
         case CMD_DUP_FIND: StartDuplicates(); break;
+        case CMD_PHOTO_FIND: StartSimilarPhotos(); break;
+        case CMD_PHOTO_MARK: {
+            // Nothing is chosen for deletion until asked: this marks every photo except the suggested one.
+            sel_.clear();
+            uint64_t bytes = 0;
+            for (auto& g : photos_)
+                for (size_t i = 1; i < g.photos.size(); ++i) {
+                    sel_.insert(g.photos[i].node);
+                    bytes += Val(g.photos[i].node);
+                }
+            Toast(L"Selected " + util::FormatCount(sel_.size()) + L" photos (" + util::FormatSizeShort(bytes) +
+                      L") — the suggested photo of each group is kept. Review before deleting.",
+                  2);
+            break;
+        }
         case CMD_DUP_MARK: {
             sel_.clear();
             uint64_t bytes = 0;

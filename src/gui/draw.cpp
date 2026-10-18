@@ -24,7 +24,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
                   IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770, IC_GAME = 0xE7FC,
-                  IC_CALENDAR = 0xE787, IC_POWER = 0xE7E8;
+                  IC_CALENDAR = 0xE787, IC_POWER = 0xE7E8, IC_PHOTO = 0xE91B;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -571,7 +571,7 @@ void App::DrawTable(const RectF& area, std::vector<Column>& cols, int sortKey, b
     }
 }
 
-void App::DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, bool expanded, int row, bool sel) {
+void App::DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, bool expanded, int row, bool sel, ID2D1Bitmap* thumb) {
     float x = cell.left + depth * 18.0f;
     if (expander) {
         if (n->CanEnter() && !n->children.empty()) {
@@ -584,8 +584,21 @@ void App::DrawNameCell(const RectF& cell, Node* n, int depth, bool expander, boo
         x += 20;
     }
     float cy = (cell.top + cell.bottom) / 2;
-    gfx_.Bitmap(icons_.ForNode(gfx_, n), RWH(x, cy - 9, 18, 18), n->Has(NF_LINK | NF_EXCLUDED) ? 0.5f : 1.0f);
-    x += 26;
+    if (thumb) {
+        // Photo preview, fitted into a 28 x 28 box.
+        D2D1_SIZE_F ts = thumb->GetPixelSize().width ? D2D1::SizeF(static_cast<float>(thumb->GetPixelSize().width),
+                                                                  static_cast<float>(thumb->GetPixelSize().height))
+                                                    : D2D1::SizeF(1, 1);
+        float k = 28.0f / std::max(ts.width, ts.height);
+        float tw = ts.width * k, th = ts.height * k;
+        RectF tr = RWH(x + (28 - tw) / 2, cy - th / 2, tw, th);
+        gfx_.Bitmap(thumb, tr);
+        gfx_.Stroke(tr, WithAlpha(P_.border, 0.8f));
+        x += 36;
+    } else {
+        gfx_.Bitmap(icons_.ForNode(gfx_, n), RWH(x, cy - 9, 18, 18), n->Has(NF_LINK | NF_EXCLUDED) ? 0.5f : 1.0f);
+        x += 26;
+    }
     bool hidden = (n->attrs & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) != 0;
     D2D1_COLOR_F col = n->Has(NF_LINK | NF_EXCLUDED | NF_HARDLINK) ? P_.textFaint : (hidden ? P_.textDim : P_.text);
     TextStyle ts = TS(13, n->IsDir() ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL);
@@ -1117,6 +1130,7 @@ void App::DrawTypes(const RectF& area) {
 
 void App::DrawDuplicates(const RectF& area) {
     float top = area.top + 18;
+    if (dupPhotos_) return DrawSimilarPhotos(area, top);
     uint64_t waste = 0, files = 0;
     for (auto& g : dups_) {
         waste += g.size * (g.files.size() - 1);
@@ -1139,6 +1153,10 @@ void App::DrawDuplicates(const RectF& area) {
     DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Duplicate files", sub, IC_COPY);
     float y = top + 58;
     float x = area.left + 24;
+    x += Chip(x, y, L"Identical files", true, 6, 0) + 6;
+    Chip(x, y, L"Similar photos", false, 6, 1);
+    y += 42;
+    x = area.left + 24;
     gfx_.Text(L"Ignore files smaller than", R(x, y, x + 170, y + 30), P_.textDim, Small(12.5f));
     x += 160;
     std::pair<const wchar_t*, uint64_t> sizes[] = {{L"100 KB", 100ull << 10}, {L"1 MB", 1ull << 20}, {L"10 MB", 10ull << 20}, {L"100 MB", 100ull << 20}};
@@ -1189,6 +1207,150 @@ void App::DrawDuplicates(const RectF& area) {
             gfx_.Text(t, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
             gfx_.Text(util::FormatSizeShort(g.size * (g.files.size() - 1)) + L" reclaimable", R(r.left + 48 + tw, r.top, r.right, r.bottom),
                       P_.accent2, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        });
+}
+
+void App::ClearThumbs() {
+    for (auto& kv : thumbs_) SafeRelease(kv.second);
+    thumbs_.clear();
+}
+
+ID2D1Bitmap* App::Thumb(Node* n) {
+    if (thumbGen_ != gfx_.Generation()) {
+        ClearThumbs();
+        thumbGen_ = gfx_.Generation();
+    }
+    auto it = thumbs_.find(n);
+    if (it != thumbs_.end()) return it->second;
+    // Decoding happens on this thread, a few per frame; the rest come with the next frames.
+    if (GetTickCount64() > thumbDeadline_) {
+        thumbsPending_ = true;
+        return nullptr;
+    }
+    if (thumbs_.size() > 800) ClearThumbs();  // only what is on screen matters; keep memory bounded
+    std::vector<uint8_t> px;
+    int w = 0, h = 0;
+    ID2D1Bitmap* bmp = nullptr;
+    if (gfx_.Wic() && DecodeThumbnail(gfx_.Wic(), NodePath(n), Dip2Px(28), px, w, h)) {
+        D2D1_BITMAP_PROPERTIES bp = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+        gfx_.RT()->CreateBitmap(D2D1::SizeU(w, h), px.data(), w * 4, bp, &bmp);
+    }
+    thumbs_[n] = bmp;
+    return bmp;
+}
+
+void App::DrawSimilarPhotos(const RectF& area, float top) {
+    thumbDeadline_ = GetTickCount64() + 30;
+    uint64_t waste = 0, files = 0;
+    for (auto& g : photos_) {
+        waste += g.Reclaimable();
+        files += g.photos.size();
+    }
+    std::wstring sub;
+    if (photosDone_ && photos_.empty()) {
+        sub = util::FormatCount(photoImages_) + L" images compared" +
+              (photoFailed_ ? L" (" + util::FormatCount(photoFailed_) + L" unreadable)" : std::wstring());
+    } else if (photosDone_) {
+        sub = util::FormatCount(photos_.size()) + (photos_.size() == 1 ? L" group  ·  " : L" groups  ·  ") + util::FormatCount(files) +
+              L" photos  ·  " + util::FormatSizeShort(waste) + L" in the copies not suggested to keep  ·  " + util::FormatCount(photoImages_) +
+              L" images compared";
+        if (photoFailed_) sub += L" (" + util::FormatCount(photoFailed_) + L" unreadable)";
+    } else {
+        sub = L"Pictures that look alike: resized, re-saved or lightly edited copies (compared by perceptual hash)";
+    }
+    float bx = area.right - 24;
+    if (photosDone_ && !photos_.empty()) {
+        if (!sel_.empty()) {
+            bx -= 150;
+            Button(RWH(bx, top + 6, 150, 34), IC_DELETE, L"Delete selected", CMD_DELETE, 2);
+            bx -= 8;
+        }
+        bx -= 226;
+        Button(RWH(bx, top + 6, 226, 34), IC_CHECK, L"Select all but suggested", CMD_PHOTO_MARK, 0);
+        bx -= 16;
+    }
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Similar photos", sub, IC_PHOTO);
+    float y = top + 58;
+    float x = area.left + 24;
+    x += Chip(x, y, L"Identical files", false, 6, 0) + 6;
+    Chip(x, y, L"Similar photos", true, 6, 1);
+    y += 42;
+    x = area.left + 24;
+    gfx_.Text(L"Match", R(x, y, x + 60, y + 30), P_.textDim, Small(12.5f));
+    x += 50;
+    std::pair<const wchar_t*, PhotoMatch> levels[] = {{L"Strict", PhotoMatch::Strict}, {L"Normal", PhotoMatch::Normal}, {L"Loose", PhotoMatch::Loose}};
+    for (auto& l : levels) x += Chip(x, y, l.first, photoMatch_ == l.second, 7, static_cast<intptr_t>(l.second)) + 6;
+    x += 18;
+    gfx_.Text(L"Ignore smaller than", R(x, y, x + 140, y + 30), P_.textDim, Small(12.5f));
+    x += 128;
+    std::pair<const wchar_t*, uint64_t> sizes[] = {{L"Any", 1}, {L"20 KB", 20ull << 10}, {L"100 KB", 100ull << 10}, {L"1 MB", 1ull << 20}};
+    for (auto& s : sizes) x += Chip(x, y, s.first, photoMin_ == s.second, 8, static_cast<intptr_t>(s.second)) + 6;
+    x += 12;
+    Button(RWH(x, y - 1, 176, 32), IC_SEARCH, photosDone_ ? L"Search again" : L"Find similar photos", CMD_PHOTO_FIND, 1, !readOnly_);
+    y += 46;
+    RectF tr = R(area.left, y, area.right, area.bottom);
+    if (!photosDone_) {
+        DrawEmptyState(tr, IC_PHOTO, readOnly_ ? L"Not available for saved scans" : L"Ready when you are",
+                       readOnly_ ? L"Comparing photos needs to read the real files."
+                                 : L"Press “Find similar photos”. Each image is only read (a small copy is decoded), never changed; "
+                                   L"results are remembered, so searching again is quick. Nothing is selected for you.");
+        return;
+    }
+    if (photos_.empty()) {
+        DrawEmptyState(tr, IC_CHECK, L"No similar photos found",
+                       photoImages_ ? L"None of the " + util::FormatCount(photoImages_) + L" images look alike at this setting. “Loose” finds more."
+                                    : L"This scan has no images (JPEG, PNG, HEIC, WebP, TIFF, BMP, GIF) above the minimum size.");
+        return;
+    }
+    std::vector<Column> cols = {{L"Name", -1.0f, Align::Left, -1},
+                                {L"Folder", -1.2f, Align::Left, -1},
+                                {L"Resolution", 104, Align::Right, -1},
+                                {L"Size", 84, Align::Right, -1},
+                                {L"Modified", 128, Align::Left, -1}};
+    auto photoOf = [&](int row) -> const Photo* {
+        const PhotoGroup& g = photos_[rows_[row].idx];
+        for (auto& p : g.photos)
+            if (p.node == rows_[row].node) return &p;
+        return nullptr;
+    };
+    DrawTable(
+        tr, cols, -1, true,
+        [&](int i, const Column&, int ci, const RectF& cr, bool sel) {
+            Node* n = rows_[i].node;
+            const Photo* p = n ? photoOf(i) : nullptr;
+            if (!p) return;
+            switch (ci) {
+                case 0: {
+                    RectF c2 = cr;
+                    c2.left += 18;
+                    DrawNameCell(c2, n, 0, false, false, i, sel, Thumb(n));
+                    if (photos_[rows_[i].idx].photos[0].node == n) {
+                        RectF star = RWH(cr.left, cr.top, 14, H(cr));
+                        gfx_.Icon(0xE735 /*FavoriteStarFill*/, star, P_.warning, 10);
+                        if (Inside(star, mouseX_, mouseY_)) {
+                            tipText_ = L"Suggested to keep: the largest picture (then the largest file, then the oldest)";
+                            tipAnchor_ = star;
+                        }
+                    }
+                    break;
+                }
+                case 1: gfx_.Text(FitPath(RelFolder(n), cr.right - cr.left, 12.5f), cr, P_.textDim, Small(12.5f)); break;
+                case 2:
+                    gfx_.Text(util::FormatCount(p->hash.width) + L" × " + util::FormatCount(p->hash.height), cr, P_.text,
+                              Small(12.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+                    break;
+                case 3: gfx_.Text(util::FormatSizeShort(n->size), cr, P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right)); break;
+                default: gfx_.Text(util::FormatTime(n->mtime), cr, P_.textDim, Small(12.5f));
+            }
+        },
+        [&](int i, const RectF& r) {
+            const PhotoGroup& g = photos_[rows_[i].idx];
+            gfx_.Icon(IC_PHOTO, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
+            std::wstring t = util::FormatCount(g.photos.size()) + (g.maxDist == 0 ? L" photos that look the same" : L" similar photos");
+            float tw = gfx_.Measure(t, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 4;
+            gfx_.Text(t, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+            std::wstring keep = L"keep ★ " + g.photos[0].node->name + L"  ·  " + util::FormatSizeShort(g.Reclaimable()) + L" in the others";
+            gfx_.Text(keep, R(r.left + 48 + tw, r.top, r.right - 8, r.bottom), P_.accent2, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
         });
 }
 

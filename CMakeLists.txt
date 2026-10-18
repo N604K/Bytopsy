@@ -30,10 +30,11 @@ add_library(winncdu_core STATIC
   src/schedule.cpp
   src/startup.cpp
   src/apps.cpp
+  src/phash.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32 version wevtapi)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32 version wevtapi windowscodecs)
 
 # SQLite (public domain, https://www.sqlite.org), for reading and editing browsers' cookie and
 # history databases. Third-party code: compiled as C, its warnings are not ours to fix.
@@ -224,5 +225,13 @@ if(MSVC)
   target_compile_options(winncdu-apps-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME apps COMMAND winncdu-apps-test)
+
+# Similar photos (perceptual hashes, BK-tree, EXIF orientation, hash cache): build/winncdu-phash-test.exe
+add_executable(winncdu-phash-test tests/phash_test.cpp)
+target_link_libraries(winncdu-phash-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-phash-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME phash COMMAND winncdu-phash-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

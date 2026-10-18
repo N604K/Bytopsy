@@ -24,6 +24,19 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   files), **Old files** (filter by age and size) and **Empty folders**.
 - **Duplicates**: compares size, then a quick hash, then the full SHA-256. "Select all but oldest"
   selects every redundant copy in one click.
+- **Similar photos** (second tab of Duplicates): pictures that look alike rather than match byte
+  for byte, such as a photo resized, re-saved as JPEG, slightly brightened or stored sideways with
+  an EXIF rotation tag. Each image (JPEG, PNG, HEIC/WebP where Windows has the codec, TIFF, BMP,
+  GIF) is decoded small through Windows Imaging Component, turned upright and reduced to two
+  64-bit perceptual hashes (dHash and a DCT pHash); photos within the chosen distance of each
+  other (Strict / Normal / Loose) form a group. Every group suggests one photo to keep (most
+  pixels, then largest file, then oldest, then the name without "copy" or "(2)"), and everything
+  else in it is close to that photo. Rows show a small preview, resolution, size and date. Nothing
+  is selected for you; "Select all but suggested" does that on request, and deleting goes through
+  the usual protection check, Recycle Bin and journal. Images are only read; hashes are kept in
+  `%LOCALAPPDATA%\WinNCDU\photohash.cache` per path, size and modified time, so a second search
+  only decodes new or changed files. Cloud placeholders are skipped (reading one would download
+  it). Mirrored or cropped copies are not matched.
 - **Developer junk** (like npkill, for every ecosystem): build output and dependency folders your
   projects recreate on the next build or install, grouped by project with the date the project
   itself last changed (its own files, not the build output or `.git`). Covers `node_modules`,
@@ -287,7 +300,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup and apps self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps and phash self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -338,6 +351,9 @@ winncdu-cli [options] [path]
                         logon/boot tasks, services) with impact estimates, and exit
   --apps                List installed apps (size, install date, version, publisher)
                         from the Uninstall registry keys, and exit
+  --similar-photos[=strict|normal|loose]
+                        Scan path, list groups of photos that look alike (resized,
+                        re-saved, lightly edited copies) with the one to keep, and exit
 ```
 
 Examples:
@@ -406,6 +422,7 @@ src/                  core engine + terminal app
   schedule.cpp        scheduled cleanup: --clean arguments, Task Scheduler task, cleanup.log
   startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
   apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
+  phash.cpp           similar photos: WIC decoding, dHash/pHash, hash index, grouping, cache
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -437,6 +454,7 @@ tests/diskhealth_test.cpp disk health: WMI/fsutil/NVMe log parsing, verdicts, us
 tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --clean --yes on a fixture (ctest)
 tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
 tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
+tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified
