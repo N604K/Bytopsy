@@ -201,6 +201,39 @@ swapped for a link), so nobody can redirect an elevated delete into, say, `C:\Wi
 `winncdu-cli --protected` lists the protected locations found on this PC.
 Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; pull requests welcome.
 
+## Privacy
+
+WinNCDU has no telemetry and makes no network connections. It contains no networking code (no
+WinHTTP, WinINet, sockets or URL downloads), links no networking library, has no update check, and
+sends nothing anywhere. What it learns about your disk stays on your PC.
+
+**What it reads.** Names, sizes, times and attributes of what you scan. File contents only where a
+feature needs them: hashes for Duplicates, the ext4 superblock inside WSL disks, game launcher and
+AI model manifests, scans you import, and its rule files.
+
+**What it writes.** Everything lives in `%LOCALAPPDATA%\WinNCDU`:
+
+| File | Contents |
+| --- | --- |
+| `settings.ini` | Window position, theme, view options and exclude patterns of the windowed app |
+| `history\` | Folder sizes of each completed scan, for *History & compare* |
+| `journal.log` (`journal.1.log` after 4 MB) | What was deleted or cleaned: time, path, size, Recycle Bin or permanent |
+| `protect.txt` | Your protection rules (created with commented examples) |
+| `cleaners.ini` | Your cleanup rules (created when you open *Cleanup rules…*) |
+| `winapp2.ini` | A copy of the winapp2.ini you imported |
+
+Outside that folder: exports where you save them; the Explorer menu entry, if you add it (three keys
+under `HKCU\Software\Classes`, removed by the same menu item); and short-lived files in `%TEMP%` (a
+`diskpart` script while compacting virtual disks, the output of tools run as administrator), deleted
+when the tool finishes. Deleting the `WinNCDU` folder removes everything else.
+
+**Programs it starts**, only from the views and actions that need them: Windows' own tools (DISM,
+`pnputil`, `vssadmin`, `powercfg`, `compact`, `wevtutil`, `diskpart`, PowerShell for System Restore
+storage and the Delivery Optimization cache, Disk Cleanup), `wsl.exe`, `docker`, the clean command of a
+`kind = command` cleanup rule (such as `conan remove`), and a game launcher's uninstall link
+(`steam://uninstall/...`). WinNCDU itself goes online for none of these, but the programs behave as
+they always do: Steam or Docker Desktop, for example, may connect on their own.
+
 ## Build
 
 Requires Visual Studio 2022 (or Build Tools) with the *Desktop development with C++* workload.

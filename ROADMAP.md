@@ -95,4 +95,6 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [ ] Localization: move strings to a table; start with the languages of the first contributors.
 - [ ] Tests: analysis (search syntax, duplicates), export/import round trips, fuzzing the ncdu JSON
       importer.
-- [ ] Privacy statement: no telemetry, no network access (except an optional update check).
+- [x] Privacy statement: no telemetry, no network access (except an optional update check).
+      *Done: "Privacy" in the README, checked against the source (no networking APIs or libraries).
+      There is no update check, so the statement has no exception.*
