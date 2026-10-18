@@ -37,6 +37,17 @@ for %t in (build\winncdu-*-test.exe) do %t
 | `winncdu-vdisks-test` | WSL/Docker: ext4 usage read from a VHDX, tool output parsing |
 | `winncdu-wintools-test` | DISM report parsing, which driver packages count as old |
 | `winncdu-games-test` | Steam libraries and leftovers, Epic manifests, launcher uninstallers |
+| `winncdu-analysis-test` | search syntax, largest files, file types, duplicates on real files |
+| `winncdu-export-test` | ncdu JSON round trips with odd names and flags, Linux ncdu input, CSV |
+| `winncdu-importfuzz-test` | 5000 mutated exports (fixed seed) fed to the ncdu JSON importer |
+| `winncdu-diskhealth-test` | WMI / fsutil / NVMe health log parsing, verdicts, used-space trends |
+| `winncdu-schedule-test` | `--clean` ids and arguments, schedule triggers, `--clean --yes` on a fixture |
+| `winncdu-startup-test` | `StartupApproved` values, command lines, impact; changes nothing |
+| `winncdu-apps-test` | which Uninstall entries are listed, which folders count as leftovers |
+| `winncdu-phash-test` | similar photos: hashes of re-encoded and rotated images, grouping, cache |
+
+The devjunk test builds its fixture next to the test program, so it finds nothing (and fails) when
+the build folder sits inside a dot folder such as `.claude\worktrees\...`.
 
 The tests work in `%TEMP%` and in a folder next to the test program, and remove what they create.
 Two of them move a test folder to the Recycle Bin and take it out again; the protect test rewrites

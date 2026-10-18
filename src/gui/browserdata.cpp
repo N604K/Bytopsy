@@ -248,11 +248,8 @@ std::wstring KeepSignedInFile() {
     wchar_t over[MAX_PATH];
     DWORD n = GetEnvironmentVariableW(L"WINNCDU_KEEP_SIGNED_IN", over, MAX_PATH);  // tests
     if (n && n < MAX_PATH) return over;
-    PWSTR p = nullptr;
-    std::wstring file;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) file = std::wstring(p) + L"\\WinNCDU\\keep-signed-in.txt";
-    CoTaskMemFree(p);
-    return file;
+    std::wstring dir = util::DataDir();
+    return dir.empty() ? L"" : dir + L"\\keep-signed-in.txt";
 }
 
 std::vector<std::wstring> LoadKeepList(const std::wstring& file) {

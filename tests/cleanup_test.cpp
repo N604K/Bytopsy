@@ -194,8 +194,8 @@ int main() {
 
     // ---- WhatsApp's received media is open to Cleanup (with a heads-up); its chat history is not
     {
-        wchar_t lb[MAX_PATH];
-        std::wstring local(lb, GetEnvironmentVariableW(L"LOCALAPPDATA", lb, MAX_PATH));
+        wchar_t la[MAX_PATH];
+        std::wstring local(la, GetEnvironmentVariableW(L"LOCALAPPDATA", la, MAX_PATH));
         std::wstring pkg = local + L"\\Packages\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\\LocalState";
         Protect media = CheckProtection(pkg + L"\\shared\\transfers\\2025_01\\IMG-1.jpg").level;
         Protect chats = CheckProtection(pkg + L"\\shared\\messages.db").level;

@@ -294,7 +294,10 @@ sends nothing anywhere. What it learns about your disk stays on your PC.
 
 **What it reads.** Names, sizes, times and attributes of what you scan. File contents only where a
 feature needs them: hashes for Duplicates, the ext4 superblock inside WSL disks, game launcher and
-AI model manifests, scans you import, and its rule files.
+AI model manifests, scans you import, and its rule files; pixels of images for *Similar photos*; the
+cookie and history databases of browsers for those two Cleanup categories (cookies are counted per
+site, never read out). From Windows it reads the Uninstall, Run and service registry keys, scheduled
+tasks, and disk health from WMI and the drives' own health logs.
 
 **What it writes.** Everything lives in `%LOCALAPPDATA%\WinNCDU` (in
 [portable mode](#portable-mode), in `WinNCDU-data` next to the exe):
@@ -307,18 +310,27 @@ AI model manifests, scans you import, and its rule files.
 | `protect.txt` | Your protection rules (created with commented examples) |
 | `cleaners.ini` | Your cleanup rules (created when you open *Cleanup rules…*) |
 | `winapp2.ini` | A copy of the winapp2.ini you imported |
+| `keep-signed-in.txt` | The sites whose cookies Cleanup keeps (created when cookies are first measured) |
+| `cleanup.log` | One line per `winncdu-cli --clean --yes` run and per schedule change |
+| `freespace.log` | Each drive's free space, at most every 6 hours, for *Disk health* trends |
+| `photohash.cache` | Image hashes by path, size and time, so *Similar photos* is fast the second time |
 
 Outside that folder: exports where you save them; the Explorer menu entry, if you add it (three keys
-under `HKCU\Software\Classes`, removed by the same menu item); and short-lived files in `%TEMP%` (a
+under `HKCU\Software\Classes`, removed by the same menu item); the scheduled cleanup task
+(`\WinNCDU\Scheduled cleanup` in Task Scheduler), if you create one; when you turn a startup entry
+off or on, the same `StartupApproved` value Task Manager writes, the task's enabled switch, or the
+service's start type; and short-lived files in `%TEMP%` (a
 `diskpart` script while compacting virtual disks, the output of tools run as administrator), deleted
 when the tool finishes. Deleting the `WinNCDU` folder removes everything else.
 
 **Programs it starts**, only from the views and actions that need them: Windows' own tools (DISM,
 `pnputil`, `vssadmin`, `powercfg`, `compact`, `wevtutil`, `diskpart`, PowerShell for System Restore
-storage and the Delivery Optimization cache, Disk Cleanup), `wsl.exe`, `docker`, the clean command of a
-`kind = command` cleanup rule (such as `conan remove`), and a game launcher's uninstall link
-(`steam://uninstall/...`). WinNCDU itself goes online for none of these, but the programs behave as
-they always do: Steam or Docker Desktop, for example, may connect on their own.
+storage and the Delivery Optimization cache, Disk Cleanup, `fsutil` for TRIM, `reg`, `schtasks` and
+`sc` for startup entries that need administrator rights), `wsl.exe`, `docker`, the clean command of a
+`kind = command` cleanup rule (such as `conan remove`), an app's own uninstaller, and a game
+launcher's uninstall link (`steam://uninstall/...`). WinNCDU itself goes online for none of these,
+but the programs behave as they always do: Steam or Docker Desktop, for example, may connect on
+their own.
 
 ## Install
 

@@ -374,11 +374,8 @@ const wchar_t* PhotoMatchName(PhotoMatch m) {
 // ---- cache
 
 std::wstring PhotoHashCache::DefaultFile() {
-    PWSTR p = nullptr;
-    std::wstring out;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) out = std::wstring(p) + L"\\WinNCDU\\photohash.cache";
-    CoTaskMemFree(p);
-    return out;
+    std::wstring dir = util::DataDir();
+    return dir.empty() ? L"" : dir + L"\\photohash.cache";
 }
 
 bool PhotoHashCache::Lookup(const std::wstring& path, uint64_t size, int64_t mtime, ImageHash& out) {

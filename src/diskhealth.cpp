@@ -231,11 +231,7 @@ TrimStatus QueryTrim() {
 }
 
 std::wstring LocalDataDir() {
-    PWSTR p = nullptr;
-    std::wstring out;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &p)) && p) out = std::wstring(p) + L"\\WinNCDU";
-    CoTaskMemFree(p);
-    return out;
+    return util::DataDir();  // %LOCALAPPDATA%\WinNCDU, or WinNCDU-data next to a portable exe
 }
 
 std::string ReadSmallFile(const std::wstring& path) {
