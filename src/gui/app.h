@@ -17,6 +17,7 @@
 #include "../analysis.h"
 #include "../devjunk.h"
 #include "../diskhealth.h"
+#include "../driverupdates.h"
 #include "../fsops.h"
 #include "../games.h"
 #include "../i18n.h"
@@ -37,7 +38,7 @@
 #include "treemap.h"
 #include "uia.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, Startup, Apps, CleanReview, DiskHealth, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, Startup, Apps, CleanReview, DiskHealth, Drivers, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -118,8 +119,14 @@ enum Cmd : int {
     CMD_APP_UPD_SELALL,    // check every update (or none)
     CMD_APP_UPD_CHECK,     // ask winget again
     CMD_APP_GET_WINGET,    // App Installer in the Microsoft Store
+    CMD_DRV_CHECK,
+    CMD_DRV_INSTALL,
+    CMD_DRV_RESULTS_DONE,
     CMD_WIN_ACT = 600,  // + WinAction
     CMD_LANG = 800,     // + 0 Windows' language, 1 the pseudo-language, 2 + an index into langMenu_
+    CMD_DRV_ROW = 1000,   // + index into drvSearch_.updates: check / uncheck it
+    CMD_DRV_TOOL = 1500,  // + index into drvLinks_: open a vendor's tool or page
+    CMD_DRV_END = 1600,
 };
 
 // The Windows view's actions (command CMD_WIN_ACT + action).
@@ -334,6 +341,11 @@ private:
     void OnAppUninstallProgress();
     void LookForAppLeftovers(bool askIfInstalled);
     void StartAppLeftoversDelete();
+    // Drivers view (drivers_view.cpp)
+    void LoadDrivers();
+    void CheckDriverUpdates();
+    void StartDriverInstall();
+    void OnDriverCommand(int cmd);
     void SyncSearchBox();
     // App updates through winget (apps_view.cpp)
     void CheckAppUpdates();
@@ -427,6 +439,7 @@ private:
     void DrawDiskHealth(const RectF& area);
     void DrawStartup(const RectF& area);
     void DrawApps(const RectF& area);
+    void DrawDrivers(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -582,6 +595,15 @@ private:
         WingetUpgradeResult r;
     };
     std::vector<AppUpdResult> appUpdResults_;  // the last run's, shown once the list is read again
+    // Drivers view
+    DriverToolsReport drvTools_;       // PC maker and GPU vendor tools (read without Windows Update)
+    bool drvLoaded_ = false;
+    std::vector<DriverTool> drvLinks_;  // what CMD_DRV_TOOL + i opens
+    DriverSearch drvSearch_;           // Windows Update's answer
+    bool drvSearched_ = false;
+    std::set<size_t> drvSel_;          // checked updates
+    std::vector<DriverInstallResult> drvResults_;  // the last install, shown until dismissed
+    bool drvReboot_ = false;
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

@@ -307,6 +307,7 @@ void App::Paint() {
         case View::DiskHealth: DrawDiskHealth(contentArea_); break;
         case View::Startup: DrawStartup(contentArea_); break;
         case View::Apps: DrawApps(contentArea_); break;
+        case View::Drivers: DrawDrivers(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -486,6 +487,7 @@ void App::DrawSidebar() {
     for (auto& p : win_.drivers)
         if (p.old) oldDrivers += p.bytes;
     drawItem({View::WinTools, IC_SYSTEM, Tr(L"Windows"), false, oldDrivers ? util::FormatSizeShort(oldDrivers) : L""});
+    drawItem({View::Drivers, 0xE964, Tr(L"Drivers"), false, drvSearched_ && !drvSearch_.updates.empty() ? util::FormatCount(drvSearch_.updates.size()) : L""});
     uint64_t gamesTotal = 0;
     for (auto& g : games_) gamesTotal += g.bytes;
     drawItem({View::Games, IC_GAME, Tr(L"Games"), false, gamesTotal ? util::FormatSizeShort(gamesTotal) : L""});
