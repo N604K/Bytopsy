@@ -29,6 +29,7 @@ add_library(winncdu_core STATIC
   src/diskhealth.cpp
   src/schedule.cpp
   src/startup.cpp
+  src/apps.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
@@ -57,6 +58,7 @@ add_executable(winncdu WIN32
   src/gui/cleanup.cpp
   src/gui/browserdata.cpp
   src/gui/winapp2.cpp
+  src/gui/apps_view.cpp
   src/gui/platform.cpp
   src/gui/winncdu-gui.rc
 )
@@ -214,5 +216,13 @@ if(MSVC)
   target_compile_options(winncdu-startup-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME startup COMMAND winncdu-startup-test)
+
+# Apps (Uninstall entries, which folders count as an uninstalled app's leftovers): build/winncdu-apps-test.exe
+add_executable(winncdu-apps-test tests/apps_test.cpp)
+target_link_libraries(winncdu-apps-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-apps-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME apps COMMAND winncdu-apps-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

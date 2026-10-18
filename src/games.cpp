@@ -1,7 +1,6 @@
 #include "games.h"
 
 #include <windows.h>
-#include <shellapi.h>
 
 #include <algorithm>
 #include <functional>
@@ -90,45 +89,6 @@ std::wstring JsonValue(const std::wstring& json, const wchar_t* key) {
     }
     while (at < json.size() && json[at] != L',' && json[at] != L'}' && !iswspace(json[at])) v += json[at++];
     return v;
-}
-
-std::wstring RegStr(HKEY k, const wchar_t* name) {
-    wchar_t buf[2048];
-    DWORD size = sizeof(buf);
-    if (RegGetValueW(k, nullptr, name, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, buf, &size) != ERROR_SUCCESS) return L"";
-    return buf;
-}
-
-std::vector<UninstallEntry> UninstallEntries() {
-    std::vector<UninstallEntry> out;
-    struct Root {
-        HKEY hive;
-        REGSAM view;
-    };
-    for (Root r : {Root{HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY}, Root{HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY}, Root{HKEY_CURRENT_USER, 0}}) {
-        HKEY base = nullptr;
-        if (RegOpenKeyExW(r.hive, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0, KEY_READ | r.view, &base) != ERROR_SUCCESS)
-            continue;
-        wchar_t name[256];
-        for (DWORD i = 0;; ++i) {
-            DWORD n = 256;
-            if (RegEnumKeyExW(base, i, name, &n, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS) break;
-            HKEY k = nullptr;
-            if (RegOpenKeyExW(base, name, 0, KEY_READ | r.view, &k) != ERROR_SUCCESS) continue;
-            UninstallEntry e;
-            e.key = name;
-            e.displayName = RegStr(k, L"DisplayName");
-            e.publisher = RegStr(k, L"Publisher");
-            e.uninstallString = RegStr(k, L"UninstallString");
-            e.installLocation = RegStr(k, L"InstallLocation");
-            DWORD kb = 0, size = sizeof(kb);
-            if (RegGetValueW(k, nullptr, L"EstimatedSize", RRF_RT_REG_DWORD, nullptr, &kb, &size) == ERROR_SUCCESS) e.estimatedBytes = kb * 1024ull;
-            RegCloseKey(k);
-            if (!e.displayName.empty() && !e.uninstallString.empty()) out.push_back(std::move(e));
-        }
-        RegCloseKey(base);
-    }
-    return out;
 }
 
 const wchar_t* HowFor(const std::wstring& launcher) {
@@ -289,27 +249,6 @@ std::wstring GameLauncherOf(const UninstallEntry& e) {
     return L"";
 }
 
-bool SplitCommand(const std::wstring& command, std::wstring& exe, std::wstring& args) {
-    std::wstring c = command;
-    size_t b = c.find_first_not_of(L" \t");
-    if (b == std::wstring::npos) return false;
-    c = c.substr(b);
-    if (c[0] == L'"') {
-        size_t q = c.find(L'"', 1);
-        if (q == std::wstring::npos) return false;
-        exe = c.substr(1, q - 1);
-        args = c.substr(q + 1);
-    } else {
-        size_t at = Lower(c).find(L".exe");
-        if (at == std::wstring::npos) return false;
-        exe = c.substr(0, at + 4);
-        args = c.substr(at + 4);
-    }
-    size_t a = args.find_first_not_of(L" \t");
-    args = a == std::wstring::npos ? L"" : args.substr(a);
-    return !exe.empty();
-}
-
 std::vector<Game> FindGames() {
     std::vector<Game> out;
     // Steam: its libraries (libraryfolders.vdf).
@@ -342,7 +281,8 @@ std::vector<Game> FindGames() {
     // Epic Games: the launcher's install manifests.
     ScanEpicManifests(Env(L"ProgramData") + L"\\Epic\\EpicGamesLauncher\\Data\\Manifests", out);
     // GOG, Ubisoft Connect, EA app, Battle.net: their games register an uninstaller.
-    for (auto& e : UninstallEntries()) {
+    for (auto& e : ReadUninstallEntries()) {
+        if (e.uninstallString.empty()) continue;
         std::wstring launcher = GameLauncherOf(e);
         if (launcher.empty()) continue;
         Game g;
@@ -399,32 +339,9 @@ bool StartUninstall(const Game& g, std::wstring& err) {
         err = L"No uninstaller is registered for " + g.name;
         return false;
     }
-    size_t colon = g.uninstall.find(L':');
-    bool uri = colon != std::wstring::npos && colon > 1 && g.uninstall.find(L'\\') > colon &&
-               g.uninstall.find_first_of(L" \"") > colon;  // "steam://...", "ms-settings:..." (not "C:\...")
-    if (uri) {
-        auto r = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", g.uninstall.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
-        if (r <= 32) {
-            err = L"Couldn't open " + g.launcher + L" (is it installed?)";
-            return false;
-        }
-        return true;
-    }
-    std::wstring exe, args;
-    if (!SplitCommand(g.uninstall, exe, args)) {
-        err = L"Can't read the uninstall command: " + g.uninstall;
-        return false;
-    }
-    SHELLEXECUTEINFOW sei{sizeof(sei)};
-    sei.fMask = SEE_MASK_FLAG_NO_UI;
-    sei.lpVerb = L"open";
-    sei.lpFile = exe.c_str();
-    sei.lpParameters = args.empty() ? nullptr : args.c_str();
-    sei.nShow = SW_SHOWNORMAL;
-    if (!ShellExecuteExW(&sei)) {
-        DWORD e = GetLastError();
-        err = e == ERROR_CANCELLED ? L"Cancelled" : L"Couldn't start the uninstaller: " + util::Win32ErrorMessage(e);
-        return false;
-    }
-    return true;
+    std::wstring launchErr;
+    if (LaunchCommand(g.uninstall, nullptr, launchErr)) return true;
+    // "steam://...", "ms-settings:...": the launcher isn't there to open it.
+    err = IsUriCommand(g.uninstall) && launchErr != L"Cancelled" ? L"Couldn't open " + g.launcher + L" (is it installed?)" : launchErr;
+    return false;
 }

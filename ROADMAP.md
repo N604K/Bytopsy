@@ -82,8 +82,12 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       Manager), Task Scheduler's switch, or Manual start for services (previous start type kept in
       the journal); impact measured from the Diagnostics-Performance log when readable, else an
       estimate from program size and type, else "unknown"; Microsoft's services never changed.*
-- [ ] **Uninstaller with leftovers**: list apps from the Uninstall registry keys, run their uninstaller,
+- [x] **Uninstaller with leftovers**: list apps from the Uninstall registry keys, run their uninstaller,
       then offer leftover folders (checked against the protection rules).
+      *Done: Apps view and `winncdu-cli --apps` (`src/apps.cpp`, shared with Games). The app's own
+      uninstaller runs; WinNCDU waits for its entry to go, then offers its former install folder and
+      folders named after it, never ones another installed app may use, never protected data, never
+      the registry. MSIX/Store apps are not listed. No real uninstall has been run in testing.*
 - [x] **Disk health**: SMART/wear via `MSFT_PhysicalDisk` and `MSFT_StorageReliabilityCounter`, TRIM
       status, free-space trend from scan history.
       *Done: Disk health view and `winncdu-cli --disks` (`src/diskhealth.cpp`), read-only. NVMe

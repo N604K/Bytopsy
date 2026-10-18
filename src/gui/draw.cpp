@@ -218,6 +218,7 @@ void App::DrawEmptyState(const RectF& area, wchar_t icon, const std::wstring& ti
 
 void App::Paint() {
     if (!gfx_.Begin()) return;
+    SyncSearchBox();
     if (rowsDirty_) BuildRows();
     hits_.clear();
     modalHitStart_ = SIZE_MAX;
@@ -253,6 +254,7 @@ void App::Paint() {
         case View::Games: DrawGames(contentArea_); break;
         case View::DiskHealth: DrawDiskHealth(contentArea_); break;
         case View::Startup: DrawStartup(contentArea_); break;
+        case View::Apps: DrawApps(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -295,7 +297,8 @@ void App::DrawTopBar() {
         int n = GetWindowTextLengthW(search_);
         std::wstring text(n, L' ');
         if (n) GetWindowTextW(search_, text.data(), n + 1);
-        gfx_.Text(n ? text : L"Search files & folders", R(left + 40, 10, box.right - 40, 46), n ? P_.text : P_.textFaint, TS(14));
+        gfx_.Text(n ? text : (searchForApps_ ? L"Filter apps by name or publisher" : L"Search files & folders"), R(left + 40, 10, box.right - 40, 46),
+                  n ? P_.text : P_.textFaint, TS(14));
     }
     if (search_ && GetWindowTextLengthW(search_) > 0) {
         RectF cr = RWH(box.right - 32, 14, 28, 28);
@@ -415,6 +418,7 @@ void App::DrawSidebar() {
     for (auto& e : startup_.entries)
         if (e.enabled && StartupVisible(e)) ++startupOn;
     drawItem({View::Startup, IC_POWER, L"Startup", false, startupOn ? util::FormatCount(startupOn) : L""});
+    drawItem({View::Apps, 0xE71D, L"Apps", false, appsLoaded_ ? util::FormatCount(apps_.size()) : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
     drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 

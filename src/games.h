@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "apps.h"  // UninstallEntry, SplitCommand
+
 struct Game {
     std::wstring launcher;  // "Steam", "Epic Games", "GOG", "EA app", "Ubisoft Connect", "Battle.net", "Xbox"
     std::wstring id;        // Steam app id, Epic AppName, ...
@@ -41,12 +43,6 @@ Vdf ParseVdf(const std::wstring& text);  // Valve KeyValues text (libraryfolders
 void ScanSteamLibrary(const std::wstring& steamapps, std::vector<Game>& out);
 void ScanEpicManifests(const std::wstring& manifestsDir, std::vector<Game>& out);
 
-struct UninstallEntry {
-    std::wstring key, displayName, publisher, uninstallString, installLocation;
-    uint64_t estimatedBytes = 0;
-};
 // The launcher an Uninstall registry entry belongs to ("GOG", "Ubisoft Connect", "EA app",
 // "Battle.net"), or "" if it is not a game from one of them.
 std::wstring GameLauncherOf(const UninstallEntry& e);
-// Splits a registered uninstall command into program and arguments.
-bool SplitCommand(const std::wstring& command, std::wstring& exe, std::wstring& args);

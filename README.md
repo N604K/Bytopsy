@@ -108,6 +108,19 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   otherwise an estimate from the program file's size and type (Electron/Chromium apps high, small
   updaters and delayed-start services low), and "unknown" when the program file or its size isn't
   there. Hover the impact to see why. Every change is journaled.
+- **Apps** (works without a scan): installed programs from the Uninstall registry keys (HKLM 64- and
+  32-bit, HKCU), as Settings lists them: system components, updates and patches are left out. Name,
+  publisher, version, install date and size (the registered size, or the measured install folder);
+  sort by any of them and filter by typing in the search box. *Uninstall* runs the app's own
+  registered uninstaller, which asks what to do; WinNCDU waits for it (and for the app's entry to
+  disappear, since many uninstallers hand over to a copy of themselves), then lists the folders the
+  app left behind for review: its former install folder (the only one preselected, and only with
+  nothing protected inside) and folders named after it, or after its publisher and it, in Program
+  Files, ProgramData, AppData (Roaming, Local, LocalLow) and Local\Programs. Folders another installed
+  app may use (same name, a name it begins with, a publisher folder holding other apps, or holding or
+  inside another app's folder) are never offered; folders with protected data inside (wallets, keys,
+  chat history, browser profiles) are shown with a shield and left alone. Checked folders go to the
+  Recycle Bin and the journal. Registry entries are never touched (no registry cleaning).
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -274,7 +287,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule and startup self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup and apps self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -323,6 +336,8 @@ winncdu-cli [options] [path]
     --quiet             ...print nothing (used by the scheduled task)
   --startup             List what starts with Windows (Run keys, Startup folders,
                         logon/boot tasks, services) with impact estimates, and exit
+  --apps                List installed apps (size, install date, version, publisher)
+                        from the Uninstall registry keys, and exit
 ```
 
 Examples:
@@ -390,6 +405,7 @@ src/                  core engine + terminal app
   diskhealth.cpp      disk health: WMI storage, NVMe health log, TRIM, used-space trends
   schedule.cpp        scheduled cleanup: --clean arguments, Task Scheduler task, cleanup.log
   startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
+  apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -401,6 +417,7 @@ src/gui/              windowed app
   cleanup.cpp         cleanup rules: parsing, measuring, cleaning
   browserdata.cpp     browser cookies (with the keep list) and history, through SQLite
   winapp2.cpp         winapp2.ini import
+  apps_view.cpp       Apps view: list, uninstall and wait, leftovers review
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
@@ -419,6 +436,7 @@ tests/importfuzz_test.cpp fuzzing the ncdu JSON importer with mutated exports, f
 tests/diskhealth_test.cpp disk health: WMI/fsutil/NVMe log parsing, verdicts, used-space trends (ctest)
 tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --clean --yes on a fixture (ctest)
 tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
+tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified

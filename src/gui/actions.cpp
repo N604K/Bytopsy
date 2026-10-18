@@ -194,6 +194,17 @@ void App::BuildRows() {
             }
             break;
         }
+        case View::Apps: {
+            bool left = !appLeftFor_.empty();
+            if (left) {
+                rows_.push_back({nullptr, 0, RK_GROUP, 0});
+                for (size_t i = 0; i < appLeft_.size(); ++i) rows_.push_back({nullptr, 0, RK_APPLEFT, static_cast<int>(i)});
+                rows_.push_back({nullptr, 0, RK_GROUP, 1});
+            }
+            for (size_t i = 0; i < apps_.size(); ++i)
+                if (AppVisible(apps_[i])) rows_.push_back({nullptr, 0, RK_APP, static_cast<int>(i)});
+            break;
+        }
         case View::CleanReview:
             if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
                 for (size_t i = 0; i < cleanup_[reviewCat_].entries.size(); ++i) rows_.push_back({nullptr, 0, RK_CLEAN, static_cast<int>(i)});
@@ -2062,7 +2073,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
-        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::Startup && v != View::CleanReview && v != View::DiskHealth && !root_)
+        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::Startup && v != View::Apps && v != View::CleanReview && v != View::DiskHealth && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -2104,8 +2115,12 @@ void App::ShowView(View v) {
         case View::Startup:
             if (!startupLoaded_) LoadStartup();
             break;
+        case View::Apps:
+            if (!appsLoaded_) LoadApps();
+            break;
         default: break;
     }
+    SyncSearchBox();
     rowsDirty_ = true;
     Invalidate();
 }
@@ -2161,6 +2176,16 @@ void App::OpenRow(int row) {
                 RevealInExplorer(e.program);
             else
                 Toast(e.program.empty() ? L"No program to show" : L"Not found: " + e.program, 2);
+        }
+        return;
+    }
+    if (view_ == View::Apps) {
+        if (r.kind == RK_APP && r.idx < static_cast<int>(apps_.size())) {
+            const std::wstring& f = apps_[r.idx].folder;
+            if (f.empty() || !PathExists(f)) return Toast(L"No install folder is known for " + apps_[r.idx].e.displayName, 2);
+            OpenWithDefault(f);
+        } else if (r.kind == RK_APPLEFT && r.idx < static_cast<int>(appLeft_.size())) {
+            OpenWithDefault(appLeft_[r.idx].path);
         }
         return;
     }
@@ -2521,6 +2546,21 @@ void App::OnCommand(int cmd) {
         case CMD_GAMES_DELETE: StartGameLeftoversDelete(); break;
         case CMD_DISK_REFRESH: LoadDiskHealth(); break;
         case CMD_STARTUP_REFRESH: LoadStartup(); break;
+            break;
+        case CMD_APPS_REFRESH: LoadApps(); break;
+        case CMD_APP_UNINSTALL: StartAppUninstall(); break;
+        case CMD_APP_LEFTOVERS: LookForAppLeftovers(true); break;
+        case CMD_APP_STOPWAIT:
+            if (appWait_) appWait_->stop = true;
+            appWait_.reset();
+            break;
+        case CMD_APPS_DELETE: StartAppLeftoversDelete(); break;
+        case CMD_APP_LEFT_DONE:
+            appLeftFor_.clear();
+            appLeft_.clear();
+            appLeftSel_.clear();
+            rowsDirty_ = true;
+            break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE:
             MeasureCleanup();

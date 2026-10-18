@@ -170,6 +170,10 @@ LRESULT CALLBACK App::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 LRESULT CALLBACK App::SearchProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR ref) {
     App* app = reinterpret_cast<App*>(ref);
     if (msg == WM_KEYDOWN) {
+        if (wp == VK_RETURN && app->searchForApps_) {  // the Apps view filters as you type
+            SetFocus(app->hwnd_);
+            return 0;
+        }
         if (wp == VK_RETURN) {
             int n = GetWindowTextLengthW(hwnd);
             std::wstring text(n, L'\0');
@@ -221,6 +225,10 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND:
             if (HIWORD(wp) == 0 && lp == 0 && LOWORD(wp) >= CMD_HOME) {  // menu / accelerator commands
                 OnCommand(LOWORD(wp));
+                return 0;
+            }
+            if (HIWORD(wp) == EN_CHANGE && reinterpret_cast<HWND>(lp) == search_) {
+                OnSearchChanged();
                 return 0;
             }
             break;
@@ -281,6 +289,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_TIMER: OnTimer(); return 0;
         case WM_APP_TASKDONE: OnTaskDone(); return 0;
         case WM_APP_CLEANUP: OnCleanupMeasured(reinterpret_cast<std::vector<CleanCategory>*>(lp)); return 0;
+        case WM_APP_UNINSTALL: OnAppUninstallProgress(); return 0;
         case WM_DROPFILES: OnDrop(reinterpret_cast<HDROP>(wp)); return 0;
         case WM_CTLCOLOREDIT:
             if (reinterpret_cast<HWND>(lp) == search_) {
@@ -320,6 +329,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
                 settings_.maximized = wp2.showCmd == SW_SHOWMAXIMIZED;
             }
             SaveSettings(settings_);
+            if (appWait_) appWait_->stop = true;  // its worker only waits; the uninstaller itself keeps running
             if (task_) {
                 if (task_->cancel) task_->cancel();
                 WaitForSingleObject(task_->thread, 2000);
@@ -431,6 +441,13 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                     OnGameRow(hit.a);
                 break;
             }
+            if (view_ == View::Apps) {
+                if (dbl)
+                    OpenRow(hit.a);
+                else
+                    OnAppRow(hit.a);
+                break;
+            }
             if (view_ == View::Wsl) {
                 ToggleWslRow(hit.a);
                 if (dbl) OpenRow(hit.a);
@@ -463,7 +480,15 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
             }
             break;
         case HK_HEADER:
-            if (view_ == View::Browse) {
+            if (view_ == View::Apps) {
+                if (appSortKey_ == hit.a)
+                    appSortDesc_ = !appSortDesc_;
+                else {
+                    appSortKey_ = hit.a;
+                    appSortDesc_ = hit.a == SK_SIZE || hit.a == SK_MTIME;
+                }
+                SortApps();
+            } else if (view_ == View::Browse) {
                 if (sortKey_ == hit.a)
                     sortDesc_ = !sortDesc_;
                 else {
@@ -729,12 +754,16 @@ void App::OnKeyDown(WPARAM vk) {
                 if (ls.focus >= 0 && ls.focus < static_cast<int>(rows_.size()) && rows_[ls.focus].kind == RK_STARTUP)
                     OnStartupSwitch(rows_[ls.focus].idx);
             }
+            else if (view_ == View::Apps)
+                OnAppRow(ls.focus);
             else if (ls.focus >= 0)
                 SelectRow(ls.focus, true, false);
             break;
         case VK_DELETE:
             if (view_ == View::AiModels)
                 StartAiDelete();
+            else if (view_ == View::Apps)
+                StartAppLeftoversDelete();
             else
                 RequestDelete(shift);
             break;
