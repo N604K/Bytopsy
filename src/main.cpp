@@ -10,6 +10,8 @@
 #include "fsops.h"
 #include "aimodels.h"
 #include "diskhealth.h"
+#include "driverupdates.h"
+#include "runtool.h"
 #include "apps.h"
 #include "games.h"
 #include "gui/cleanup.h"
@@ -61,6 +63,15 @@ void PrintUsage() {
         "                        Restore, event logs) and exit\n"
         "  --games               List installed games of every launcher (size, last played)\n"
         "                        and leftovers of uninstalled ones, and exit\n"
+        "  --driver-updates      Ask Windows Update which driver updates it offers for this PC\n"
+        "                        (read-only), next to each device's installed driver, and the\n"
+        "                        GPU vendor's and PC maker's own driver tools, and exit\n"
+        "  --install-driver-updates IDS\n"
+        "                        As administrator: create a System Restore point, then have\n"
+        "                        Windows Update download and install exactly these updates\n"
+        "                        (comma list of update ids from --driver-updates). Nothing is\n"
+        "                        installed if the restore point fails. Used by the windowed app\n"
+        "    --no-restore-point  ...without the restore point\n"
         "  --disks               List physical disks (health, wear, temperature, TRIM, drive\n"
         "                        letters) and each drive's used-space trend, and exit\n"
         "  --clean IDS           Cleanup categories (comma list of ids, e.g. temp,browser,dev,\n"
@@ -423,6 +434,123 @@ int Fail(const std::wstring& msg) {
     return 2;
 }
 
+void PrintUtf8(const std::wstring& s) {
+    std::string u = util::WideToUtf8(s);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+}
+
+std::wstring DateOnly(int64_t ft) { return ft ? util::FormatTime(ft).substr(0, 10) : L"unknown date"; }
+
+const wchar_t* AgeWord(OfferAge a) {
+    switch (a) {
+        case OfferAge::Newer: return L"newer than installed";
+        case OfferAge::Same: return L"same as installed";
+        case OfferAge::Older: return L"OLDER than installed";
+        default: return L"can't compare";
+    }
+}
+
+// Read-only: asks Windows Update which driver updates it offers, and lists them next to the
+// driver each device has now, plus the vendors' own driver tools.
+int ListDriverUpdates() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    PrintUtf8(L"Asking Windows Update which driver updates it offers for this PC (read-only; can take a minute)...\n\n");
+    DriverSearch s = SearchDriverUpdates();
+    std::wstring out;
+    if (!s.ok) {
+        out += L"  Windows Update couldn't be asked: " + s.error + L"\n";
+    } else if (s.updates.empty()) {
+        out += L"  Windows Update offers no driver updates for this PC.\n";
+    } else {
+        out += L"Driver updates Windows Update offers (install them in the windowed app: Drivers):\n";
+        for (auto& u : s.updates) {
+            const DeviceDriver* d = u.device >= 0 ? &s.devices[u.device] : nullptr;
+            out += L"\n  " + u.title + L"\n";
+            out += L"      offered    " + (u.version.empty() ? std::wstring(L"version not given") : u.version) + L", " + DateOnly(u.date) + L", " +
+                   u.provider + (u.driverClass.empty() ? L"" : L" (" + u.driverClass + L")") + L", " + util::FormatSizeShort(u.bytes) + L"\n";
+            if (d)
+                out += L"      installed  " + (d->version.empty() ? std::wstring(L"unknown version") : d->version) + L", " + DateOnly(d->date) + L", " +
+                       d->provider + L"  on " + d->name + (d->present ? L"" : L" (not connected)") +
+                       (u.devices > 1 ? L" and " + std::to_wstring(u.devices - 1) + L" more" : L"") + L"\n";
+            else
+                out += L"      installed  no device with hardware id " + u.hardwareId + L" found\n";
+            std::wstring notes = AgeWord(u.age);
+            if (u.display) notes += L"; graphics driver: the GPU vendor's own tool is recommended";
+            if (u.reboot == 1) notes += L"; needs a restart";
+            if (u.reboot == 2) notes += L"; may need a restart";
+            if (u.optional) notes += L"; optional";
+            if (u.hidden) notes += L"; hidden in Windows Update";
+            if (!u.eulaAccepted) notes += L"; license terms not accepted yet";
+            out += L"      note       " + notes + L"\n";
+            out += L"      update id  " + u.updateId + (u.kbs.empty() ? L"" : L"  " + u.kbs[0]) + L"\n";
+        }
+    }
+    DriverToolsReport tools = ReadDriverTools();
+    out += L"\nDrivers from the vendors' own tools:\n";
+    auto toolLine = [&](const DriverTool& t) {
+        if (t.installed)
+            return L"installed: " + t.name + (t.launch.empty() ? L"" : L"  (" + t.launch + L")");
+        return (t.name.empty() ? std::wstring(L"support page") : t.name + L" not installed, get it from") + L" " + t.launch;
+    };
+    if (!tools.maker.name.empty()) {
+        out += L"  PC maker    " + tools.maker.name + (tools.maker.model.empty() ? L"" : L", " + tools.maker.model) +
+               (tools.maker.selfBuilt ? L" (motherboard: a self-built PC)" : L"") + L"\n";
+        for (auto& t : tools.makerTools) out += L"              " + toolLine(t) + L"\n";
+    }
+    for (auto& g : tools.gpus) {
+        const DeviceDriver& a = tools.devices[g.adapters[0]];
+        out += L"  Graphics    " + a.name + L", driver " + a.version + L" (" + DateOnly(a.date) + L")\n";
+        for (auto& t : g.tools) out += L"              " + toolLine(t) + L"\n";
+    }
+    PrintUtf8(out);
+    SetConsoleOutputCP(oldCp);
+    return s.ok ? 0 : 1;
+}
+
+// Elevated only (the windowed app starts it through UAC): a restore point, then Windows Update
+// downloads and installs exactly these updates. Prints one RESULT line per update.
+// Exit codes: 0 all installed, 1 some failed or skipped, 2 bad arguments, 3 not elevated,
+// 4 no restore point (nothing installed), 5 Windows Update couldn't be asked.
+int InstallDriverUpdatesCli(const std::wstring& idList, bool restorePoint) {
+    std::vector<std::wstring> ids;
+    if (!ParseUpdateIdList(idList, ids)) return Fail(L"--install-driver-updates needs update ids (GUIDs, comma-separated; see --driver-updates)");
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    auto done = [&](int code) {
+        SetConsoleOutputCP(oldCp);
+        return code;
+    };
+    if (!RunningElevated()) {
+        PrintUtf8(L"Installing driver updates needs administrator rights: run this from an elevated terminal.\n");
+        return done(3);
+    }
+    if (restorePoint) {
+        PrintUtf8(L"Creating a System Restore point...\n");
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        std::wstring err;
+        bool ok = CreateRestorePoint(L"Bytopsy driver updates", err);
+        CoUninitialize();
+        if (!ok) {
+            PrintUtf8(L"RESTOREPOINT\tfailed\t" + err + L"\nNo restore point, so nothing was installed: " + err + L"\n");
+            return done(4);
+        }
+    }
+    DriverInstallReport rep = InstallDriverUpdates(ids, [](const std::wstring& s) { PrintUtf8(s + L"\n"); });
+    if (!rep.ok) {
+        PrintUtf8(L"Windows Update couldn't be asked: " + rep.error + L"\n");
+        return done(5);
+    }
+    bool all = true;
+    for (auto& r : rep.results) {
+        all = all && r.status == InstallStatus::Installed;
+        PrintUtf8(FormatInstallResultLine(r) + L"\n");
+    }
+    if (rep.rebootRequired) PrintUtf8(L"Restart Windows to finish installing.\n");
+    return done(all ? 0 : 1);
+}
+
 std::atomic<bool> g_cleanCancel{false};
 
 BOOL WINAPI OnCtrl(DWORD) {
@@ -726,6 +854,16 @@ int wmain(int argc, wchar_t** argv) {
             return ListWindowsTools();
         } else if (a == L"--games") {
             return ListGames();
+        } else if (a == L"--driver-updates") {
+            return ListDriverUpdates();
+        } else if (a == L"--install-driver-updates") {
+            if (!next(v)) return Fail(L"--install-driver-updates needs update ids");
+            bool restorePoint = true;
+            for (int k = 1; k < argc; ++k)
+                if (std::wstring(argv[k]) == L"--no-restore-point") restorePoint = false;
+            return InstallDriverUpdatesCli(v, restorePoint);
+        } else if (a == L"--no-restore-point") {
+            // only with --install-driver-updates
         } else if (a == L"--disks") {
             return ListDisks();
         } else if (a == L"--startup") {

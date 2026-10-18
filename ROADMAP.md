@@ -180,13 +180,21 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 What CCleaner sells in its paid tier, done the safe way: nothing from third-party driver
 databases, and every install through Windows' or the app's own mechanism.
 
-- [ ] **Driver updates through Windows Update**: ask Windows Update (Windows Update Agent API,
+- [x] **Driver updates through Windows Update**: ask Windows Update (Windows Update Agent API,
       `Type='Driver'`) which driver updates exist for this PC, show them next to the installed
       version and date, and install the chosen ones through Windows Update itself (Microsoft-signed,
       matched to the hardware), with a System Restore point first. For graphics, detect the
       vendor's own tool (NVIDIA app, AMD Software: Adrenalin, Intel Driver & Support Assistant) and
       open it rather than installing a graphics driver another way. Never a third-party driver
       database.
+      *Done: a "Drivers" view (`src/driverupdates.cpp`, `src/gui/drivers_view.cpp`): the search runs
+      on a worker and can be cancelled; updates are matched to devices by hardware id and checked for
+      being really newer (version within the same provider, else date); installing runs
+      `bytopsy-cli --install-driver-updates` elevated, which makes the restore point (none, no
+      install), then IUpdateDownloader and IUpdateInstaller, and journals each result. Cards for the
+      PC maker's tool (from SMBIOS; motherboard maker for self-built PCs; Dell, Lenovo, HP, ASUS,
+      MSI, GIGABYTE, Acer, Surface, Framework, ASRock) and each GPU vendor's tool, or the official
+      page when it isn't installed. `--driver-updates` lists it all read-only.*
 - [ ] **App updates through winget**: an *Updates* column and filter in Apps (`winget upgrade`),
       update one app or all of them, each through its own installer. If winget (App Installer) is
       missing, say so and link to it in the Microsoft Store.

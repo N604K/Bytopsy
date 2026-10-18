@@ -30,6 +30,7 @@ add_library(bytopsy_core STATIC
   src/schedule.cpp
   src/startup.cpp
   src/apps.cpp
+  src/driverupdates.cpp
   src/phash.cpp
   src/i18n.cpp
 )
@@ -61,6 +62,7 @@ add_executable(bytopsy WIN32
   src/gui/browserdata.cpp
   src/gui/winapp2.cpp
   src/gui/apps_view.cpp
+  src/gui/drivers_view.cpp
   src/gui/platform.cpp
   src/gui/accmodel.cpp
   src/gui/uia.cpp
@@ -181,6 +183,16 @@ if(MSVC)
   target_compile_options(bytopsy-wintools-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME wintools COMMAND bytopsy-wintools-test)
+
+# Driver updates (hardware id matching, version and date comparison, graphics drivers, vendor and PC
+# maker tools from fake Uninstall entries, the elevated install's result lines): build/bytopsy-driverupdates-test.exe
+# Never asks Windows Update unless BYTOPSY_WU_SEARCH=1 (read-only search); never installs anything.
+add_executable(bytopsy-driverupdates-test tests/driverupdates_test.cpp)
+target_link_libraries(bytopsy-driverupdates-test PRIVATE bytopsy_core)
+if(MSVC)
+  target_compile_options(bytopsy-driverupdates-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME driverupdates COMMAND bytopsy-driverupdates-test)
 
 # Games (Steam libraries, Epic manifests, launcher uninstall entries): build/bytopsy-games-test.exe
 add_executable(bytopsy-games-test tests/games_test.cpp)

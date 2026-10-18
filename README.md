@@ -88,6 +88,24 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
     (`powercfg`).
   - *Compact OS*: compress Windows' own files, or undo it (`compact /compactos`).
   - *Event logs*: clear every log except Security (`wevtutil`).
+- **Drivers** (works without a scan): *Check Windows Update* asks Windows Update (the Windows Update
+  Agent API, the same service Settings uses) which driver updates it offers this PC
+  (`IsInstalled=0 and Type='Driver'`). Each one is shown next to the driver its device has now
+  (found by hardware id): installed and offered version and date, size, whether it may need a
+  restart, and whether the offer is actually newer (Windows Update sometimes offers an older
+  driver; those, graphics drivers, hidden ones and ones for unplugged devices are not checked).
+  *Install* creates a System Restore point first (if it can't be made, nothing is installed), then
+  Windows Update itself downloads and installs exactly the checked updates, as administrator
+  (`bytopsy-cli --install-driver-updates`, through UAC); each result (installed, failed with the
+  reason, restart needed) is shown and journaled. Nothing comes from anywhere but Windows Update; no
+  third-party driver database. Drivers Windows Update doesn't have come from the vendors' own
+  tools, which are only detected and opened: *Your PC maker* (from the firmware's SMBIOS fields:
+  Dell Command | Update and SupportAssist, Lenovo Vantage, Commercial Vantage and System Update,
+  HP Support Assistant and Image Assistant, MyASUS, ASUS DriverHub and Armoury Crate, MSI Center,
+  GIGABYTE Control Center, Acer Care Center, the Surface app, Framework's driver page; for a
+  self-built PC, the motherboard's maker and model) and one card per graphics vendor present
+  (NVIDIA app or GeForce Experience, AMD Software: Adrenalin Edition, Intel Driver & Support
+  Assistant). A tool that isn't installed gets its maker's official download or support page.
 - **Games** (works without a scan): installed games from Steam (every library), Epic Games, GOG,
   EA app, Ubisoft Connect, Battle.net and the Xbox app, with their size and when they were last
   played (from Steam itself, or from when the game's program was last opened). Sort by size or by
@@ -341,7 +359,16 @@ feature needs them: hashes for Duplicates, the ext4 superblock inside WSL disks,
 AI model manifests, scans you import, and its rule files; pixels of images for *Similar photos*; the
 cookie and history databases of browsers for those two Cleanup categories (cookies are counted per
 site, never read out). From Windows it reads the Uninstall, Run and service registry keys, scheduled
-tasks, and disk health from WMI and the drives' own health logs.
+tasks, and disk health from WMI and the drives' own health logs. For *Drivers*: each device's
+hardware ids and installed driver (SetupAPI), the PC maker and model from
+`HKLM\HARDWARE\DESCRIPTION\System\BIOS`, and the current user's Store app packages (to find the
+vendors' driver tools).
+
+**Windows Update.** *Check Windows Update* in *Drivers* (and `bytopsy-cli --driver-updates`) asks
+Windows' own Windows Update service which driver updates it offers this PC. Windows contacts Windows
+Update (or the update server your organization set) for that, exactly as Settings > Windows Update
+does; Bytopsy sends nothing itself and nothing is downloaded until you install. Installing is done
+by Windows Update too, after a System Restore point.
 
 **What it writes.** Everything lives in `%LOCALAPPDATA%\Bytopsy` (in
 [portable mode](#portable-mode), in `Bytopsy-data` next to the exe):
@@ -366,14 +393,17 @@ under `HKCU\Software\Classes`, removed by the same menu item); the scheduled cle
 off or on, the same `StartupApproved` value Task Manager writes, the task's enabled switch, or the
 service's start type; and short-lived files in `%TEMP%` (a
 `diskpart` script while compacting virtual disks, the output of tools run as administrator), deleted
-when the tool finishes. Deleting the `Bytopsy` folder removes everything else.
+when the tool finishes. When you install driver updates: a System Restore point, and the drivers
+Windows Update installs. Deleting the `Bytopsy` folder removes everything else.
 
 **Programs it starts**, only from the views and actions that need them: Windows' own tools (DISM,
 `pnputil`, `vssadmin`, `powercfg`, `compact`, `wevtutil`, `diskpart`, PowerShell for System Restore
 storage and the Delivery Optimization cache, Disk Cleanup, `fsutil` for TRIM, `reg`, `schtasks` and
 `sc` for startup entries that need administrator rights), `wsl.exe`, `docker`, the clean command of a
 `kind = command` cleanup rule (such as `conan remove`), an app's own uninstaller, and a game
-launcher's uninstall link (`steam://uninstall/...`). Bytopsy itself goes online for none of these,
+launcher's uninstall link (`steam://uninstall/...`), `bytopsy-cli` as administrator to install driver
+updates, and, when you click them in *Drivers*, a vendor's driver tool (such as the NVIDIA app) or
+its official web page in your browser. Bytopsy itself goes online for none of these,
 but the programs behave as they always do: Steam or Docker Desktop, for example, may connect on
 their own.
 
@@ -455,7 +485,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash, uia and i18n self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, driverupdates, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash, uia and i18n self-tests
 ```
 
 GitHub Actions builds and runs the self-tests on every push and pull request
@@ -499,6 +529,15 @@ bytopsy-cli [options] [path]
                         Restore, event logs) and exit
   --games               List installed games of every launcher (size, last played)
                         and leftovers of uninstalled ones, and exit
+  --driver-updates      Ask Windows Update which driver updates it offers for this PC
+                        (read-only), next to each device's installed driver, and the
+                        GPU vendor's and PC maker's own driver tools, and exit
+  --install-driver-updates IDS
+                        As administrator: create a System Restore point, then have
+                        Windows Update download and install exactly these updates
+                        (comma list of update ids from --driver-updates). Nothing is
+                        installed if the restore point fails. Used by the windowed app
+    --no-restore-point  ...without the restore point
   --disks               List physical disks (health, wear, temperature, TRIM, drive
                         letters) and each drive's used-space trend, and exit
   --clean IDS           Cleanup categories (comma list of ids, e.g. temp,browser,dev,
@@ -583,6 +622,7 @@ src/                  core engine + terminal app
   schedule.cpp        scheduled cleanup: --clean arguments, Task Scheduler task, cleanup.log
   startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
   apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
+  driverupdates.cpp   driver updates through Windows Update (search, match, install); PC maker and GPU vendor tools
   phash.cpp           similar photos: WIC decoding, dHash/pHash, hash index, grouping, cache
   i18n.cpp            translations: Tr/TrF/TrN, .lang files, plural rules, pseudo-language
   runtool.cpp         running console tools without a window, and as administrator
@@ -597,6 +637,7 @@ src/gui/              windowed app
   browserdata.cpp     browser cookies (with the keep list) and history, through SQLite
   winapp2.cpp         winapp2.ini import
   apps_view.cpp       Apps view: list, uninstall and wait, leftovers review
+  drivers_view.cpp    Drivers view: Windows Update's driver updates, install, vendor tool cards
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
@@ -612,6 +653,7 @@ tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the
 tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
 tests/wintools_test.cpp Windows: DISM report parsing, which driver packages count as old (ctest)
 tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
+tests/driverupdates_test.cpp driver updates: hardware id matching, version/date checks, graphics drivers, vendor and PC maker tools, install result lines; installs nothing (ctest)
 tests/analysis_test.cpp search syntax, largest files, file types, duplicates on real files (ctest)
 tests/export_test.cpp   ncdu JSON round trips with odd names and flags, Linux ncdu input, CSV (ctest)
 tests/importfuzz_test.cpp fuzzing the ncdu JSON importer with mutated exports, fixed seed (ctest)

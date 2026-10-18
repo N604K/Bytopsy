@@ -2146,7 +2146,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
-        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::Startup && v != View::Apps && v != View::CleanReview && v != View::DiskHealth && !root_)
+        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::Startup && v != View::Apps && v != View::CleanReview && v != View::DiskHealth && v != View::Drivers && !root_)
         return Toast(Tr(L"Scan a drive or folder first"), 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -2190,6 +2190,9 @@ void App::ShowView(View v) {
             break;
         case View::Apps:
             if (!appsLoaded_) LoadApps();
+            break;
+        case View::Drivers:
+            if (!drvLoaded_) LoadDrivers();
             break;
         default: break;
     }
@@ -2516,6 +2519,8 @@ void App::ShowMoreMenu() {
 
 void App::OnCommand(int cmd) {
     if (cmd >= CMD_WIN_ACT && cmd < CMD_WIN_ACT + static_cast<int>(WA_COUNT)) return WinToolAction(cmd - CMD_WIN_ACT);
+    if ((cmd >= CMD_DRV_ROW && cmd < CMD_DRV_END) || cmd == CMD_DRV_CHECK || cmd == CMD_DRV_INSTALL || cmd == CMD_DRV_RESULTS_DONE)
+        return OnDriverCommand(cmd);
     if (cmd >= CMD_LANG && cmd < CMD_LANG + 2 + static_cast<int>(langMenu_.size())) {
         settings_.language = cmd == CMD_LANG ? L"" : cmd == CMD_LANG + 1 ? std::wstring(i18n::kPseudoCode) : langMenu_[cmd - CMD_LANG - 2].code;
         ApplyLanguage(true);
