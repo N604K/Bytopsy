@@ -16,6 +16,7 @@
 #include "protect.h"
 #include "schedule.h"
 #include "scanner.h"
+#include "startup.h"
 #include "ui.h"
 #include "util.h"
 #include "vdisks.h"
@@ -67,6 +68,8 @@ void PrintUsage() {
         "                        it and append a line to cleanup.log. Exit code 0 = done,\n"
         "                        1 = some items in use, 2 = bad ids, 3 = all skipped (admin)\n"
         "    --quiet             ...print nothing (used by the scheduled task)\n"
+        "  --startup             List what starts with Windows (Run keys, Startup folders,\n"
+        "                        logon/boot tasks, services) with impact estimates, and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -339,6 +342,49 @@ int ListDisks() {
     return 0;
 }
 
+int ListStartup() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    StartupList list = FindStartupEntries();
+    std::wstring out = L"What starts with Windows (read-only; turn entries off or on in the windowed app: Startup).\n";
+    const StartupKind kinds[] = {StartupKind::Run, StartupKind::RunOnce, StartupKind::Folder, StartupKind::Task, StartupKind::Service};
+    const wchar_t* titles[] = {L"Run keys", L"Run once (next sign-in only)", L"Startup folders", L"Scheduled tasks (at log on / startup)",
+                               L"Services (automatic start)"};
+    size_t hiddenMs = 0;
+    for (int ki = 0; ki < 5; ++ki) {
+        StartupKind k = kinds[ki];
+        bool header = false;
+        for (const StartupEntry& e : list.entries) {
+            if (e.kind != k) continue;
+            // Microsoft's services and tasks are left out, as in the windowed app's default view.
+            if (e.microsoft && (k == StartupKind::Service || k == StartupKind::Task)) {
+                ++hiddenMs;
+                continue;
+            }
+            if (!header) out += L"\n" + std::wstring(titles[ki]) + L":\n";
+            header = true;
+            wchar_t head[64];
+            swprintf(head, 64, L"  %-4ls %-8ls ", e.enabled ? L"on" : L"off", StartupImpactName(e.impact));
+            out += head + e.display + (e.publisher.empty() ? L"" : L"  (" + e.publisher + L")") + L"\n";
+            out += L"                " + (e.command.empty() ? e.where : e.command) + L"\n";
+            if (!e.restoreStart.empty())
+                out += L"                set to Manual by WinNCDU; turning it on restores start type " + e.restoreStart + L"\n";
+        }
+    }
+    if (list.entries.empty()) out += L"\n  Nothing found.\n";
+    out += L"\nImpact: measured when Windows' boot performance log recorded a slow start, otherwise an estimate from the\n"
+           L"program's size and type (Electron/Chromium apps, updaters, delayed-start services); \"unknown\" when the\n"
+           L"program file isn't there. ";
+    out += list.bootLogRead ? std::wstring(L"The boot performance log was read.\n") : list.bootLogNote + L", so these are estimates.\n";
+    out += L"Not listed: " + util::FormatCount(hiddenMs) + L" Microsoft services and tasks, and " + util::FormatCount(list.hiddenTasks) +
+           L" tasks in \\Microsoft\\Windows.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
 int Fail(const std::wstring& msg) {
     fwprintf(stderr, L"winncdu-cli: %s\n", msg.c_str());
     return 2;
@@ -583,6 +629,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListGames();
         } else if (a == L"--disks") {
             return ListDisks();
+        } else if (a == L"--startup") {
+            return ListStartup();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {

@@ -24,7 +24,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
                   IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770, IC_GAME = 0xE7FC,
-                  IC_CALENDAR = 0xE787;
+                  IC_CALENDAR = 0xE787, IC_POWER = 0xE7E8;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -252,6 +252,7 @@ void App::Paint() {
         case View::WinTools: DrawWinTools(contentArea_); break;
         case View::Games: DrawGames(contentArea_); break;
         case View::DiskHealth: DrawDiskHealth(contentArea_); break;
+        case View::Startup: DrawStartup(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -410,6 +411,10 @@ void App::DrawSidebar() {
         if (AssessDisk(d).level >= DiskHealthLevel::Warning) ++diskIssues;
     drawItem({View::DiskHealth, IC_DRIVE, L"Disk health", false,
               diskIssues ? util::FormatCount(diskIssues) + (diskIssues == 1 ? L" warning" : L" warnings") : L""});
+    size_t startupOn = 0;
+    for (auto& e : startup_.entries)
+        if (e.enabled && StartupVisible(e)) ++startupOn;
+    drawItem({View::Startup, IC_POWER, L"Startup", false, startupOn ? util::FormatCount(startupOn) : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
     drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 
@@ -1982,6 +1987,147 @@ void App::DrawDiskHealth(const RectF& area) {
         y += 76;
     }
     gfx_.PopClip();
+}
+
+void App::DrawStartup(const RectF& area) {
+    float top = area.top + 18;
+    size_t shown = 0, on = 0, off = 0, hidden = 0;
+    for (auto& e : startup_.entries) {
+        if (!StartupVisible(e)) {
+            ++hidden;
+            continue;
+        }
+        ++shown;
+        (e.enabled ? on : off) += 1;
+    }
+    std::wstring sub = !startupLoaded_ ? L"Run keys, Startup folders, scheduled tasks and services; turned off, never deleted"
+                                       : util::FormatCount(on) + (on == 1 ? L" entry starts with Windows" : L" entries start with Windows") +
+                                             (off ? L"  ·  " + util::FormatCount(off) + L" turned off" : L"") +
+                                             L"  ·  turning one off keeps it, so it can be turned on again";
+    float bx = area.right - 24;
+    {
+        float w = gfx_.Measure(L"Refresh", TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 54;
+        bx -= w;
+        Button(RWH(bx, top + 6, w, 34), IC_REFRESH, L"Refresh", CMD_STARTUP_REFRESH, 0);
+        bx -= 16;
+    }
+    DrawViewHeader(R(area.left + 24, top, bx, top + 46), L"Startup", sub, IC_POWER);
+    float y = top + 58;
+    if (!startupLoaded_) return;
+    {
+        float x = area.left + 24;
+        x += Chip(x, y, L"Show Microsoft's services and tasks", startupShowMs_, 40, 0) + 12;
+        std::wstring note = startup_.bootLogRead ? L"Impact: measured where Windows logged a slow start, else estimated (hover for why)"
+                                                 : L"Impact: estimated from program size and type (hover for why); measured needs admin";
+        gfx_.Text(note, R(x, y, area.right - 24, y + 30), P_.textFaint, Small(12, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+        y += 44;
+    }
+    if (!shown) {
+        DrawEmptyState(R(area.left, y, area.right, area.bottom), IC_POWER, L"Nothing starts with Windows",
+                       hidden ? L"Only Microsoft's own services and tasks were found." : L"No Run keys, Startup folder items, logon tasks or services were found.");
+        return;
+    }
+    std::vector<Column> cols = {{L"On", 44, Align::Left, -1},
+                                {L"Name", -1.2f, Align::Left, -1},
+                                {L"Publisher", 170, Align::Left, -1},
+                                {L"Where", 150, Align::Left, -1},
+                                {L"Impact", 110, Align::Left, -1},
+                                {L"Command", -1.0f, Align::Left, -1}};
+    DrawTable(
+        R(area.left, y, area.right, area.bottom), cols, -1, true,
+        [&](int i, const Column&, int ci, const RectF& cr, bool) {
+            size_t k = static_cast<size_t>(rows_[i].idx);
+            if (k >= startup_.entries.size()) return;
+            const StartupEntry& e = startup_.entries[k];
+            float cy = (cr.top + cr.bottom) / 2;
+            bool hoverCell = Hovered(HK_ROW, i) && mouseX_ >= cr.left && mouseX_ < cr.right;
+            switch (ci) {
+                case 0: {
+                    // On/off switch.
+                    RectF sw = RWH(cr.left, cy - 9, 34, 18);
+                    bool hv = Hovered(HK_SWITCH, static_cast<int>(k));
+                    D2D1_COLOR_F track = e.enabled ? P_.accent : (hv ? P_.surface3 : P_.surface2);
+                    if (!e.canToggle) track = WithAlpha(track, 0.4f);
+                    gfx_.FillRound(sw, 9, track);
+                    if (!e.enabled) gfx_.StrokeRound(sw, 9, hv && e.canToggle ? P_.accent : P_.textFaint, 1.2f);
+                    float kx = e.enabled ? sw.right - 16 : sw.left + 2;
+                    gfx_.FillRound(RWH(kx, sw.top + 2, 14, 14), 7, e.enabled ? P_.accentText : (e.canToggle ? P_.textDim : P_.textFaint));
+                    AddHit(Inset(sw, -4, -6), HK_SWITCH, static_cast<int>(k));
+                    if (hv) {
+                        tipText_ = !e.canToggle ? e.cantToggle
+                                   : e.enabled  ? std::wstring(L"Turn off at startup") + (StartupNeedsAdmin(e) ? L" (needs administrator permission)" : L"")
+                                                : std::wstring(L"Turn on at startup") + (StartupNeedsAdmin(e) ? L" (needs administrator permission)" : L"");
+                        tipAnchor_ = sw;
+                    }
+                    break;
+                }
+                case 1:
+                    gfx_.Text(e.display, cr, e.enabled ? P_.text : P_.textDim, TS(13, e.enabled ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL));
+                    if (hoverCell && e.display != e.name) {
+                        tipText_ = e.name;
+                        tipAnchor_ = cr;
+                    }
+                    break;
+                case 2: gfx_.Text(e.publisher.empty() ? L"unknown" : e.publisher, cr, e.publisher.empty() ? P_.textFaint : P_.textDim, Small(12.5f)); break;
+                case 3: {
+                    std::wstring w;
+                    switch (e.kind) {
+                        case StartupKind::Run: w = e.machine ? L"Run key · all users" : L"Run key · you"; break;
+                        case StartupKind::RunOnce: w = L"Run once"; break;
+                        case StartupKind::Folder: w = e.machine ? L"Startup folder · all" : L"Startup folder · you"; break;
+                        case StartupKind::Task: w = L"Task · " + e.trigger; break;
+                        case StartupKind::Service:
+                            w = !e.enabled ? L"Service · manual" : e.delayed ? L"Service · delayed" : L"Service · automatic";
+                            break;
+                    }
+                    gfx_.Text(w, cr, P_.textDim, Small(12.5f));
+                    if (hoverCell) {
+                        tipText_ = e.kind == StartupKind::Service ? L"Service " + e.name
+                                   : e.kind == StartupKind::Task  ? e.name
+                                                                  : e.where;
+                        if (!e.enabled && e.disabledAt) tipText_ += L"  ·  turned off " + AgeText(e.disabledAt);
+                        tipAnchor_ = cr;
+                    }
+                    break;
+                }
+                case 4: {
+                    D2D1_COLOR_F c = e.impact == StartupImpact::High     ? P_.danger
+                                     : e.impact == StartupImpact::Medium ? P_.warning
+                                     : e.impact == StartupImpact::Low    ? P_.textDim
+                                                                         : P_.textFaint;
+                    std::wstring t = StartupImpactName(e.impact);
+                    t[0] = static_cast<wchar_t>(towupper(t[0]));
+                    if (e.impact != StartupImpact::Unknown) t += e.measured ? L" · measured" : L" (est.)";
+                    gfx_.Text(t, cr, e.enabled ? c : P_.textFaint, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+                    if (hoverCell) {
+                        tipText_ = e.impactWhy;
+                        tipAnchor_ = cr;
+                    }
+                    break;
+                }
+                default:
+                    gfx_.Text(FitPath(e.command.empty() ? e.program : e.command, W(cr), 12), cr, e.programFound || e.program.empty() ? P_.textFaint : P_.warning,
+                              Small(12));
+                    if (hoverCell) {
+                        tipText_ = e.programFound ? e.program : e.program.empty() ? e.command : L"Not found: " + e.program;
+                        tipAnchor_ = cr;
+                    }
+            }
+        },
+        [&](int i, const RectF& r) {
+            int g = rows_[i].idx;
+            static const wchar_t* titles[] = {L"Run keys", L"Startup folders", L"Scheduled tasks", L"Services"};
+            static const wchar_t* notes[] = {
+                L"programs registered to start at sign-in; turned off in StartupApproved, as Task Manager does",
+                L"shortcuts and programs in the Startup folders; turned off in StartupApproved, the file stays",
+                L"tasks that run at log on or startup (\\Microsoft\\Windows\\ is left out); turned off in Task Scheduler",
+                L"services that start automatically; turned off = Manual start, which programs can still start"};
+            gfx_.Icon(IC_POWER, RWH(r.left + 8, r.top, 22, H(r)), P_.accent2, 13);
+            TextStyle ts = TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+            float tw = gfx_.Measure(titles[g & 3], ts) + 4;
+            gfx_.Text(titles[g & 3], R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
+            gfx_.Text(notes[g & 3], R(r.left + 48 + tw, r.top, r.right - 12, r.bottom), P_.textFaint, Small(12));
+        });
 }
 
 void App::DrawCleanup(const RectF& area) {

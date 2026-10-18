@@ -177,6 +177,23 @@ void App::BuildRows() {
                 }
             }
             break;
+        case View::Startup: {
+            // Groups: 0 Run keys (and Run once), 1 Startup folders, 2 scheduled tasks, 3 services.
+            auto group = [](StartupKind k) {
+                return k == StartupKind::Folder ? 1 : k == StartupKind::Task ? 2 : k == StartupKind::Service ? 3 : 0;
+            };
+            for (int g = 0; g < 4; ++g) {
+                bool any = false;
+                for (size_t i = 0; i < startup_.entries.size(); ++i) {
+                    const StartupEntry& e = startup_.entries[i];
+                    if (group(e.kind) != g || !StartupVisible(e)) continue;
+                    if (!any) rows_.push_back({nullptr, 0, RK_GROUP, g});
+                    any = true;
+                    rows_.push_back({nullptr, 0, RK_STARTUP, static_cast<int>(i)});
+                }
+            }
+            break;
+        }
         case View::CleanReview:
             if (reviewCat_ >= 0 && reviewCat_ < static_cast<int>(cleanup_.size()))
                 for (size_t i = 0; i < cleanup_[reviewCat_].entries.size(); ++i) rows_.push_back({nullptr, 0, RK_CLEAN, static_cast<int>(i)});
@@ -866,6 +883,115 @@ void App::WinToolAction(int action) {
         if (b == 1 && run) run();
     };
     ShowDialog(std::move(d));
+}
+
+// =============================================================================================
+// Startup: what starts with Windows (works without a scan). Turning something off never deletes
+// it: StartupApproved (as Task Manager), Task Scheduler's own switch, or Manual start for services.
+
+void App::LoadStartup() {
+    if (task_) return;
+    auto st = std::make_shared<StartupList>();
+    auto t = std::make_unique<Task>();
+    t->title = L"Looking at what starts with Windows";
+    t->lines = [] {
+        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Run keys, Startup folders, scheduled tasks, services"}};
+    };
+    t->onDone = [this, st] {
+        startup_ = std::move(*st);
+        startupLoaded_ = true;
+        // Within each group: highest impact first, then by name.
+        std::stable_sort(startup_.entries.begin(), startup_.entries.end(), [](const StartupEntry& a, const StartupEntry& b) {
+            if (a.impact != b.impact) return a.impact > b.impact;
+            return _wcsicmp(a.display.c_str(), b.display.c_str()) < 0;
+        });
+        lists_[static_cast<int>(View::Startup)].focus = -1;
+        rowsDirty_ = true;
+        Invalidate();
+    };
+    StartTask(std::move(t), [st] { *st = FindStartupEntries(); });
+}
+
+bool App::StartupVisible(const StartupEntry& e) const {
+    return startupShowMs_ || !e.microsoft || (e.kind != StartupKind::Service && e.kind != StartupKind::Task);
+}
+
+void App::OnStartupSwitch(int index) {
+    if (task_ || index < 0 || index >= static_cast<int>(startup_.entries.size())) return;
+    const StartupEntry& e = startup_.entries[index];
+    if (!e.canToggle) return Toast(e.cantToggle, 2);
+    bool enable = !e.enabled;
+    bool admin = StartupNeedsAdmin(e);
+    // This user's Run keys and Startup folder items flip at once, as in Task Manager; anything that
+    // needs administrator rights (or may: tasks) is confirmed first.
+    if (!admin && e.kind != StartupKind::Task && e.kind != StartupKind::Service) return ApplyStartupChange(index, enable);
+    Dialog d;
+    d.icon = 0xE7E8;
+    d.tone = enable ? 0 : 2;
+    d.title = std::wstring(enable ? L"Turn on " : L"Turn off ") + e.display + L" at startup?";
+    std::wstring adminNote = admin ? L" Windows asks for administrator permission." : L"";
+    switch (e.kind) {
+        case StartupKind::Task:
+            d.message = std::wstring(enable ? L"The task is enabled again in Task Scheduler." : L"The task is disabled in Task Scheduler, not deleted: it stops running at log on or startup until it is turned on again here or in Task Scheduler.") +
+                        L" If Task Scheduler doesn't let this account change it, Windows asks for administrator permission.";
+            break;
+        case StartupKind::Service:
+            d.message = enable ? L"Its start type is set back to " +
+                                     std::wstring(e.restoreStart == L"delayed-auto" ? L"Automatic (delayed start)" : L"Automatic") +
+                                     L", so it starts with Windows again." + adminNote
+                               : L"Its start type changes from " + std::wstring(e.delayed ? L"Automatic (delayed start)" : L"Automatic") +
+                                     L" to Manual: it no longer starts with Windows, but programs that need it can still start it. "
+                                     L"The previous start type is kept in the journal, so it can be set back here." + adminNote;
+            break;
+        default:
+            d.message = std::wstring(enable ? L"It is marked as enabled again" : L"It is marked as disabled") +
+                        L" in StartupApproved, exactly as Task Manager does it; the entry itself stays where it is." +
+                        std::wstring(e.machine ? L" It applies to every user of this PC." : L"") + adminNote;
+    }
+    d.lines.push_back(std::wstring(StartupKindName(e.kind)) + L"\t" + (e.kind == StartupKind::Task || e.kind == StartupKind::Service ? e.name : e.where));
+    if (!e.command.empty()) d.lines.push_back(L"Runs\t" + e.command);
+    d.buttons = {L"Cancel", enable ? L"Turn on" : L"Turn off"};
+    d.primary = 1;
+    std::wstring name = e.name;
+    d.onClose = [this, index, enable, name](int b, bool) {
+        if (b == 1 && index < static_cast<int>(startup_.entries.size()) && startup_.entries[index].name == name) ApplyStartupChange(index, enable);
+    };
+    ShowDialog(std::move(d));
+}
+
+void App::ApplyStartupChange(int index, bool enable) {
+    if (task_ || index < 0 || index >= static_cast<int>(startup_.entries.size())) return;
+    struct State {
+        StartupEntry e;
+        StartupChange r;
+    };
+    auto st = std::make_shared<State>();
+    st->e = startup_.entries[index];
+    auto t = std::make_unique<Task>();
+    t->title = enable ? L"Turning on at startup" : L"Turning off at startup";
+    t->lines = [st] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", st->e.display}}; };
+    t->onDone = [this, st, index, enable] {
+        if (!st->r.ok) return Toast(st->r.error, st->r.declined ? 2 : 1);
+        if (index < static_cast<int>(startup_.entries.size()) && startup_.entries[index].name == st->e.name) {
+            StartupEntry& e = startup_.entries[index];
+            e.enabled = enable;
+            e.disabledAt = enable ? 0 : util::NowFileTime();
+            if (e.kind == StartupKind::Service) {
+                if (enable) {
+                    e.startType = SERVICE_AUTO_START;
+                    e.delayed = e.restoreStart == L"delayed-auto";
+                    e.restoreStart.clear();
+                } else {
+                    e.startType = SERVICE_DEMAND_START;
+                    e.restoreStart = e.delayed ? L"delayed-auto" : L"auto";
+                }
+            }
+        }
+        Toast(std::wstring(enable ? L"Turned on at startup: " : L"Turned off at startup: ") + st->e.display +
+                  (enable ? L"" : L" · turn it on again here any time"),
+              0);
+    };
+    StartTask(std::move(t), [st, enable] { st->r = SetStartupEnabled(st->e, enable); });
 }
 
 // =============================================================================================
@@ -1936,7 +2062,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
-        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::CleanReview && v != View::DiskHealth && !root_)
+        v != View::Wsl && v != View::WinTools && v != View::Games && v != View::Startup && v != View::CleanReview && v != View::DiskHealth && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -1974,6 +2100,9 @@ void App::ShowView(View v) {
             break;
         case View::DiskHealth:
             if (!diskLoaded_) LoadDiskHealth();
+            break;
+        case View::Startup:
+            if (!startupLoaded_) LoadStartup();
             break;
         default: break;
     }
@@ -2023,6 +2152,16 @@ void App::OpenRow(int row) {
     if (view_ == View::Games) {
         if (r.kind == RK_GAME && r.idx < static_cast<int>(games_.size()) && !games_[r.idx].folder.empty())
             OpenWithDefault(games_[r.idx].folder);
+        return;
+    }
+    if (view_ == View::Startup) {
+        if (r.kind == RK_STARTUP && r.idx < static_cast<int>(startup_.entries.size())) {
+            const StartupEntry& e = startup_.entries[r.idx];
+            if (e.programFound)
+                RevealInExplorer(e.program);
+            else
+                Toast(e.program.empty() ? L"No program to show" : L"Not found: " + e.program, 2);
+        }
         return;
     }
     if (view_ == View::AiModels) {
@@ -2381,6 +2520,7 @@ void App::OnCommand(int cmd) {
         case CMD_GAME_UNINSTALL: StartGameUninstall(); break;
         case CMD_GAMES_DELETE: StartGameLeftoversDelete(); break;
         case CMD_DISK_REFRESH: LoadDiskHealth(); break;
+        case CMD_STARTUP_REFRESH: LoadStartup(); break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE:
             MeasureCleanup();

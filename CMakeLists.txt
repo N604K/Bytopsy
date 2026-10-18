@@ -28,10 +28,11 @@ add_library(winncdu_core STATIC
   src/games.cpp
   src/diskhealth.cpp
   src/schedule.cpp
+  src/startup.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32 version wevtapi)
 
 # SQLite (public domain, https://www.sqlite.org), for reading and editing browsers' cookie and
 # history databases. Third-party code: compiled as C, its warnings are not ours to fix.
@@ -205,5 +206,13 @@ if(MSVC)
   target_compile_options(winncdu-schedule-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME schedule COMMAND winncdu-schedule-test)
+
+# Startup manager (StartupApproved values, command lines, journal notes; never changes anything): build/winncdu-startup-test.exe
+add_executable(winncdu-startup-test tests/startup_test.cpp)
+target_link_libraries(winncdu-startup-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-startup-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME startup COMMAND winncdu-startup-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

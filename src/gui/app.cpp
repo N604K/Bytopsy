@@ -307,7 +307,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
                             hover_.kind == HK_CARD || hover_.kind == HK_RECENT || hover_.kind == HK_CHIP ||
                             hover_.kind == HK_CRUMB || hover_.kind == HK_CHECK || hover_.kind == HK_SNAPSHOT ||
                             hover_.kind == HK_DIALOG || hover_.kind == HK_RESTORE || hover_.kind == HK_REVIEW ||
-                            hover_.kind == HK_DIALOG_CHOICE;
+                            hover_.kind == HK_DIALOG_CHOICE || hover_.kind == HK_SWITCH;
                 SetCursor(LoadCursorW(nullptr, link ? IDC_HAND : IDC_ARROW));
                 return TRUE;
             }
@@ -413,6 +413,13 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
             if (view_ == View::CleanReview) {
                 // A click toggles the check; a double-click shows the item (and undoes its first click).
                 ToggleKeep(hit.a);
+                if (dbl) OpenRow(hit.a);
+                break;
+            }
+            if (view_ == View::Startup) {
+                // A click focuses the row; its switch turns it off/on; a double-click shows the program.
+                if (hit.a >= 0 && hit.a < static_cast<int>(rows_.size()) && rows_[hit.a].kind == RK_STARTUP)
+                    lists_[static_cast<int>(view_)].focus = hit.a;
                 if (dbl) OpenRow(hit.a);
                 break;
             }
@@ -524,11 +531,19 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 gamesByAge_ = hit.b != 0;
                 SortGames();
             }
+            if (hit.a == 40) {  // Startup: "Show Microsoft's"
+                startupShowMs_ = !startupShowMs_;
+                lists_[static_cast<int>(View::Startup)].focus = -1;
+                rowsDirty_ = true;
+            }
             break;
         case HK_CHECK:
             if (hit.a >= 0 && hit.a < static_cast<int>(cleanup_.size())) cleanup_[hit.a].selected = !cleanup_[hit.a].selected;
             break;
         case HK_RESTORE: RestoreDeleted(hit.a); break;
+        case HK_SWITCH:
+            if (!dbl) OnStartupSwitch(hit.a);
+            break;
         case HK_REVIEW:
             reviewCat_ = hit.a;
             lists_[static_cast<int>(View::CleanReview)] = ListState{};
@@ -710,6 +725,10 @@ void App::OnKeyDown(WPARAM vk) {
                 ToggleWslRow(ls.focus);
             else if (view_ == View::Games)
                 OnGameRow(ls.focus);
+            else if (view_ == View::Startup) {
+                if (ls.focus >= 0 && ls.focus < static_cast<int>(rows_.size()) && rows_[ls.focus].kind == RK_STARTUP)
+                    OnStartupSwitch(rows_[ls.focus].idx);
+            }
             else if (ls.focus >= 0)
                 SelectRow(ls.focus, true, false);
             break;

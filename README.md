@@ -92,6 +92,22 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   that rate) from free-space measurements WinNCDU notes in `%LOCALAPPDATA%\WinNCDU\freespace.log`
   when the view opens or a scan finishes, or else from earlier scans of the drive. The disks are
   only queried (handles opened without read or write access); nothing is ever sent to them.
+- **Startup** (works without a scan): what starts with Windows: the Run keys (this user, all users,
+  32-bit), Run once entries, both Startup folders, scheduled tasks with an "at log on" or "at
+  startup" trigger (Windows' own `\Microsoft\Windows\` tasks are left out), and services that start
+  automatically. Each row shows the program's publisher, where it is registered, the command and an
+  impact. Turning an entry off never deletes it: Run keys and Startup folder items are marked
+  disabled in `StartupApproved` exactly as Task Manager does it (so Task Manager agrees), tasks are
+  disabled in Task Scheduler, and services are set to Manual start, with the previous start type
+  kept in the journal so turning it on sets it back. This user's Run and Startup folder entries flip
+  at once; anything for all users, tasks and services are confirmed first and ask for
+  administrator permission when needed. Microsoft's own services are only shown (behind "Show
+  Microsoft's services and tasks"), never changed; Run once entries are only listed. *Impact* is
+  honest about what it is: measured when Windows' boot performance log (Diagnostics-Performance,
+  events 101/103) recorded the program slowing a boot, which needs administrator rights to read;
+  otherwise an estimate from the program file's size and type (Electron/Chromium apps high, small
+  updaters and delayed-start services low), and "unknown" when the program file or its size isn't
+  there. Hover the impact to see why. Every change is journaled.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -258,7 +274,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth and schedule self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule and startup self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -305,6 +321,8 @@ winncdu-cli [options] [path]
                         it and append a line to cleanup.log. Exit code 0 = done,
                         1 = some items in use, 2 = bad ids, 3 = all skipped (admin)
     --quiet             ...print nothing (used by the scheduled task)
+  --startup             List what starts with Windows (Run keys, Startup folders,
+                        logon/boot tasks, services) with impact estimates, and exit
 ```
 
 Examples:
@@ -371,6 +389,7 @@ src/                  core engine + terminal app
   games.cpp           games of every launcher, uninstall through the launcher, leftovers
   diskhealth.cpp      disk health: WMI storage, NVMe health log, TRIM, used-space trends
   schedule.cpp        scheduled cleanup: --clean arguments, Task Scheduler task, cleanup.log
+  startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -399,6 +418,7 @@ tests/export_test.cpp   ncdu JSON round trips with odd names and flags, Linux nc
 tests/importfuzz_test.cpp fuzzing the ncdu JSON importer with mutated exports, fixed seed (ctest)
 tests/diskhealth_test.cpp disk health: WMI/fsutil/NVMe log parsing, verdicts, used-space trends (ctest)
 tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --clean --yes on a fixture (ctest)
+tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified
