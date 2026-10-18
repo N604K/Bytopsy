@@ -106,7 +106,8 @@ int main() {
     auto found = FindDevJunk(root.get());
     std::wstring all;
     for (auto& p : found) all += p.dir->name + L"(" + Names(&p) + L") ";
-    Check(found.size() == 6, L"6 projects: " + all);
+    // A build inside a dot folder (.claude\worktrees\...) counts as a tool's folder: nothing is found.
+    Check(found.size() == 6, L"6 projects (build outside folders like .git or AppData): " + all);
 
     const DevProject* web = Project(found, L"web");
     Check(web && Names(web) == L"node_modules .next ", L"web: node_modules (largest first) and .next, nothing nested: " + Names(web));
@@ -124,7 +125,7 @@ int main() {
           L"Python: __pycache__ grouped under the project, .venv: " + py);
     Check(!Project(found, L"loose") && !Project(found, L"random") && !Project(found, L"ext"),
           L"not listed: node_modules without package.json, a plain build folder, an editor extension");
-    Check(DevProjectSize(*web, false) >= 100000, L"sizes add up");
+    Check(web && DevProjectSize(*web, false) >= 100000, L"sizes add up");
 
     // The same projects inside AppData belong to installed programs: nothing is listed.
     wchar_t tb[MAX_PATH];
