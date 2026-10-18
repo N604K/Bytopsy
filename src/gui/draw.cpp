@@ -393,7 +393,9 @@ void App::DrawSidebar() {
     gfx_.Fill(R(kSidebarW - 1, kTopH, kSidebarW, sb.bottom), P_.border);
     // The items get closer together when the window is short, and the sidebar scrolls (mouse wheel)
     // when even that isn't enough.
-    const int itemCount = 8 + (searchQuery_.empty() ? 0 : 1) + 10;
+    // How many items there are is counted while drawing them (last frame's count; it repaints when that changed).
+    const int itemCount = std::max(1, sidebarItems_);
+    int drawnItems = 0;
     const float fixedH = 14 + (root_ ? 90.0f : 0.0f) + 10 + 24 + 10;
     float step = std::clamp((H(sb) - fixedH) / itemCount, 30.0f, 38.0f);
     float contentH = fixedH + itemCount * step;
@@ -471,6 +473,7 @@ void App::DrawSidebar() {
                 AccDisabled(r, HK_NAV, static_cast<int>(it.v));
         }
         y += step;
+        ++drawnItems;
     };
     for (auto& it : items) drawItem(it);
     y += 10;
@@ -529,6 +532,10 @@ void App::DrawSidebar() {
         }
     }
     gfx_.PopClip();
+    if (drawnItems != sidebarItems_) {
+        sidebarItems_ = drawnItems;
+        Invalidate();
+    }
 }
 
 void App::DrawStatusBar() {
