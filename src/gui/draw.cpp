@@ -250,6 +250,7 @@ void App::Paint() {
         case View::Wsl: DrawWsl(contentArea_); break;
         case View::WinTools: DrawWinTools(contentArea_); break;
         case View::Games: DrawGames(contentArea_); break;
+        case View::DiskHealth: DrawDiskHealth(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -403,6 +404,11 @@ void App::DrawSidebar() {
     uint64_t gamesTotal = 0;
     for (auto& g : games_) gamesTotal += g.bytes;
     drawItem({View::Games, IC_GAME, L"Games", false, gamesTotal ? util::FormatSizeShort(gamesTotal) : L""});
+    size_t diskIssues = 0;
+    for (auto& d : disk_.disks)
+        if (AssessDisk(d).level >= DiskHealthLevel::Warning) ++diskIssues;
+    drawItem({View::DiskHealth, IC_DRIVE, L"Disk health", false,
+              diskIssues ? util::FormatCount(diskIssues) + (diskIssues == 1 ? L" warning" : L" warnings") : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
     drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 
@@ -1734,6 +1740,247 @@ void App::DrawGames(const RectF& area) {
             gfx_.Text(title, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
             gfx_.Text(note, R(r.left + 48 + tw, r.top, r.right - 12, r.bottom), P_.textFaint, Small(12));
         });
+}
+
+void App::DrawDiskHealth(const RectF& area) {
+    float top = area.top + 18;
+    Button(RWH(area.right - 24 - 108, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_DISK_REFRESH, 0);
+    DrawViewHeader(R(area.left + 24, top, area.right - 150, top + 46), L"Disk health",
+                   L"Each physical disk's health, wear and temperature, and used space over time  ·  read-only, works without a scan",
+                   IC_DRIVE);
+    if (!diskLoaded_) return;
+
+    auto levelColor = [&](DiskHealthLevel l) {
+        switch (l) {
+            case DiskHealthLevel::Healthy: return P_.success;
+            case DiskHealthLevel::Warning: return P_.warning;
+            case DiskHealthLevel::Unhealthy: return P_.danger;
+            default: return P_.textFaint;
+        }
+    };
+    struct Metric {
+        std::wstring label, value, sub;
+        D2D1_COLOR_F color;
+        double bar = -1;  // 0..1: a small gauge under the value, in barColor
+        D2D1_COLOR_F barColor{};
+    };
+    struct Card {
+        const PhysicalDisk* d;
+        DiskVerdict v;
+        std::wstring sub;
+        std::vector<Metric> metrics;
+        std::wstring noCounters;
+        float h;
+    };
+    std::vector<Card> cards;
+    bool needAdmin = false;
+    for (auto& d : disk_.disks) {
+        Card c{&d, AssessDisk(d), L"", {}, L"", 0};
+        c.sub = MediaName(d) + L"  ·  " + util::FormatSizeShort(d.size) + L"  ·  disk " + std::to_wstring(d.number);
+        if (d.drives.empty()) {
+            c.sub += L"  ·  no drive letters";
+        } else {
+            std::wstring list;
+            for (size_t i = 0; i < d.drives.size(); ++i)
+                list += (i == 0 ? L"" : i + 1 == d.drives.size() ? L" and " : L", ") + d.drives[i];
+            c.sub += L"  ·  " + list + (d.drives.size() == 1 ? L" is on it" : L" are on it");
+        }
+        if (d.HasCounters()) {
+            if (d.wear >= 0)
+                c.metrics.push_back({L"WEAR", std::to_wstring(d.wear) + L"%", L"of rated life",
+                                     d.wear >= 100 ? P_.danger : d.wear >= 90 ? P_.warning : P_.text, std::min(1.0, d.wear / 100.0),
+                                     d.wear >= 90 ? P_.warning : P_.accent});
+            if (d.temperature > 0) {
+                bool hot = d.temperatureMax > 0 && d.temperature >= d.temperatureMax;
+                c.metrics.push_back({L"TEMPERATURE", std::to_wstring(d.temperature) + L" °C",
+                                     d.temperatureMax > 0 ? L"limit " + std::to_wstring(d.temperatureMax) + L" °C" : L"",
+                                     hot ? P_.danger : d.temperature >= 60 ? P_.warning : P_.text});
+            }
+            if (d.powerOnHours >= 0) {
+                wchar_t yrs[48];
+                double y = d.powerOnHours / 8766.0;
+                if (y >= 1)
+                    swprintf(yrs, 48, L"%.1f years", y);
+                else
+                    swprintf(yrs, 48, L"%lld days", static_cast<long long>(d.powerOnHours / 24));
+                c.metrics.push_back({L"POWERED ON", util::FormatCount(static_cast<uint64_t>(d.powerOnHours)) + L" h", yrs, P_.text});
+            }
+            int64_t errs = d.mediaErrors >= 0 ? d.mediaErrors
+                                              : std::max<int64_t>(0, d.readErrorsUncorrected) + std::max<int64_t>(0, d.writeErrorsUncorrected);
+            bool errKnown = d.mediaErrors >= 0 || d.readErrorsUncorrected >= 0 || d.writeErrorsUncorrected >= 0;
+            if (errKnown)
+                c.metrics.push_back({L"ERRORS", errs ? util::FormatCount(static_cast<uint64_t>(errs)) : L"None",
+                                     d.mediaErrors >= 0 ? L"media errors" : L"uncorrected reads/writes", errs ? P_.warning : P_.text});
+            if (d.availableSpare >= 0)
+                c.metrics.push_back({L"SPARE", std::to_wstring(d.availableSpare) + L"%",
+                                     L"warns at " + std::to_wstring(d.spareThreshold) + L"%",
+                                     d.availableSpare <= d.spareThreshold ? P_.danger : d.availableSpare <= d.spareThreshold + 10 ? P_.warning : P_.text,
+                                     d.availableSpare / 100.0, d.availableSpare <= d.spareThreshold + 10 ? P_.warning : P_.accent});
+            if (d.bytesWritten) c.metrics.push_back({L"WRITTEN", util::FormatSizeShort(d.bytesWritten), L"lifetime", P_.text});
+        } else {
+            c.noCounters = d.countersDenied ? L"Restart as administrator to see wear and temperature"
+                                            : L"This disk doesn't report wear or temperature to Windows";
+            needAdmin |= d.countersDenied;
+        }
+        if (d.Ssd()) {
+            int on = -1;  // all its file systems: 1 on, 0 off somewhere
+            std::wstring fsList;
+            for (auto& fs : d.fileSystems) {
+                int t = TrimFor(disk_.trim, fs);
+                if (t < 0) continue;
+                on = on == 0 ? 0 : t;
+                if (fsList.find(fs) == std::wstring::npos) fsList += (fsList.empty() ? L"" : L", ") + fs;
+            }
+            if (on >= 0)
+                c.metrics.push_back({L"TRIM", on ? L"On" : L"Off", fsList, on ? P_.success : P_.warning});
+            if (on == 0)
+                c.v.notes.push_back(L"TRIM is off: Windows doesn't tell the SSD which blocks are free, so it slows down over time. "
+                                    L"`fsutil behavior set DisableDeleteNotify 0` (as administrator) turns it on");
+        } else if (d.mediaType == 3) {
+            c.metrics.push_back({L"TRIM", L"Not used", L"hard disks don't need it", P_.textDim});
+        }
+        c.h = 84 + (c.metrics.empty() && c.noCounters.empty() ? 0 : 62) + (c.v.problems.size() + c.v.notes.size()) * 24.0f + 12;
+        cards.push_back(std::move(c));
+    }
+
+    float y = top + 62;
+    RectF body = R(area.left, y, area.right, area.bottom);
+    ListState& ls = lists_[static_cast<int>(View::DiskHealth)];
+    float contentH = (needAdmin && !elevated_ ? 64.0f : 0.0f) + (disk_.error.empty() ? 0.0f : 64.0f) + 46 + 20;
+    for (auto& c : cards) contentH += c.h + 12;
+    contentH += diskTrends_.size() * 76.0f + 60;
+    ls.scroll = std::clamp(ls.scroll, 0.0f, std::max(0.0f, contentH - H(body)));
+    gfx_.PushClip(body);
+    y -= ls.scroll;
+    auto banner = [&](const std::wstring& text, D2D1_COLOR_F tone, bool adminButton) {
+        RectF b = R(area.left + 24, y, area.right - 24, y + 52);
+        gfx_.FillRound(b, 10, WithAlpha(tone, 0.12f));
+        gfx_.Icon(adminButton ? IC_SHIELD : IC_WARN, RWH(b.left + 10, b.top, 30, H(b)), tone, 16);
+        gfx_.Text(text, R(b.left + 46, b.top, b.right - (adminButton ? 200 : 12), b.bottom), P_.text, TS(13));
+        if (adminButton) Button(R(b.right - 190, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, L"Restart as admin", CMD_ADMIN, 0);
+        y += 64;
+    };
+    if (!disk_.error.empty()) banner(disk_.error, P_.danger, false);
+    if (needAdmin && !elevated_)
+        banner(L"Wear, temperature and error counts of some disks need administrator rights. Nothing is changed either way.", P_.warning,
+               true);
+
+    gfx_.Text(L"PHYSICAL DISKS", R(area.left + 26, y + 10, area.right, y + 30), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    y += 36;
+    if (cards.empty()) {
+        gfx_.Text(disk_.error.empty() ? L"Windows lists no physical disks." : L"No disk information.", R(area.left + 26, y, area.right, y + 30),
+                  P_.textDim, TS(13));
+        y += 40;
+    }
+    for (auto& c : cards) {
+        const PhysicalDisk& d = *c.d;
+        RectF card = R(area.left + 24, y, area.right - 24, y + c.h);
+        gfx_.FillRound(card, 12, P_.surface);
+        gfx_.StrokeRound(card, 12, P_.border);
+        D2D1_COLOR_F lc = levelColor(c.v.level);
+        float x = card.left + 18;
+        gfx_.FillRound(RWH(x, card.top + 18, 40, 40), 10, WithAlpha(lc, 0.16f));
+        gfx_.Icon(IC_DRIVE, RWH(x, card.top + 18, 40, 40), lc, 17);
+        x += 54;
+        // Health pill
+        std::wstring pill = HealthLevelName(c.v.level);
+        float pw = gfx_.Measure(pill, TS(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 30;
+        RectF pr = RWH(card.right - 18 - pw, card.top + 20, pw, 28);
+        gfx_.FillRound(pr, 14, WithAlpha(lc, 0.16f));
+        gfx_.FillCircle(pr.left + 12, (pr.top + pr.bottom) / 2, 3.5f, lc);
+        gfx_.Text(pill, R(pr.left + 20, pr.top, pr.right, pr.bottom), lc, TS(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(d.model, R(x, card.top + 14, pr.left - 12, card.top + 38), P_.text, TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        std::wstring status;
+        for (int s : d.opStatus)
+            if (s != 2) status += L"  ·  " + OpStatusName(s);
+        gfx_.Text(c.sub + status, R(x, card.top + 38, pr.left - 12, card.top + 60), P_.textDim, Small(12.5f));
+        float my = card.top + 76;
+        if (!c.noCounters.empty()) {
+            RectF nr = R(card.left + 18, my, card.right - 18, my + 50);
+            gfx_.FillRound(nr, 8, P_.surface2);
+            gfx_.Icon(d.countersDenied ? IC_SHIELD : IC_INFO, RWH(nr.left + 8, nr.top, 28, H(nr)), d.countersDenied ? P_.warning : P_.textFaint, 14);
+            // TRIM still shows at the right.
+            float right = nr.right - 12;
+            for (auto& m : c.metrics) {
+                std::wstring t = L"TRIM " + m.value + (m.sub.empty() ? L"" : L" (" + m.sub + L")");
+                gfx_.Text(t, R(nr.left, nr.top, right, nr.bottom), m.color, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+            }
+            gfx_.Text(c.noCounters, R(nr.left + 40, nr.top, right - 160, nr.bottom), P_.textDim, TS(13));
+            my += 62;
+        } else if (!c.metrics.empty()) {
+            float mw = (W(card) - 36) / static_cast<float>(std::max<size_t>(c.metrics.size(), 4));
+            float mx = card.left + 18;
+            for (auto& m : c.metrics) {
+                RectF mr = RWH(mx, my, mw - 10, 50);
+                gfx_.FillRound(mr, 8, P_.surface2);
+                gfx_.Text(m.label, R(mr.left + 12, mr.top + 4, mr.right - 6, mr.top + 18), P_.textFaint, Small(10, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+                TextStyle vs = TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+                float vw = gfx_.Measure(m.value, vs) + 6;
+                gfx_.Text(m.value, R(mr.left + 12, mr.top + 18, mr.left + 12 + vw, mr.top + 38), m.color, vs);
+                gfx_.Text(m.sub, R(mr.left + 16 + vw, mr.top + 18, mr.right - 6, mr.top + 38), P_.textFaint, Small(11.5f));
+                if (m.bar >= 0) {
+                    RectF track = R(mr.left + 12, mr.bottom - 9, mr.right - 12, mr.bottom - 5);
+                    gfx_.FillRound(track, 2, P_.track);
+                    gfx_.FillRound(R(track.left, track.top, track.left + static_cast<float>(W(track) * std::clamp(m.bar, 0.0, 1.0)), track.bottom),
+                                   2, m.barColor);
+                }
+                mx += mw;
+            }
+            my += 62;
+        }
+        auto line = [&](const std::wstring& t, wchar_t icon, D2D1_COLOR_F ic) {
+            gfx_.Icon(icon, RWH(card.left + 18, my, 20, 22), ic, 12);
+            gfx_.Text(t, R(card.left + 44, my, card.right - 18, my + 22), P_.text, Small(12.5f));
+            my += 24;
+        };
+        for (auto& p : c.v.problems) line(p, IC_WARN, c.v.level == DiskHealthLevel::Unhealthy ? P_.danger : P_.warning);
+        for (auto& n : c.v.notes) line(n, IC_INFO, P_.warning);
+        y += c.h + 12;
+    }
+
+    // Used space over time
+    y += 8;
+    gfx_.Text(L"USED SPACE OVER TIME", R(area.left + 26, y, area.right, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+    gfx_.Text(L"WinNCDU notes each drive's free space when this view opens or a scan finishes", R(area.left + 200, y, area.right - 26, y + 20),
+              P_.textFaint, Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
+    y += 28;
+    for (auto& t : diskTrends_) {
+        RectF r = R(area.left + 24, y, area.right - 24, y + 66);
+        gfx_.FillRound(r, 12, P_.surface);
+        gfx_.StrokeRound(r, 12, P_.border);
+        std::wstring name = t.drive + L"  " + (t.label.empty() ? L"Local disk" : t.label);
+        gfx_.Text(name, R(r.left + 18, r.top + 10, r.left + 260, r.top + 32), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        uint64_t used = t.total >= t.free ? t.total - t.free : 0;
+        gfx_.Text(util::FormatSizeShort(used) + L" of " + util::FormatSizeShort(t.total) + L" used", R(r.left + 18, r.top + 34, r.left + 260, r.top + 56),
+                  P_.textDim, Small(12.5f));
+        // Sparkline
+        RectF sp = R(r.left + 270, r.top + 12, r.left + 270 + 200, r.bottom - 12);
+        const auto& pts = t.trend.points;
+        if (t.trend.ok && pts.size() >= 2) {
+            gfx_.FillRound(Inset(sp, -6, -2), 6, P_.surface2);
+            uint64_t lo = UINT64_MAX, hi = 0;
+            for (auto& p : pts) {
+                lo = std::min(lo, p.used);
+                hi = std::max(hi, p.used);
+            }
+            double t0 = static_cast<double>(pts.front().time), t1 = static_cast<double>(pts.back().time);
+            auto px = [&](const UsagePoint& p) { return sp.left + static_cast<float>((p.time - t0) / std::max(1.0, t1 - t0) * W(sp)); };
+            auto py = [&](const UsagePoint& p) {
+                return hi == lo ? (sp.top + sp.bottom) / 2 : sp.bottom - static_cast<float>(static_cast<double>(p.used - lo) / (hi - lo) * H(sp));
+            };
+            D2D1_COLOR_F lc = t.fromScans ? P_.accent2 : P_.accent;
+            for (size_t i = 1; i < pts.size(); ++i) gfx_.Line(px(pts[i - 1]), py(pts[i - 1]), px(pts[i]), py(pts[i]), lc, 1.6f);
+            gfx_.FillCircle(px(pts.back()), py(pts.back()), 3, lc);
+        }
+        float tx = t.trend.ok ? sp.right + 18 : r.left + 270;
+        gfx_.Text(t.text, R(tx, r.top + 10, r.right - 18, r.top + 34), t.trend.ok ? P_.text : P_.textDim, TS(13));
+        std::wstring src = !t.trend.ok ? L"A trend needs measurements a day or more apart"
+                           : t.fromScans ? L"From " + util::FormatCount(t.samples) + L" scans of " + t.drive + L"\\ (the size of the files they found)"
+                                         : L"From " + util::FormatCount(t.samples) + L" free-space measurements";
+        gfx_.Text(src, R(tx, r.top + 34, r.right - 18, r.top + 56), P_.textFaint, Small(12));
+        y += 76;
+    }
+    gfx_.PopClip();
 }
 
 void App::DrawCleanup(const RectF& area) {

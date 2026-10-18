@@ -14,6 +14,7 @@
 #include "../aimodels.h"
 #include "../analysis.h"
 #include "../devjunk.h"
+#include "../diskhealth.h"
 #include "../fsops.h"
 #include "../games.h"
 #include "../journal.h"
@@ -29,7 +30,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, CleanReview, DiskHealth, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -93,6 +94,7 @@ enum Cmd : int {
     CMD_GAMES_REFRESH,
     CMD_GAME_UNINSTALL,
     CMD_GAMES_DELETE,
+    CMD_DISK_REFRESH,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 
@@ -269,6 +271,7 @@ private:
     uint64_t WslRowBytes(int id) const;
     void LoadWinTools();
     void LoadGames();
+    void LoadDiskHealth();
     void SortGames();
     void OnGameRow(int row);
     void StartGameUninstall();
@@ -329,6 +332,7 @@ private:
     void DrawWsl(const RectF& area);
     void DrawWinTools(const RectF& area);
     void DrawGames(const RectF& area);
+    void DrawDiskHealth(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -427,6 +431,9 @@ private:
     bool gamesByAge_ = false;       // least recently played first instead of largest
     int gameChosen_ = -1;           // the installed game the Uninstall button acts on
     std::set<size_t> gameLeftSel_;  // checked leftovers
+    DiskHealthReport disk_;
+    std::vector<DriveTrend> diskTrends_;
+    bool diskLoaded_ = false;
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

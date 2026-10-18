@@ -81,6 +81,17 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   itself there. Steam runtimes (redistributables, Proton) are not listed. *Leftovers* are what
   launchers leave behind: game folders, workshop items and shader caches of games that are no
   longer installed; they go to the Recycle Bin.
+- **Disk health** (works without a scan, read-only): one card per physical disk with its model,
+  type (NVMe / SATA SSD, hard disk, USB), Windows' own verdict (`MSFT_PhysicalDisk` health and
+  operational status), wear, temperature against the drive's limit, power-on hours, error counts,
+  spare blocks, data written, TRIM state, and which drive letters live on it. Wear and temperature
+  come from `MSFT_StorageReliabilityCounter` (needs administrator rights) and, for NVMe drives,
+  from the drive's own SMART / health log, which Windows hands out without them. TRIM comes from
+  `fsutil behavior query DisableDeleteNotify`. *Used space over time* shows each drive's trend
+  ("used space grew 12 GiB in the last 30 days", with a sparkline and when it would be full at
+  that rate) from free-space measurements WinNCDU notes in `%LOCALAPPDATA%\WinNCDU\freespace.log`
+  when the view opens or a scan finishes, or else from earlier scans of the drive. The disks are
+  only queried (handles opened without read or write access); nothing is ever sent to them.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -223,7 +234,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export and importfuzz self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz and diskhealth self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -261,6 +272,8 @@ winncdu-cli [options] [path]
                         Restore, event logs) and exit
   --games               List installed games of every launcher (size, last played)
                         and leftovers of uninstalled ones, and exit
+  --disks               List physical disks (health, wear, temperature, TRIM, drive
+                        letters) and each drive's used-space trend, and exit
 ```
 
 Examples:
@@ -325,6 +338,7 @@ src/                  core engine + terminal app
   vdisks.cpp          WSL and Docker virtual disks: usage, compaction, Docker prune
   wintools.cpp        Windows: component store, old drivers, System Restore, hibernation, ...
   games.cpp           games of every launcher, uninstall through the launcher, leftovers
+  diskhealth.cpp      disk health: WMI storage, NVMe health log, TRIM, used-space trends
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -350,6 +364,7 @@ tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, la
 tests/analysis_test.cpp search syntax, largest files, file types, duplicates on real files (ctest)
 tests/export_test.cpp   ncdu JSON round trips with odd names and flags, Linux ncdu input, CSV (ctest)
 tests/importfuzz_test.cpp fuzzing the ncdu JSON importer with mutated exports, fixed seed (ctest)
+tests/diskhealth_test.cpp disk health: WMI/fsutil/NVMe log parsing, verdicts, used-space trends (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```
