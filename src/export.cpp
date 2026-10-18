@@ -72,9 +72,9 @@ private:
     bool failed_ = false;
 };
 
-void WriteInfo(Out& o, const Node* n) {
+void WriteInfo(Out& o, const Node* n, bool top) {
     o.Raw("{\"name\":");
-    o.JsonStr(n->name);
+    o.JsonStr(top ? NodePath(n) : n->name);  // ncdu names the top folder by its full path
     if (!n->IsDir() || n->Has(NF_LINK | NF_EXCLUDED)) {
         uint64_t as = n->Has(NF_HARDLINK) ? 0 : n->size;
         uint64_t ds = n->Has(NF_HARDLINK) ? 0 : n->disk;
@@ -97,18 +97,19 @@ void WriteInfo(Out& o, const Node* n) {
     o.Ch('}');
 }
 
-void WriteNode(Out& o, const Node* n, std::atomic<uint64_t>& count) {
+// The top folder is always written as a folder: an export that doesn't start with one can't be read.
+void WriteNode(Out& o, const Node* n, std::atomic<uint64_t>& count, bool top = false) {
     ++count;
-    if (n->IsDir() && !n->Has(NF_LINK | NF_EXCLUDED)) {
+    if (n->IsDir() && (top || !n->Has(NF_LINK | NF_EXCLUDED))) {
         o.Ch('[');
-        WriteInfo(o, n);
+        WriteInfo(o, n, top);
         for (const auto& c : n->children) {
             o.Raw(",\n");
             WriteNode(o, c.get(), count);
         }
         o.Ch(']');
     } else {
-        WriteInfo(o, n);
+        WriteInfo(o, n, top);
     }
 }
 
@@ -145,7 +146,7 @@ bool ExportNcduJson(const Node* root, const std::wstring& file, std::atomic<uint
         o.Raw("[1,2,{\"progname\":\"winncdu\",\"progver\":\"" WINNCDU_VERSION_A "\",\"timestamp\":");
         o.SNum(static_cast<int64_t>(time(nullptr)));
         o.Raw("},\n");
-        WriteNode(o, root, count);
+        WriteNode(o, root, count, true);
         o.Raw("]\n");
         if (!o.Flush()) err = L"Write error (disk full?)";
     }
@@ -226,6 +227,14 @@ private:
         uint64_t ino = 0, dev = 0;
     };
 
+    // Parsing recurses per level; this bounds the stack (a Windows path has at most ~16K levels).
+    static constexpr int kMaxDepth = 16384;
+    struct Nest {
+        explicit Nest(int& d) : d_(d) { ++d_; }
+        ~Nest() { --d_; }
+        int& d_;
+    };
+
     std::nullptr_t Fail(const std::wstring& msg) {
         if (err_.empty()) err_ = msg;
         return nullptr;
@@ -274,7 +283,7 @@ private:
         }
         p_ = s;
         if (!Number(d)) return false;
-        v = d < 0 ? 0 : static_cast<uint64_t>(d);
+        v = !(d > 0) ? 0 : d >= 18446744073709551616.0 ? UINT64_MAX : static_cast<uint64_t>(d);
         return true;
     }
 
@@ -360,6 +369,8 @@ private:
             return String(s);
         }
         if (c == '{' || c == '[') {
+            if (depth_ >= kMaxDepth) return FailB(L"Nested too deeply");
+            Nest nest(depth_);
             char close = c == '{' ? '}' : ']';
             ++p_;
             if (Peek() == close) {
@@ -407,7 +418,9 @@ private:
             } else if (key == "mtime") {
                 uint64_t t;
                 if (!Uint(t)) return false;
-                n->mtime = util::UnixToFileTime(static_cast<int64_t>(t));
+                // Times past what a FILETIME can hold are left out.
+                if (t <= static_cast<uint64_t>((INT64_MAX - util::UnixToFileTime(0)) / 10000000))
+                    n->mtime = util::UnixToFileTime(static_cast<int64_t>(t));
             } else if (key == "ino") {
                 if (!Uint(info.ino)) return false;
             } else if (key == "dev") {
@@ -449,6 +462,8 @@ private:
     }
 
     bool ParseDir(Node* dir) {
+        if (depth_ >= kMaxDepth) return FailB(L"Folders nested too deeply");
+        Nest nest(depth_);
         if (!Expect('[')) return false;
         Info info;
         if (!ParseInfo(dir, info)) return false;
@@ -487,6 +502,7 @@ private:
     const char* end_;
     std::atomic<uint64_t>& count_;
     std::wstring err_;
+    int depth_ = 0;
     std::set<std::pair<uint64_t, uint64_t>> hardlinks_;
 };
 

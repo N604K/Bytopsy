@@ -145,4 +145,28 @@ if(MSVC)
 endif()
 add_test(NAME games COMMAND winncdu-games-test)
 
+# Search syntax, largest files, file types and duplicates: build\winncdu-analysis-test.exe
+add_executable(winncdu-analysis-test tests/analysis_test.cpp)
+target_link_libraries(winncdu-analysis-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-analysis-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME analysis COMMAND winncdu-analysis-test)
+
+# ncdu JSON and CSV export/import round trips: build\winncdu-export-test.exe
+add_executable(winncdu-export-test tests/export_test.cpp)
+target_link_libraries(winncdu-export-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-export-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME export COMMAND winncdu-export-test)
+
+# Fuzzing the ncdu JSON importer with mutated exports (fixed seed): build\winncdu-importfuzz-test.exe
+add_executable(winncdu-importfuzz-test tests/importfuzz_test.cpp)
+target_link_libraries(winncdu-importfuzz-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-importfuzz-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME importfuzz COMMAND winncdu-importfuzz-test)
+
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

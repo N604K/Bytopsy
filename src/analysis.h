@@ -10,7 +10,7 @@
 // Query syntax (space separated, all terms must match):
 //   word / "two words"   name contains text (case-insensitive)
 //   *.iso, foo?.txt      wildcard match on the name
-//   >100M  <1G           size limits (also size:>100M)
+//   >100M  <1G           size limits (also size:>100M; >= and <= include the limit)
 //   older:30d newer:2w   modification age (h, d, w, m, y)
 //   type:f | type:d      only files / only folders
 //   ext:mp4,mkv          by extension
