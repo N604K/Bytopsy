@@ -96,6 +96,9 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [ ] Accessibility: the GUI is custom-drawn with Direct2D, so screen readers see nothing. Add a
       UI Automation provider for the list, buttons and dialogs.
 - [ ] Localization: move strings to a table; start with the languages of the first contributors.
-- [ ] Tests: analysis (search syntax, duplicates), export/import round trips, fuzzing the ncdu JSON
+- [x] Tests: analysis (search syntax, duplicates), export/import round trips, fuzzing the ncdu JSON
       importer.
+      *Done: `tests/analysis_test.cpp`, `tests/export_test.cpp`, `tests/importfuzz_test.cpp` (5000
+      mutated files, fixed seed). Fixed what they found: deep nesting crashed the importer (now
+      capped at 16384 levels), `>`/`<` were inclusive, a sub-folder export lost its full path.*
 - [ ] Privacy statement: no telemetry, no network access (except an optional update check).

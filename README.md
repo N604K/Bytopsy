@@ -17,8 +17,9 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
 - **Treemap** below the list: every file drawn to scale and colored by kind (video, images, audio,
   documents, archives, code, programs, system). Hover for details, click to select the file in the
   list, double-click to zoom into a folder. Drag the splitter to resize it, or hide it.
-- **Find**: the search box understands `*.iso`, `>1G`, `<10M`, `older:1y`, `newer:7d`, `type:d`,
-  `ext:mp4,mkv`, `empty`, and combinations such as `*.mp4 >500M older:1y`.
+- **Find**: the search box understands `*.iso`, `>1G`, `<10M` (`>=`/`<=` include the limit),
+  `older:1y`, `newer:7d`, `type:d`, `ext:mp4,mkv`, `empty`, and combinations such as
+  `*.mp4 >500M older:1y`.
 - **Largest files**, **File types** (with a category breakdown; double-click a type to list its
   files), **Old files** (filter by age and size) and **Empty folders**.
 - **Duplicates**: compares size, then a quick hash, then the full SHA-256. "Select all but oldest"
@@ -222,7 +223,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools and games self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export and importfuzz self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -346,6 +347,9 @@ tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the
 tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
 tests/wintools_test.cpp Windows: DISM report parsing, which driver packages count as old (ctest)
 tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
+tests/analysis_test.cpp search syntax, largest files, file types, duplicates on real files (ctest)
+tests/export_test.cpp   ncdu JSON round trips with odd names and flags, Linux ncdu input, CSV (ctest)
+tests/importfuzz_test.cpp fuzzing the ncdu JSON importer with mutated exports, fixed seed (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

@@ -89,16 +89,22 @@ bool ParseQuery(const std::wstring& text, SearchQuery& q, std::wstring& err) {
         if (t.rfind(L"size:", 0) == 0) t = t.substr(5);
         if (!t.empty() && (t[0] == L'>' || t[0] == L'<')) {
             bool greater = t[0] == L'>';
-            size_t start = (t.size() > 1 && t[1] == L'=') ? 2 : 1;
+            bool orEqual = t.size() > 1 && t[1] == L'=';
             uint64_t v;
-            if (!util::ParseSize(t.substr(start), v)) {
+            if (!util::ParseSize(t.substr(orEqual ? 2 : 1), v)) {
                 err = L"Bad size: " + tok;
                 return false;
             }
-            if (greater)
+            // ">" and "<" are strict, ">=" and "<=" include the limit itself.
+            if (greater) {
+                if (!orEqual) v = v == UINT64_MAX ? v : v + 1;
                 q.minSize = std::max(q.minSize, v);
-            else
-                q.maxSize = std::min(q.maxSize, v);
+            } else if (!orEqual && v == 0) {
+                q.minSize = UINT64_MAX;  // "<0": nothing matches
+                q.maxSize = 0;
+            } else {
+                q.maxSize = std::min(q.maxSize, orEqual ? v : v - 1);
+            }
         } else if (t.rfind(L"older:", 0) == 0 || t.rfind(L"newer:", 0) == 0) {
             int64_t ticks;
             if (!ParseAge(t.substr(6), ticks)) {
