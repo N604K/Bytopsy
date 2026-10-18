@@ -23,6 +23,7 @@
 #include "scanner.h"
 #include "startup.h"
 #include "ui.h"
+#include "update.h"
 #include "util.h"
 #include "vdisks.h"
 #include "version.h"
@@ -91,6 +92,9 @@ void PrintUsage() {
         "  --similar-photos[=strict|normal|loose]\n"
         "                        Scan path, list groups of photos that look alike (resized,\n"
         "                        re-saved, lightly edited copies) with the one to keep, and exit\n"
+        "  --check-update        Ask bytopsy.com (or GitHub) for the latest version, print it\n"
+        "                        next to this one, and exit; never installs anything. Exit\n"
+        "                        code 0 = up to date, 2 = a newer version exists, 1 = no answer\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -284,6 +288,43 @@ int ListGames() {
     fflush(stdout);
     SetConsoleOutputCP(oldCp);
     return 0;
+}
+
+// --check-update: the windowed app's "Check for updates now", without installing.
+int CheckUpdate() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    UpdateSources src = DefaultUpdateSources();
+    std::wstring out = L"Installed:  Bytopsy " BYTOPSY_VERSION L"\n";
+    int rc = 1;
+    UpdateCheck c = CheckForUpdate(src, BYTOPSY_VERSION);
+    wchar_t exe[MAX_PATH * 2];
+    DWORD n = GetModuleFileNameW(nullptr, exe, static_cast<DWORD>(std::size(exe)));
+    PackageManager pm = PackageManagerFor(std::wstring(exe, n));
+    switch (c.status) {
+        case UpdateStatus::UpToDate:
+            out += L"Latest:     " + c.manifest.version + L" - up to date\n";
+            rc = 0;
+            break;
+        case UpdateStatus::Available:
+            out += L"Latest:     " + c.manifest.version + (c.manifest.released.empty() ? L"" : L" (released " + c.manifest.released + L")") + L"\n";
+            if (c.required) out += L"            Important: versions before " + c.manifest.minimumVersion + L" should be updated.\n";
+            if (!c.manifest.notesUrl.empty()) out += L"What's new: " + c.manifest.notesUrl + L"\n";
+            if (pm != PackageManager::None)
+                out += std::wstring(L"Installed with ") + PackageManagerName(pm) + L"; update with:  " + PackageManagerCommand(pm) + L"\n";
+            else
+                out += L"Update from the windowed app (menu > Check for updates now), or download:\n  " + c.asset.url + L"\n";
+            rc = 2;
+            break;
+        case UpdateStatus::NoKey: out += L"This build has no update key, so it can't check for updates.\n"; break;
+        case UpdateStatus::Failed: out += L"Couldn't check for updates: " + c.error + L"\n"; break;
+    }
+    if (!c.source.empty()) out += L"(from " + c.source + L")\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), rc == 1 ? stderr : stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return rc;
 }
 
 int ListDisks() {
@@ -924,6 +965,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListApps();
         } else if (a == L"--app-updates") {
             return ListAppUpdates();
+        } else if (a == L"--check-update") {
+            return CheckUpdate();
         } else if (a == L"--similar-photos" || a.rfind(L"--similar-photos=", 0) == 0) {
             similar = true;
             std::wstring m = a.size() > 17 ? a.substr(17) : L"normal";

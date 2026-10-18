@@ -82,6 +82,10 @@ Settings LoadSettings() {
             }
         } else if (k == L"maximized") s.maximized = iv != 0;
         else if (k == L"language") s.language = v;
+        else if (k == L"updates") s.updates = iv == 1 ? 1 : 0;
+        else if (k == L"updatesAsked") s.updatesAsked = iv != 0;
+        else if (k == L"updateLastCheck") s.updateLastCheck = _wtoi64(v.c_str());
+        else if (k == L"updateSkip") s.updateSkip = v;
     }
     if (s.split < 0.2f || s.split > 0.9f) s.split = 0.56f;
     return s;
@@ -103,6 +107,10 @@ void SaveSettings(const Settings& s) {
         ss << L"window=" << s.window.left << L"," << s.window.top << L"," << s.window.right << L"," << s.window.bottom << L"\n";
     ss << L"maximized=" << s.maximized << L"\n";
     if (!s.language.empty()) ss << L"language=" << s.language << L"\n";
+    ss << L"updates=" << s.updates << L"\n";
+    ss << L"updatesAsked=" << s.updatesAsked << L"\n";
+    if (s.updateLastCheck) ss << L"updateLastCheck=" << s.updateLastCheck << L"\n";
+    if (!s.updateSkip.empty()) ss << L"updateSkip=" << s.updateSkip << L"\n";
     std::string data = util::WideToUtf8(ss.str());
     FILE* f = nullptr;
     if (_wfopen_s(&f, SettingsFile().c_str(), L"wb") != 0 || !f) return;

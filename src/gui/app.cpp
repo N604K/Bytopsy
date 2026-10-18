@@ -20,7 +20,7 @@ constexpr float kTopH = 56.0f;
 // =============================================================================================
 // Creation
 
-bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show) {
+bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show, bool updated) {
     inst_ = inst;
     acc_ = std::make_unique<AccBridge>(static_cast<AccHost*>(this));
     settings_ = LoadSettings();
@@ -83,11 +83,18 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
     ShowWindow(hwnd_, plain ? (settings_.maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL) : show);
     UpdateWindow(hwnd_);
     if (!toast_.text.empty()) EnsureTimer();  // a problem with the language file
+    StartupUpdates(updated);
 
     if (!importFile.empty())
         StartImport(importFile);
     else if (!path.empty())
         StartScan(path);
+    // Update checks: asked once (not over a scan that is starting: then on a later start).
+    if (!settings_.updatesAsked) {
+        if (path.empty() && importFile.empty()) AskAboutUpdates();
+    } else {
+        MaybeCheckForUpdates();
+    }
     return true;
 }
 
@@ -333,6 +340,12 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_APP_TASKDONE: OnTaskDone(); return 0;
         case WM_APP_CLEANUP: OnCleanupMeasured(reinterpret_cast<std::vector<CleanCategory>*>(lp)); return 0;
         case WM_APP_UNINSTALL: OnAppUninstallProgress(); return 0;
+        case WM_APP_UPDATE: {
+            std::unique_ptr<UpdateCheck> r(reinterpret_cast<UpdateCheck*>(lp));
+            updateCheckRunning_ = false;
+            if (r) OnUpdateChecked(*r, false);
+            return 0;
+        }
         case WM_GETOBJECT: {
             LRESULT r = 0;
             bool first = acc_ && !acc_->Active();

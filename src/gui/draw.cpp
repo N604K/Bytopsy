@@ -322,6 +322,7 @@ void App::Paint() {
     segment(2);
     DrawStatusBar();
     segment(3);
+    if (updateBanner_) DrawUpdateBanner();
     DrawToast();
     accTipFrom_ = gfx_.Runs().size();
     DrawTooltip();
@@ -3269,7 +3270,8 @@ void App::DrawToast() {
     D2D1_SIZE_F sz = gfx_.Size();
     float tw = std::min(gfx_.Measure(toast_.text, TS(13)) + 4, sz.width * 0.5f);
     float w = tw + 64, h = 46;
-    RectF r = RWH(sz.width - w - 24, sz.height - kStatusH - h - 18, w, h);
+    float bottom = updateBanner_ ? bannerTop_ - 10 : sz.height - kStatusH - 18;  // above the update banner
+    RectF r = RWH(sz.width - w - 24, bottom - h, w, h);
     D2D1_COLOR_F tone = toast_.tone == 1 ? P_.danger : (toast_.tone == 2 ? P_.accent : P_.success);
     gfx_.Shadow(r, 12, 14 * alpha);
     gfx_.FillRound(r, 12, WithAlpha(P_.dark ? P_.surface3 : Hex(0x1F2230), alpha));

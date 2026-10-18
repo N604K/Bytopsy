@@ -13,12 +13,15 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
     // Usage: bytopsy.exe [folder]          scan a folder or drive
     //        bytopsy.exe -f export.json    open a saved scan (Bytopsy or ncdu JSON)
     std::wstring path, importFile;
+    bool updated = false;  // started by the self-update that just replaced the program
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     for (int i = 1; argv && i < argc; ++i) {
         std::wstring a = argv[i];
         if ((a == L"-f" || a == L"--file") && i + 1 < argc) {
             importFile = argv[++i];
+        } else if (a == L"--updated") {
+            updated = true;
         } else if (!a.empty() && a[0] != L'-') {
             // Explorer passes "C:\" as "C:\"" when the path ends in a backslash; strip stray quotes.
             while (!a.empty() && a.back() == L'"') a.pop_back();
@@ -36,7 +39,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
     int rc = 1;
     {
         App app;
-        if (app.Create(inst, path, importFile, show)) rc = app.Run();
+        if (app.Create(inst, path, importFile, show, updated)) rc = app.Run();
     }
     CoUninitialize();
     return rc;
