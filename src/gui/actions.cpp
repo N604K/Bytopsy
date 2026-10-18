@@ -1596,6 +1596,7 @@ void App::MeasureCleanup() {
             c.guarded = old->guarded;
             c.measured = old->measured;
             c.denied = old->denied;
+            c.keep = old->keep;
         } else {
             c.selected = c.safe && !(c.needsAdmin && !elevated_) && !c.external;
         }
@@ -1664,10 +1665,16 @@ void App::StartCleanup() {
         size_t kept = cleanup_[i].KeptCount();
         const std::wstring& cmd = cleanup_[i].command;
         commands = commands || !cmd.empty();
-        d.lines.push_back(util::FormatSizeShort(cleanup_[i].ToClean()) + L"\t" + cleanup_[i].name +
-                          (!cmd.empty() ? L"  (runs " + cmd + L")" : kept ? L"  (" + util::FormatCount(kept) + L" kept)" : L""));
+        std::wstring extra = !cmd.empty() ? L"  (runs " + cmd + L")" : kept ? L"  (" + util::FormatCount(kept) + L" kept)" : L"";
+        if (cleanup_[i].browserData == BrowserData::Cookies)
+            extra = L"  (you stay signed in to " + util::FormatCount(cleanup_[i].keep.size()) + L" listed sites)";
+        d.lines.push_back(util::FormatSizeShort(cleanup_[i].ToClean()) + L"\t" + cleanup_[i].name + extra);
     }
     if (commands) d.message += L" Categories marked “runs” are cleaned by that tool's own command instead.";
+    bool browser = std::any_of(chosen.begin(), chosen.end(), [&](size_t i) { return cleanup_[i].browserData != BrowserData::None; });
+    if (browser)
+        d.message += L" Cookies and history are removed inside the browsers' own databases; close the browsers first, "
+                     L"or they are skipped.";
     d.icon = 0xE74D;
     d.tone = 1;
     d.buttons = {L"Cancel", L"Clean up"};
@@ -2239,6 +2246,7 @@ void App::ShowMoreMenu() {
                 L"Add “Analyze with WinNCDU” to Explorer");
     AppendMenuW(m, MF_STRING, CMD_PROTECTED, L"Protected locations…");
     AppendMenuW(m, MF_STRING, CMD_CLEANERS, L"Cleanup rules…");
+    AppendMenuW(m, MF_STRING, CMD_KEEP_SIGNED_IN, L"Keep me signed in to…");
     AppendMenuW(m, MF_STRING, CMD_WINAPP2, L"Import winapp2.ini…");
     if (PathExists(Winapp2File())) AppendMenuW(m, MF_STRING, CMD_WINAPP2_REMOVE, L"Remove winapp2.ini cleaners");
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
@@ -2469,6 +2477,20 @@ void App::OnCommand(int cmd) {
             std::wstring f = UserCleanersFile(true);
             if (f.empty() || !OpenWithDefault(f)) return Toast(L"Can't open " + f, 1);
             Toast(L"Add your own cleanup categories, then click Measure in Cleanup", 2);
+            break;
+        }
+        case CMD_KEEP_SIGNED_IN: {
+            // Made on first use from the most visited sites (as measuring Browser cookies does).
+            std::wstring f = KeepSignedInFile();
+            if (!f.empty() && !PathExists(f)) {
+                std::vector<std::wstring> dirs;
+                for (auto& c : cleanup_)
+                    if (c.browserData == BrowserData::Cookies)
+                        for (auto& d : ExpandedPaths(c)) dirs.push_back(d);
+                CreateKeepList(f, MostVisitedSites(dirs, 15));
+            }
+            if (f.empty() || !OpenWithDefault(f)) return Toast(L"Can't open " + f, 1);
+            Toast(L"One site per line; cookies of these sites stay. Save, then click Measure in Cleanup", 2);
             break;
         }
         case CMD_WINAPP2: {

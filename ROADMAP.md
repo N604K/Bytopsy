@@ -68,7 +68,11 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       *Done: "Chat app caches" (new and classic Teams, Discord, Slack incl. Store versions; web caches
       only) and "WhatsApp & Telegram media" (received files and Telegram's media cache, never
       preselected; WhatsApp's `transfers` folder lowered to Caution so Cleanup may list it).*
-- [ ] Browsers: cookies and history as opt-in categories, with a "keep me signed in to" list.
+- [x] Browsers: cookies and history as opt-in categories, with a "keep me signed in to" list.
+      *Done: "Browser cookies" and "Browser history" (`kind = cookies` / `history`, `src/gui/browserdata.cpp`)
+      edit the browsers' SQLite databases with a vendored SQLite: cookies of listed sites stay (the
+      list starts with the most visited sites), Firefox bookmarks stay; open databases are skipped
+      with the browser named. Checked on fixture profiles only, not yet on real browser data.*
 
 ## 3. Maintenance beyond disk space
 

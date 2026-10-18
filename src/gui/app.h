@@ -97,6 +97,7 @@ enum Cmd : int {
     CMD_GAMES_DELETE,
     CMD_DISK_REFRESH,
     CMD_CLEAN_SCHEDULE,
+    CMD_KEEP_SIGNED_IN,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 

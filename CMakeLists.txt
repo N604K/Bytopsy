@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(WinNCDU VERSION 1.0.0 LANGUAGES CXX RC)
+project(WinNCDU VERSION 1.0.0 LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,6 +33,16 @@ target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
 target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32)
 
+# SQLite (public domain, https://www.sqlite.org), for reading and editing browsers' cookie and
+# history databases. Third-party code: compiled as C, its warnings are not ours to fix.
+add_library(sqlite3 STATIC third_party/sqlite/sqlite3.c)
+target_include_directories(sqlite3 PUBLIC third_party/sqlite)
+target_compile_definitions(sqlite3 PRIVATE SQLITE_OMIT_LOAD_EXTENSION SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=0
+  SQLITE_OMIT_DEPRECATED SQLITE_OMIT_SHARED_CACHE)
+if(MSVC)
+  target_compile_options(sqlite3 PRIVATE /W0 /utf-8)
+endif()
+
 # Windowed app (Direct2D): build\winncdu.exe
 add_executable(winncdu WIN32
   src/gui/main_gui.cpp
@@ -44,11 +54,12 @@ add_executable(winncdu WIN32
   src/gui/treemap.cpp
   src/gui/history.cpp
   src/gui/cleanup.cpp
+  src/gui/browserdata.cpp
   src/gui/winapp2.cpp
   src/gui/platform.cpp
   src/gui/winncdu-gui.rc
 )
-target_link_libraries(winncdu PRIVATE winncdu_core d2d1 dwrite windowscodecs dwmapi comctl32 uxtheme gdi32 advapi32)
+target_link_libraries(winncdu PRIVATE winncdu_core sqlite3 d2d1 dwrite windowscodecs dwmapi comctl32 uxtheme gdi32 advapi32)
 # The resource script embeds these files; without this, editing them doesn't rebuild the exe.
 set_source_files_properties(src/gui/winncdu-gui.rc PROPERTIES
   OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/cleaners.ini;${CMAKE_SOURCE_DIR}/res/winncdu.ico")
@@ -60,10 +71,11 @@ add_executable(winncdu-cli
   src/console.cpp
   src/gui/history.cpp
   src/gui/cleanup.cpp
+  src/gui/browserdata.cpp
   src/gui/winapp2.cpp
   src/winncdu.rc
 )
-target_link_libraries(winncdu-cli PRIVATE winncdu_core)
+target_link_libraries(winncdu-cli PRIVATE winncdu_core sqlite3)
 set_source_files_properties(src/winncdu.rc PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/cleaners.ini;${CMAKE_SOURCE_DIR}/res/winncdu.ico")
 
 foreach(t winncdu_core winncdu winncdu-cli)
@@ -94,9 +106,10 @@ if(MSVC)
 endif()
 add_test(NAME journal COMMAND winncdu-journal-test)
 
-# Cleanup preview semantics (kept entries survive, changed entries are skipped): build\winncdu-cleanup-test.exe
-add_executable(winncdu-cleanup-test tests/cleanup_test.cpp src/gui/cleanup.cpp src/gui/winapp2.cpp)
-target_link_libraries(winncdu-cleanup-test PRIVATE winncdu_core)
+# Cleanup preview semantics (kept entries survive, changed entries are skipped), browser cookies and
+# history (kept sites and bookmarks survive): build\winncdu-cleanup-test.exe
+add_executable(winncdu-cleanup-test tests/cleanup_test.cpp src/gui/cleanup.cpp src/gui/browserdata.cpp src/gui/winapp2.cpp)
+target_link_libraries(winncdu-cleanup-test PRIVATE winncdu_core sqlite3)
 target_compile_definitions(winncdu-cleanup-test PRIVATE WINNCDU_SOURCE_DIR=L"${CMAKE_SOURCE_DIR}")
 if(MSVC)
   target_compile_options(winncdu-cleanup-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
