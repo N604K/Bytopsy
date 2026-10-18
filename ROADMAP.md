@@ -88,8 +88,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [ ] Code signing for releases (SignPath offers free signing for open-source projects), so
       SmartScreen and antivirus don't flag a tool that deletes files.
 - [ ] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
-- [ ] CONTRIBUTING.md with a short guide "add a protected location / add a cleaner", and issue
+- [x] CONTRIBUTING.md with a short guide "add a protected location / add a cleaner", and issue
       templates for "false alarm" and "missing protected folder".
+      *Done: CONTRIBUTING.md (build, self-tests, both guides) and issue forms in
+      `.github/ISSUE_TEMPLATE` (false alarm, missing protected folder, bug report).*
 - [ ] Accessibility: the GUI is custom-drawn with Direct2D, so screen readers see nothing. Add a
       UI Automation provider for the list, buttons and dialogs.
 - [ ] Localization: move strings to a table; start with the languages of the first contributors.

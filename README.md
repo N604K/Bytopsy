@@ -199,7 +199,9 @@ administrator, WinNCDU also refuses a path that no longer leads where it did (a 
 swapped for a link), so nobody can redirect an elevated delete into, say, `C:\Windows`.
 
 `winncdu-cli --protected` lists the protected locations found on this PC.
-Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; pull requests welcome.
+Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; open an issue with the
+*False alarm* or *Missing protected folder* template, or see [CONTRIBUTING.md](CONTRIBUTING.md) to
+add a rule (or a cleaner) yourself.
 
 ## Privacy
 
@@ -376,4 +378,6 @@ tests/wintools_test.cpp Windows: DISM report parsing, which driver packages coun
 tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
+CONTRIBUTING.md       building, testing, adding a protected location or a cleaner
+.github/ISSUE_TEMPLATE  issue forms: false alarm, missing protected folder, bug report
 ```
