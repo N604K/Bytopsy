@@ -233,6 +233,22 @@ The window opens as it was started (e.g. minimized from a shortcut set to "Run: 
 | `Esc` | Clear the selection, then go back to the folder view |
 | `F1` | About and shortcuts |
 
+## No registry cleaner
+
+WinNCDU will not clean the registry, and that is on purpose. The whole registry is a few hundred
+megabytes at most, so removing "unused" keys frees nothing you could measure; Windows doesn't get
+faster from it either, because it only reads the keys it needs. What registry cleaners do achieve is
+breakage: a key that looks orphaned is often read by an installer, a repair, a file association or
+a COM component later, and when it's gone, that thing fails. Microsoft doesn't support registry
+cleaners for this reason.
+
+So the only registry changes WinNCDU makes are the ones you ask for, each undoable from the app: the
+Explorer menu entry, and turning a startup entry off or on (the `StartupApproved` value Task Manager
+writes, or a service's start type through `sc`). Settings such as hibernation or the System Restore
+limit are changed by Windows' own tools (`powercfg`, `vssadmin`), never by editing keys. Uninstalling
+an app runs that app's own uninstaller, and the leftovers offered afterwards are folders, never
+registry keys.
+
 ## Protected locations
 
 Before anything is deleted, each item is checked against built-in rules and your own

@@ -102,8 +102,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       *Done: "Similar photos" tab of Duplicates (`src/phash.cpp`): WIC decode at reduced size with
       EXIF orientation, dHash + pHash, exact multi-index lookup (fast for tens of thousands of
       photos), groups built around a suggested keeper, previews, hash cache; `--similar-photos`.*
-- [ ] **No registry cleaner.** Say so in the README: it frees nothing measurable and breaks things.
+- [x] **No registry cleaner.** Say so in the README: it frees nothing measurable and breaks things.
       This stance is a selling point.
+      *Done: "No registry cleaner" section in the README, listing the only registry writes WinNCDU
+      makes (the Explorer menu entry, startup entries), both on request and undoable.*
 
 ## 4. Open-source project health
 
