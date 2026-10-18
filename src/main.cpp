@@ -16,6 +16,7 @@
 #include "util.h"
 #include "vdisks.h"
 #include "version.h"
+#include "wintools.h"
 
 namespace {
 
@@ -48,6 +49,8 @@ void PrintUsage() {
         "                        what each frees, and exit\n"
         "  --wsl                 List WSL and Docker virtual disks (size on the drive vs. used\n"
         "                        inside) and what Docker could prune, and exit\n"
+        "  --windows             List space Windows keeps (old drivers, hibernation, System\n"
+        "                        Restore, event logs) and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -172,6 +175,46 @@ int ListVDisks() {
     return 0;
 }
 
+int ListWindowsTools() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    std::wstring out = L"Space Windows keeps for itself (read-only overview; change it in the windowed app: Windows).\n\n";
+    auto drivers = ListDriverPackages();
+    uint64_t oldBytes = 0;
+    size_t old = 0;
+    for (auto& d : drivers)
+        if (d.old) {
+            oldBytes += d.bytes;
+            ++old;
+        }
+    out += L"  Driver packages      " + util::FormatCount(drivers.size()) + L" third-party, " + util::FormatCount(old) +
+           L" old versions nothing uses (" + util::FormatSizeShort(oldBytes) + L")\n";
+    for (auto& d : drivers)
+        if (d.old)
+            out += L"                         " + d.oemInf + L"  " + d.originalInf + L"  " + d.provider + L"  " + d.version + L"  " +
+                   util::FormatSizeShort(d.bytes) + L"\n";
+    Hibernation h = QueryHibernation();
+    out += L"  Hibernation          " +
+           (h.on ? std::wstring(h.reduced ? L"on (reduced, for Fast Startup)" : L"on") + L", hiberfil.sys " + util::FormatSizeShort(h.bytes)
+                 : std::wstring(L"off")) +
+           L"\n";
+    out += L"  Compact OS           " + std::wstring(CompactOsOn() ? L"on" : L"off") + L"\n";
+    EventLogs e = QueryEventLogs();
+    out += L"  Event logs           " + (e.known ? util::FormatSizeShort(e.bytes) + L" in " + util::FormatCount(e.files) + L" logs" : L"unknown") + L"\n";
+    std::wstring err;
+    auto shadows = QueryShadowStorage(err);
+    if (!err.empty()) out += L"  System Restore       " + err + L"\n";
+    for (auto& s : shadows)
+        out += L"  System Restore       " + s.forDrive + L" uses " + util::FormatSizeShort(s.used) + L" of " +
+               (s.max == UINT64_MAX ? std::wstring(L"no limit") : util::FormatSizeShort(s.max)) + L"\n";
+    out += L"  Component store      analyze it in the windowed app (DISM, needs administrator rights)\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
 int Fail(const std::wstring& msg) {
     fwprintf(stderr, L"winncdu-cli: %s\n", msg.c_str());
     return 2;
@@ -289,6 +332,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListAiModels();
         } else if (a == L"--wsl") {
             return ListVDisks();
+        } else if (a == L"--windows") {
+            return ListWindowsTools();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {

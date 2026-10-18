@@ -1,7 +1,6 @@
 #include "vdisks.h"
 
 #include <windows.h>
-#include <shellapi.h>
 #include <tlhelp32.h>
 
 #include <algorithm>
@@ -10,98 +9,18 @@
 
 #include "fsops.h"
 #include "journal.h"
+#include "runtool.h"
 #include "tree.h"
 #include "util.h"
 
 namespace {
-
-std::wstring SystemTool(const wchar_t* exe) {
-    wchar_t sys[MAX_PATH];
-    UINT n = GetSystemDirectoryW(sys, MAX_PATH);
-    return std::wstring(sys, n) + L"\\" + exe;
-}
-
-std::wstring FindOnPath(const wchar_t* exe) {
-    wchar_t buf[MAX_PATH];
-    DWORD n = SearchPathW(nullptr, exe, nullptr, MAX_PATH, buf, nullptr);
-    return n && n < MAX_PATH ? std::wstring(buf, n) : L"";
-}
 
 std::wstring TempDir() {
     wchar_t tmp[MAX_PATH];
     return std::wstring(tmp, GetTempPathW(MAX_PATH, tmp));
 }
 
-// Runs a console tool without a window and collects what it prints (stdout and stderr). Returns
-// the exit code, or -1 if it couldn't start and -2 on timeout or cancel (the tool is ended then).
-int RunTool(const std::wstring& app, const std::wstring& args, std::string& out, DWORD timeoutMs,
-            std::atomic<bool>* cancel = nullptr) {
-    SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
-    HANDLE rd = nullptr, wr = nullptr;
-    if (!CreatePipe(&rd, &wr, &sa, 0)) return -1;
-    SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
-    HANDLE nul = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, nullptr);
-    STARTUPINFOW si{sizeof(si)};
-    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    si.hStdOutput = wr;
-    si.hStdError = wr;
-    si.hStdInput = nul;
-    std::wstring line = L"\"" + app + L"\" " + args;
-    std::vector<wchar_t> buf(line.begin(), line.end());
-    buf.push_back(0);
-    PROCESS_INFORMATION pi{};
-    std::wstring cwd = TempDir();  // not the exe's folder
-    BOOL ok = CreateProcessW(app.c_str(), buf.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, cwd.c_str(), &si, &pi);
-    CloseHandle(wr);
-    if (nul != INVALID_HANDLE_VALUE) CloseHandle(nul);
-    if (!ok) {
-        CloseHandle(rd);
-        return -1;
-    }
-    auto drain = [&] {
-        DWORD avail = 0;
-        while (PeekNamedPipe(rd, nullptr, 0, nullptr, &avail, nullptr) && avail) {
-            char b[4096];
-            DWORD n = 0;
-            if (!ReadFile(rd, b, std::min<DWORD>(avail, sizeof(b)), &n, nullptr) || !n) break;
-            out.append(b, n);
-        }
-    };
-    int code = 0;
-    ULONGLONG start = GetTickCount64();
-    for (;;) {
-        drain();
-        if (WaitForSingleObject(pi.hProcess, 50) == WAIT_OBJECT_0) {
-            DWORD c = 1;
-            GetExitCodeProcess(pi.hProcess, &c);
-            code = static_cast<int>(c);
-            break;
-        }
-        if ((cancel && *cancel) || GetTickCount64() - start > timeoutMs) {
-            TerminateProcess(pi.hProcess, 1);
-            code = -2;
-            break;
-        }
-    }
-    drain();  // never a blocking read: a child the tool started may still hold the pipe open
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
-    CloseHandle(rd);
-    return code;
-}
-
 std::wstring Quote(const std::wstring& s) { return L"\"" + s + L"\""; }
-
-bool Elevated() {
-    HANDLE token = nullptr;
-    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
-    TOKEN_ELEVATION e{};
-    DWORD n = 0;
-    bool elevated = GetTokenInformation(token, TokenElevation, &e, sizeof(e), &n) && e.TokenIsElevated;
-    CloseHandle(token);
-    return elevated;
-}
 
 std::vector<std::wstring> Lines(const std::wstring& s) {
     std::vector<std::wstring> out;
@@ -116,11 +35,6 @@ std::vector<std::wstring> Lines(const std::wstring& s) {
         pos = nl + 1;
     }
     return out;
-}
-
-std::wstring LastLine(const std::string& raw) {
-    auto l = Lines(DecodeToolOutput(raw));
-    return l.empty() ? L"" : l.back();
 }
 
 uint64_t AllocatedSize(const std::wstring& path) {
@@ -298,20 +212,6 @@ bool ReadVirtual(HANDLE h, uint64_t virtOffset, uint8_t* out, DWORD n, std::wstr
 }  // namespace
 
 // ---------------------------------------------------------------------------------------------
-
-std::wstring DecodeToolOutput(const std::string& raw) {
-    // wsl.exe writes UTF-16LE; Linux tools and docker write UTF-8.
-    size_t zeros = 0;
-    for (size_t i = 1; i < raw.size(); i += 2) zeros += raw[i] == 0;
-    if (raw.size() >= 2 && zeros * 3 > raw.size() / 2) {
-        size_t start = raw.size() >= 2 && static_cast<uint8_t>(raw[0]) == 0xFF && static_cast<uint8_t>(raw[1]) == 0xFE ? 2 : 0;
-        std::wstring w((raw.size() - start) / 2, L'\0');
-        memcpy(w.data(), raw.data() + start, w.size() * 2);
-        w.erase(std::remove(w.begin(), w.end(), L'\0'), w.end());
-        return w;
-    }
-    return util::Utf8ToWide(raw);
-}
 
 bool ParseDfUsed(const std::string& dfOutput, uint64_t& used) {
     // "Filesystem 1-blocks Used Available Capacity Mounted on" / "/dev/sdd 1081101176832 23707013120 ... /"
@@ -604,44 +504,29 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
     if (!paths.empty() && !cancel) {
         status(L"Compacting " + std::to_wstring(paths.size()) + (paths.size() == 1 ? L" virtual disk" : L" virtual disks") +
                L" (this can take a while)");
-        std::wstring tmp = TempDir();
-        std::wstring script = tmp + L"winncdu-compact-" + std::to_wstring(GetCurrentProcessId()) + L".txt";
-        std::wstring log = tmp + L"winncdu-compact-" + std::to_wstring(GetCurrentProcessId()) + L".log";
+        std::wstring script = TempDir() + L"winncdu-compact-" + std::to_wstring(GetCurrentProcessId()) + L".txt";
         std::string text = DiskpartScript(paths);
         HANDLE f = CreateFileW(script.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
         DWORD n = 0;
         bool written = f != INVALID_HANDLE_VALUE && WriteFile(f, text.data(), static_cast<DWORD>(text.size()), &n, nullptr) && n == text.size();
         if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
-        std::wstring diskpart = SystemTool(L"diskpart.exe");
-        std::string dpOut;
+        // Held open read-only while diskpart (as administrator) runs it: nobody can change or swap it,
+        // and what it says is checked once more.
+        f = written ? CreateFileW(script.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr) : INVALID_HANDLE_VALUE;
+        std::string check(text.size() + 1, '\0');
+        written = f != INVALID_HANDLE_VALUE && ReadFile(f, check.data(), static_cast<DWORD>(check.size()), &n, nullptr) &&
+                  n == text.size() && check.compare(0, n, text) == 0;
         if (!written) {
             res.errors.push_back(L"Couldn't write " + script);
-        } else if (Elevated()) {
-            if (RunTool(diskpart, L"/s " + Quote(script), dpOut, 4 * 3600 * 1000) != 0) res.errors.push_back(L"diskpart: " + LastLine(dpOut));
         } else {
-            std::wstring cmd = SystemTool(L"cmd.exe");
-            std::wstring params = L"/d /s /c \"" + Quote(diskpart) + L" /s " + Quote(script) + L" > " + Quote(log) + L" 2>&1\"";
-            SHELLEXECUTEINFOW sei{sizeof(sei)};
-            sei.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
-            sei.lpVerb = L"runas";
-            sei.lpFile = cmd.c_str();
-            sei.lpParameters = params.c_str();
-            sei.nShow = SW_HIDE;
-            if (!ShellExecuteExW(&sei) || !sei.hProcess) {
-                DWORD e = GetLastError();
-                res.errors.push_back(e == ERROR_CANCELLED ? L"Administrator permission was declined: nothing was compacted"
-                                                          : L"Couldn't start diskpart: " + util::Win32ErrorMessage(e));
-            } else {
-                WaitForSingleObject(sei.hProcess, INFINITE);  // never interrupt a compaction
-                DWORD code = 0;
-                GetExitCodeProcess(sei.hProcess, &code);
-                CloseHandle(sei.hProcess);
-                dpOut = ReadSmall(log);
-                if (code != 0) res.errors.push_back(L"diskpart: " + LastLine(dpOut));
-            }
+            AdminRun r = RunAsAdmin(Quote(SystemTool(L"diskpart.exe")) + L" /s " + Quote(script));  // never interrupted
+            if (!r.error.empty())
+                res.errors.push_back(r.declined ? L"Administrator permission was declined: nothing was compacted" : r.error);
+            else if (r.code != 0)
+                res.errors.push_back(L"diskpart: " + LastLine(r.out));
         }
+        if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
         DeleteFileW(script.c_str());
-        DeleteFileW(log.c_str());
     }
     for (size_t i = 0; i < chosen.size(); ++i) {
         uint64_t after = AllocatedSize(chosen[i]->path);

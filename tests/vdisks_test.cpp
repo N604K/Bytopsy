@@ -8,6 +8,7 @@
 #include <cstring>
 #include <string>
 
+#include "runtool.h"
 #include "util.h"
 #include "vdisks.h"
 

@@ -19,6 +19,7 @@
 #include "../protect.h"
 #include "../scanner.h"
 #include "../vdisks.h"
+#include "../wintools.h"
 #include "../tree.h"
 #include "cleanup.h"
 #include "gfx.h"
@@ -27,7 +28,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -87,6 +88,23 @@ enum Cmd : int {
     CMD_WSL_FREE,
     CMD_WINAPP2,
     CMD_WINAPP2_REMOVE,
+    CMD_WIN_REFRESH,
+    CMD_WIN_ACT = 600,  // + WinAction
+};
+
+// The Windows view's actions (command CMD_WIN_ACT + action).
+enum WinAction {
+    WA_ANALYZE,
+    WA_CLEAN_STORE,
+    WA_DRIVERS,
+    WA_SHADOW,
+    WA_HIBER_OFF,
+    WA_HIBER_REDUCED,
+    WA_HIBER_ON,
+    WA_COMPACT_ON,
+    WA_COMPACT_OFF,
+    WA_LOGS,
+    WA_COUNT
 };
 
 enum HitKind {
@@ -245,6 +263,10 @@ private:
     void ToggleWslRow(int row);
     void StartWslFree();
     uint64_t WslRowBytes(int id) const;
+    void LoadWinTools();
+    void WinToolAction(int action);
+    void RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
+                    std::function<AdminRun()> work);
     void RebuildOld();
 
     // ---- actions (actions.cpp)
@@ -296,6 +318,7 @@ private:
     void DrawDevJunk(const RectF& area);
     void DrawAiModels(const RectF& area);
     void DrawWsl(const RectF& area);
+    void DrawWinTools(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -377,6 +400,18 @@ private:
     // containers, 3 unused volumes (the last two are shown, never offered).
     static constexpr int kWslDocker = 1000;
     std::set<int> wslSel_;
+    struct WinToolsInfo {
+        std::vector<DriverPackage> drivers;
+        Hibernation hiber;
+        bool compactOs = false;
+        EventLogs logs;
+        std::vector<ShadowStorage> shadows;
+        std::wstring shadowErr;
+        ComponentStore store;
+        bool storeAnalyzed = false;
+    };
+    WinToolsInfo win_;
+    bool winLoaded_ = false;
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;

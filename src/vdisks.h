@@ -74,5 +74,4 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
 uint64_t ParseDockerSize(const std::wstring& s);                   // "38.69GB" -> 38690000000
 std::vector<DockerRow> ParseDockerDf(const std::string& jsonLines);  // `docker system df --format "{{json .}}"`
 bool ParseDfUsed(const std::string& dfOutput, uint64_t& used);     // `df -P -B1 <mount>`
-std::wstring DecodeToolOutput(const std::string& raw);             // wsl.exe prints UTF-16
 std::string DiskpartScript(const std::vector<std::wstring>& vhdx);

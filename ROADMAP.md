@@ -53,10 +53,15 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       *Done: WSL & Docker view and `winncdu-cli --wsl`. Compaction uses diskpart (works on Home, no
       Hyper-V module needed). Instead of `docker system prune`, only the build cache and unused images
       are pruned: stopped containers and volumes can hold data, so they are shown, not offered.*
-- [ ] Windows: component store cleanup (`DISM /StartComponentCleanup`), old drivers in DriverStore
+- [x] Windows: component store cleanup (`DISM /StartComponentCleanup`), old drivers in DriverStore
       (`pnputil`), shadow storage limit (`vssadmin`), hibernation toggle, Compact OS, delivery
       optimization via its API, event logs, `$Windows.~BT`.
-- [ ] Game launchers: Steam shader and download caches, Epic, Battle.net, EA app.
+      *Done: Windows view and `winncdu-cli --windows`; Delivery Optimization and `$Windows.~BT` /
+      `~WS` are Cleanup categories. The Security event log is never cleared.*
+- [ ] **Games**: every installed game across Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net
+      and Xbox, with its size and when it was last played, uninstalled through its own launcher
+      (so saves in the cloud and the launcher's library stay right); plus the launchers' shader
+      and download caches.
 - [ ] Chat apps: Teams, Discord, Slack caches; WhatsApp/Telegram media folders (show, don't preselect).
 - [ ] Browsers: cookies and history as opt-in categories, with a "keep me signed in to" list.
 

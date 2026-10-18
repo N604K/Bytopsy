@@ -23,7 +23,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_HISTORY = 0xE81C, IC_BACK = 0xE72B, IC_FWD = 0xE72A, IC_UP = 0xE74A, IC_CHEV_R = 0xE76C,
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
-                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756;
+                  IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770;
 
 std::wstring Pct(double v) {
     wchar_t b[32];
@@ -248,6 +248,7 @@ void App::Paint() {
         case View::Deleted: DrawDeleted(contentArea_); break;
         case View::AiModels: DrawAiModels(contentArea_); break;
         case View::Wsl: DrawWsl(contentArea_); break;
+        case View::WinTools: DrawWinTools(contentArea_); break;
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
@@ -394,6 +395,10 @@ void App::DrawSidebar() {
     uint64_t wslTotal = 0;
     for (auto& d : vdisks_) wslTotal += d.Reclaimable();
     drawItem({View::Wsl, IC_TERMINAL, L"WSL & Docker", false, wslTotal ? util::FormatSizeShort(wslTotal) : L""});
+    uint64_t oldDrivers = 0;
+    for (auto& p : win_.drivers)
+        if (p.old) oldDrivers += p.bytes;
+    drawItem({View::WinTools, IC_SYSTEM, L"Windows", false, oldDrivers ? util::FormatSizeShort(oldDrivers) : L""});
     drawItem({View::History, IC_HISTORY, L"History", false, L""});
     drawItem({View::Deleted, IC_UNDO, L"Recently deleted", false, L""});
 
@@ -1483,6 +1488,150 @@ void App::DrawWsl(const RectF& area) {
             gfx_.Text(title, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
             gfx_.Text(note, R(r.left + 48 + tw, r.top, r.right - 12, r.bottom), P_.textFaint, Small(12));
         });
+}
+
+void App::DrawWinTools(const RectF& area) {
+    float top = area.top + 18;
+    Button(RWH(area.right - 24 - 108, top + 6, 108, 34), IC_REFRESH, L"Refresh", CMD_WIN_REFRESH, 0);
+    DrawViewHeader(R(area.left + 24, top, area.right - 150, top + 46), L"Windows",
+                   L"Space Windows keeps for itself, changed with Windows' own tools  ·  works without a scan", IC_SYSTEM);
+    if (!winLoaded_) return;
+    struct Act {
+        const wchar_t* text;
+        int action;
+        int style;
+    };
+    struct Card {
+        wchar_t icon;
+        std::wstring title, desc, status, size;
+        std::vector<Act> acts;
+    };
+    std::vector<Card> cards;
+    {
+        Card c{0xE8F1, L"Component store (WinSxS)",
+               L"Older versions of Windows components kept after updates. DISM removes the ones newer updates replaced.", L"", L"", {}};
+        const ComponentStore& s = win_.store;
+        if (!win_.storeAnalyzed) {
+            c.status = L"Not analyzed yet: DISM takes a few minutes";
+            c.acts.push_back({L"Analyze", WA_ANALYZE, 0});
+        } else {
+            c.size = util::FormatSizeShort(s.actual);
+            c.status = util::FormatCount(s.reclaimablePackages < 0 ? 0 : s.reclaimablePackages) + L" components replaced by newer updates  ·  " +
+                       (s.recommended ? L"cleanup recommended" : L"no cleanup needed") +
+                       (s.lastCleanup.empty() ? L"" : L"  ·  last cleanup " + s.lastCleanup);
+            c.acts.push_back({L"Analyze", WA_ANALYZE, 0});
+            if (s.recommended || s.reclaimablePackages > 0) c.acts.push_back({L"Clean up", WA_CLEAN_STORE, 1});
+        }
+        cards.push_back(c);
+    }
+    {
+        uint64_t bytes = 0;
+        size_t n = 0;
+        for (auto& p : win_.drivers)
+            if (p.old) {
+                bytes += p.bytes;
+                ++n;
+            }
+        Card c{0xE964, L"Old driver packages",
+               L"Older versions of drivers that a newer version replaced. Drivers a device uses, and printer drivers, are kept.",
+               util::FormatCount(n) + L" old of " + util::FormatCount(win_.drivers.size()) + L" third-party driver packages",
+               n ? util::FormatSizeShort(bytes) : L"", {}};
+        if (n) c.acts.push_back({L"Remove old", WA_DRIVERS, 1});
+        cards.push_back(c);
+    }
+    {
+        Card c{0xE777, L"System Restore", L"Space for restore points. A smaller limit deletes the oldest restore points first.", L"", L"", {}};
+        if (win_.shadows.empty()) {
+            c.status = win_.shadowErr.empty() ? L"No restore point storage on this PC"
+                       : elevated_          ? win_.shadowErr
+                                            : L"Restart as administrator to see how much it uses";
+        } else {
+            uint64_t used = 0;
+            for (auto& s : win_.shadows) {
+                used += s.used;
+                std::wstring max = s.max == UINT64_MAX ? L"no limit"
+                                   : s.volumeSize    ? util::FormatSizeShort(s.max) + L" (" +
+                                                        std::to_wstring(static_cast<int>(s.max * 100.0 / s.volumeSize + 0.5)) + L"% of " +
+                                                        s.onDrive + L")"
+                                                     : util::FormatSizeShort(s.max);
+                c.status += (c.status.empty() ? L"" : L"  ·  ") + s.forDrive + L" uses " + util::FormatSizeShort(s.used) + L", limit " + max;
+            }
+            c.size = util::FormatSizeShort(used);
+            c.acts.push_back({L"Set limit", WA_SHADOW, 0});
+        }
+        cards.push_back(c);
+    }
+    {
+        const Hibernation& h = win_.hiber;
+        Card c{0xE708, L"Hibernation file",
+               L"hiberfil.sys holds memory while the PC hibernates. Off also turns off Fast Startup; reduced keeps Fast Startup.",
+               !h.on ? L"Off" : std::wstring(h.reduced ? L"On, reduced (Fast Startup only)" : L"On") +
+                                    (h.fastStartup ? L"  ·  Fast Startup on" : L"  ·  Fast Startup off"),
+               h.bytes ? util::FormatSizeShort(h.bytes) : L"", {}};
+        if (h.on) {
+            if (!h.reduced) c.acts.push_back({L"Reduce", WA_HIBER_REDUCED, 0});
+            c.acts.push_back({L"Turn off", WA_HIBER_OFF, 1});
+        } else {
+            c.acts.push_back({L"Turn on", WA_HIBER_ON, 0});
+        }
+        cards.push_back(c);
+    }
+    {
+        Card c{0xE7B8, L"Compact OS", L"Stores Windows' own files compressed, usually saving 2 GB or more. Can be turned off again.",
+               win_.compactOs ? L"On: Windows files are compressed" : L"Off", L"", {}};
+        c.acts.push_back(win_.compactOs ? Act{L"Turn off", WA_COMPACT_OFF, 0} : Act{L"Turn on", WA_COMPACT_ON, 1});
+        cards.push_back(c);
+    }
+    {
+        const EventLogs& e = win_.logs;
+        Card c{0xE7C3, L"Event logs", L"Windows' diagnostic history. Clearing loses it for troubleshooting; the Security log is kept.",
+               e.known ? util::FormatCount(e.files) + L" logs" : L"Couldn't read the log folder",
+               e.known ? util::FormatSizeShort(e.bytes - e.security) : L"", {}};
+        if (e.known) c.acts.push_back({L"Clear", WA_LOGS, 0});
+        cards.push_back(c);
+    }
+
+    float y = top + 62;
+    RectF body = R(area.left, y, area.right, area.bottom);
+    ListState& ls = lists_[static_cast<int>(View::WinTools)];
+    float contentH = (elevated_ ? 0 : 64) + cards.size() * 102.0f + 20;
+    ls.scroll = std::clamp(ls.scroll, 0.0f, std::max(0.0f, contentH - H(body)));
+    gfx_.PushClip(body);
+    y -= ls.scroll;
+    if (!elevated_) {
+        RectF b = R(area.left + 24, y, area.right - 24, y + 52);
+        gfx_.FillRound(b, 10, WithAlpha(P_.warning, 0.12f));
+        gfx_.Icon(IC_SHIELD, RWH(b.left + 10, b.top, 30, H(b)), P_.warning, 16);
+        gfx_.Text(L"Changes here need administrator rights: Windows asks each time, or restart as administrator once.",
+                  R(b.left + 46, b.top, b.right - 200, b.bottom), P_.text, TS(13));
+        Button(R(b.right - 190, b.top + 10, b.right - 12, b.bottom - 10), IC_SHIELD, L"Restart as admin", CMD_ADMIN, 0);
+        y += 64;
+    }
+    for (auto& c : cards) {
+        RectF card = R(area.left + 24, y, area.right - 24, y + 92);
+        gfx_.FillRound(card, 12, P_.surface);
+        gfx_.StrokeRound(card, 12, P_.border);
+        float x = card.left + 18;
+        gfx_.FillRound(RWH(x, card.top + 18, 40, 40), 10, WithAlpha(P_.accent, 0.14f));
+        gfx_.Icon(c.icon, RWH(x, card.top + 18, 40, 40), P_.accent, 16);
+        x += 54;
+        float textRight = card.right - 330;
+        gfx_.Text(c.title, R(x, card.top + 12, textRight, card.top + 34), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(c.desc, R(x, card.top + 35, textRight, card.top + 55), P_.textDim, Small(12.5f));
+        gfx_.Text(c.status, R(x, card.top + 58, textRight, card.top + 80), P_.textFaint, Small(12));
+        if (!c.size.empty())
+            gfx_.Text(c.size, R(card.right - 310, card.top + 10, card.right - 20, card.top + 38), P_.text,
+                      TS(15, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Right));
+        float bx = card.right - 20;
+        for (auto it = c.acts.rbegin(); it != c.acts.rend(); ++it) {
+            float w = gfx_.Measure(it->text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 36;
+            bx -= w;
+            Button(RWH(bx, card.top + 46, w, 32), 0, it->text, CMD_WIN_ACT + it->action, it->style);
+            bx -= 8;
+        }
+        y += 102;
+    }
+    gfx_.PopClip();
 }
 
 void App::DrawCleanup(const RectF& area) {

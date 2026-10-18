@@ -653,6 +653,210 @@ void App::StartWslFree() {
     ShowDialog(std::move(d));
 }
 
+// =============================================================================================
+// Windows: space Windows keeps for itself (works without a scan).
+
+void App::LoadWinTools() {
+    if (task_) return;
+    auto st = std::make_shared<WinToolsInfo>();
+    auto t = std::make_unique<Task>();
+    t->title = L"Looking at Windows";
+    t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Drivers, System Restore, hibernation, event logs"}}; };
+    t->onDone = [this, st] {
+        st->store = win_.store;  // DISM's analysis takes minutes: kept until something changes it
+        st->storeAnalyzed = win_.storeAnalyzed;
+        win_ = std::move(*st);
+        winLoaded_ = true;
+        Invalidate();
+    };
+    StartTask(std::move(t), [st] {
+        st->drivers = ListDriverPackages();
+        st->hiber = QueryHibernation();
+        st->compactOs = CompactOsOn();
+        st->logs = QueryEventLogs();
+        st->shadows = QueryShadowStorage(st->shadowErr);
+    });
+}
+
+// Runs one of Windows' own tools as administrator, then says what it freed on the system drive.
+void App::RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
+                     std::function<AdminRun()> work) {
+    struct State {
+        AdminRun r;
+        uint64_t before = 0, after = 0;
+    };
+    auto st = std::make_shared<State>();
+    wchar_t win[MAX_PATH];
+    GetWindowsDirectoryW(win, MAX_PATH);
+    std::wstring drive = std::wstring(win).substr(0, 3);
+    auto t = std::make_unique<Task>();
+    t->title = title;
+    t->lines = [] {
+        return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"Windows' own tool is working; this can take several minutes"}};
+    };
+    t->onDone = [this, st, title, journalName, done] {
+        uint64_t freed = st->after > st->before ? st->after - st->before : 0;
+        if (!st->r.error.empty()) {
+            Toast(title + L": " + st->r.error, st->r.declined ? 2 : 1);
+        } else {
+            bool ok = st->r.code == 0;
+            Toast(ok ? done + (freed ? L" · " + util::FormatSizeShort(freed) + L" more free space" : L"")
+                     : title + L" failed: " + LastLine(st->r.out),
+                  ok ? 0 : 1);
+            JournalEntry je;
+            je.action = JournalAction::Clean;
+            je.bytes = freed;
+            je.path = journalName;
+            je.note = ok ? done : L"failed: " + LastLine(st->r.out);
+            JournalAppend(je);
+        }
+        if (root_) haveVol_ = QueryFreeSpace(root_->name, volTotal_, volFree_);
+        drives_ = ListDrives();
+        LoadWinTools();
+    };
+    StartTask(std::move(t), [st, drive, work] {
+        ULARGE_INTEGER f{};
+        if (GetDiskFreeSpaceExW(drive.c_str(), &f, nullptr, nullptr)) st->before = f.QuadPart;
+        st->r = work();
+        if (GetDiskFreeSpaceExW(drive.c_str(), &f, nullptr, nullptr)) st->after = f.QuadPart;
+    });
+}
+
+void App::WinToolAction(int action) {
+    Dialog d;
+    d.icon = 0xE770;
+    d.tone = 2;
+    d.buttons = {L"Cancel", L""};
+    d.primary = 1;
+    std::function<void()> run;
+    std::wstring admin = elevated_ ? L"" : L" Windows asks for administrator permission.";
+    switch (action) {
+        case WA_ANALYZE: {
+            struct State {
+                ComponentStore cs;
+            };
+            auto st = std::make_shared<State>();
+            auto t = std::make_unique<Task>();
+            t->title = L"Analyzing the component store";
+            t->lines = [] { return std::vector<std::pair<std::wstring, std::wstring>>{{L"", L"DISM takes a few minutes"}}; };
+            t->onDone = [this, st] {
+                if (!st->cs.ok) return Toast(L"Component store: " + st->cs.error, 1);
+                win_.store = st->cs;
+                win_.storeAnalyzed = true;
+                Invalidate();
+            };
+            StartTask(std::move(t), [st] { st->cs = AnalyzeComponentStore(); });
+            return;
+        }
+        case WA_CLEAN_STORE:
+            d.title = L"Clean up the component store?";
+            d.message = L"DISM removes the Windows components that newer updates replaced. Installed updates can still be "
+                        L"uninstalled afterwards. This takes several minutes and can't be interrupted." + admin;
+            d.buttons[1] = L"Clean up";
+            run = [this] {
+                RunWinTool(L"Cleaning up the component store", L"Component store (WinSxS)", L"Component store cleaned up", [] {
+                    return CleanComponentStore();
+                });
+                win_.storeAnalyzed = false;
+            };
+            break;
+        case WA_DRIVERS: {
+            std::vector<DriverPackage> old;
+            uint64_t bytes = 0;
+            for (auto& p : win_.drivers)
+                if (p.old) {
+                    old.push_back(p);
+                    bytes += p.bytes;
+                }
+            if (old.empty()) return;
+            d.title = L"Remove " + util::FormatCount(old.size()) + (old.size() == 1 ? L" old driver package (" : L" old driver packages (") +
+                      util::FormatSizeShort(bytes) + L")?";
+            d.message = L"Newer versions of these drivers are installed, and no device uses these ones. pnputil removes them from the "
+                        L"driver store; it refuses any that a device starts using." + admin;
+            for (size_t i = 0; i < old.size() && i < 8; ++i)
+                d.lines.push_back(util::FormatSizeShort(old[i].bytes) + L"\t" + old[i].provider.substr(0, old[i].provider.find(L' ')) +
+                                  L"  " + old[i].originalInf + L"  " + old[i].version);
+            if (old.size() > 8) d.lines.push_back(L"\t… and " + util::FormatCount(old.size() - 8) + L" more");
+            d.buttons[1] = L"Remove";
+            run = [this, old] {
+                RunWinTool(L"Removing old drivers", L"Old driver packages", L"Old driver packages removed", [old] { return DeleteDriverPackages(old); });
+            };
+            break;
+        }
+        case WA_SHADOW: {
+            if (win_.shadows.empty()) return;
+            wchar_t win[MAX_PATH];
+            GetWindowsDirectoryW(win, MAX_PATH);
+            ShadowStorage s = win_.shadows[0];
+            for (auto& x : win_.shadows)
+                if (_wcsnicmp(x.forDrive.c_str(), win, 2) == 0) s = x;
+            d.title = L"Limit System Restore on " + s.forDrive + L"?";
+            d.message = L"Restore points may then use at most this share of " + s.onDrive +
+                        L". When they need more, Windows deletes the oldest ones first." + admin;
+            d.buttons = {L"Cancel", L"3%", L"5%", L"10%"};
+            d.primary = 2;
+            d.onClose = [this, s](int b, bool) {
+                if (b < 1 || b > 3) return;
+                int pct = b == 1 ? 3 : b == 2 ? 5 : 10;
+                RunWinTool(L"Limiting System Restore", L"System Restore storage on " + s.forDrive,
+                           L"System Restore limited to " + std::to_wstring(pct) + L"% of " + s.onDrive,
+                           [s, pct] { return LimitShadowStorage(s, pct); });
+            };
+            ShowDialog(std::move(d));
+            return;
+        }
+        case WA_HIBER_OFF:
+            d.title = L"Turn hibernation off?";
+            d.message = L"Deletes hiberfil.sys (" + util::FormatSizeShort(win_.hiber.bytes) +
+                        L"). Hibernate and Fast Startup stop working until you turn it on again here." + admin;
+            d.buttons[1] = L"Turn off";
+            run = [this] { RunWinTool(L"Turning hibernation off", L"Hibernation file", L"Hibernation is off", [] { return SetHibernation(L"off"); }); };
+            break;
+        case WA_HIBER_REDUCED:
+            d.title = L"Reduce the hibernation file?";
+            d.message = L"hiberfil.sys keeps only what Fast Startup needs (about half the size). Hibernate from the power menu stops "
+                        L"working; Fast Startup keeps working." + admin;
+            d.buttons[1] = L"Reduce";
+            run = [this] {
+                RunWinTool(L"Reducing the hibernation file", L"Hibernation file", L"Hibernation file reduced", [] { return SetHibernation(L"reduced"); });
+            };
+            break;
+        case WA_HIBER_ON:
+            d.title = L"Turn hibernation on?";
+            d.message = L"Windows creates hiberfil.sys again (about 40% of your memory) for Hibernate and Fast Startup." + admin;
+            d.tone = 0;
+            d.buttons[1] = L"Turn on";
+            run = [this] { RunWinTool(L"Turning hibernation on", L"Hibernation file", L"Hibernation is on", [] { return SetHibernation(L"on"); }); };
+            break;
+        case WA_COMPACT_ON:
+            d.title = L"Turn on Compact OS?";
+            d.message = L"Windows stores its own files compressed, usually saving 2 GB or more. It takes 10 to 20 minutes and uses the "
+                        L"processor while it runs; afterwards the cost is barely noticeable. You can turn it off again here." + admin;
+            d.tone = 0;
+            d.buttons[1] = L"Turn on";
+            run = [this] { RunWinTool(L"Compressing Windows", L"Compact OS", L"Compact OS is on", [] { return SetCompactOs(true); }); };
+            break;
+        case WA_COMPACT_OFF:
+            d.title = L"Turn off Compact OS?";
+            d.message = L"Windows stores its own files uncompressed again, which takes back the space it saved." + admin;
+            d.buttons[1] = L"Turn off";
+            run = [this] { RunWinTool(L"Decompressing Windows", L"Compact OS", L"Compact OS is off", [] { return SetCompactOs(false); }); };
+            break;
+        case WA_LOGS:
+            d.title = L"Clear the event logs?";
+            d.message = L"Every Windows event log except Security is emptied. The history that helps troubleshoot crashes and errors "
+                        L"is gone afterwards; new events are logged as usual." + admin;
+            d.buttons[1] = L"Clear";
+            run = [this] { RunWinTool(L"Clearing event logs", L"Event logs", L"Event logs cleared", [] { return ClearEventLogs(); }); };
+            break;
+        default: return;
+    }
+    d.onClose = [run](int b, bool) {
+        if (b == 1 && run) run();
+    };
+    ShowDialog(std::move(d));
+}
+
 void App::RebuildOld() {
     oldRes_.clear();
     if (!root_) return;
@@ -1414,7 +1618,7 @@ void App::NavigateTo(Node* dir, bool remember) {
 
 void App::ShowView(View v) {
     if (v != View::Home && v != View::Cleanup && v != View::History && v != View::Deleted && v != View::AiModels &&
-        v != View::Wsl && v != View::CleanReview && !root_)
+        v != View::Wsl && v != View::WinTools && v != View::CleanReview && !root_)
         return Toast(L"Scan a drive or folder first", 2);
     if (v != view_) sel_.clear();
     view_ = v;
@@ -1442,6 +1646,9 @@ void App::ShowView(View v) {
             break;
         case View::Wsl:
             if (!wslLoaded_) LoadWsl();
+            break;
+        case View::WinTools:
+            if (!winLoaded_) LoadWinTools();
             break;
         default: break;
     }
@@ -1724,6 +1931,7 @@ void App::ShowMoreMenu() {
 }
 
 void App::OnCommand(int cmd) {
+    if (cmd >= CMD_WIN_ACT && cmd < CMD_WIN_ACT + static_cast<int>(WA_COUNT)) return WinToolAction(cmd - CMD_WIN_ACT);
     Node* single = nullptr;
     {
         auto s = SelectedNodes();
@@ -1837,6 +2045,7 @@ void App::OnCommand(int cmd) {
         case CMD_AI_DELETE: StartAiDelete(); break;
         case CMD_WSL_REFRESH: LoadWsl(); break;
         case CMD_WSL_FREE: StartWslFree(); break;
+        case CMD_WIN_REFRESH: LoadWinTools(); break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE: MeasureCleanup(); break;
         case CMD_ADMIN: {

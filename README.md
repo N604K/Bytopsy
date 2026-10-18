@@ -57,6 +57,20 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Docker's own data is listed too (`docker system df`): the build cache and images no container
   uses can be removed with Docker's prune commands; stopped containers and unused volumes are only
   shown, since they can hold data.
+- **Windows** (works without a scan): the space Windows keeps for itself, each measured and changed
+  with Windows' own tool, as administrator (Windows asks, or restart as administrator once):
+  - *Component store (WinSxS)*: DISM analyzes it (`/AnalyzeComponentStore`) and removes components
+    that newer updates replaced (`/StartComponentCleanup`, never `/ResetBase`, so updates stay
+    removable).
+  - *Old driver packages*: third-party drivers in the DriverStore for which a newer version of the
+    same driver is installed and that no device uses (connected or not); printer drivers are never
+    offered. `pnputil /delete-driver` removes them, without `/force`.
+  - *System Restore*: how much the restore points use, and a limit of 3, 5 or 10% of the drive
+    (`vssadmin resize shadowstorage`).
+  - *Hibernation file*: turn it off, reduce it to what Fast Startup needs, or turn it on again
+    (`powercfg`).
+  - *Compact OS*: compress Windows' own files, or undo it (`compact /compactos`).
+  - *Event logs*: clear every log except Security (`wevtutil`).
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -67,7 +81,10 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Gradle; conda archives; Conan. Where a tool keeps more than downloads in its cache folder, only the
   downloads are taken (Poetry's virtualenvs, Deno's localStorage data and conda's hard-linked
   packages stay), and a cache with a database (Conan) is cleaned by the tool's own command
-  (`conan remove "*" -c`), with the space it freed measured before and after.
+  (`conan remove "*" -c`), with the space it freed measured before and after. The Delivery
+  Optimization cache is emptied with Windows' own `Delete-DeliveryOptimizationCache`; previous
+  Windows installations and upgrade leftovers (`Windows.old`, `$Windows.~BT`, `$Windows.~WS`) are
+  measured and handed to Windows Disk Cleanup.
   Each category is measured first, and only the safe ones are preselected. *Review* lists exactly
   what a category would delete (files, folders or Recycle Bin items) so you can uncheck anything to
   keep; cleaning deletes only that list, and skips entries that changed since they were measured.
@@ -190,7 +207,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels and vdisks self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks and wintools self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -224,6 +241,8 @@ winncdu-cli [options] [path]
                         what each frees, and exit
   --wsl                 List WSL and Docker virtual disks (size on the drive vs. used
                         inside) and what Docker could prune, and exit
+  --windows             List space Windows keeps (old drivers, hibernation, System
+                        Restore, event logs) and exit
 ```
 
 Examples:
@@ -286,6 +305,8 @@ src/                  core engine + terminal app
   devjunk.cpp         developer junk finder (build output and dependencies by project)
   aimodels.cpp        AI models: Hugging Face cache, Ollama, LM Studio (list and delete)
   vdisks.cpp          WSL and Docker virtual disks: usage, compaction, Docker prune
+  wintools.cpp        Windows: component store, old drivers, System Restore, hibernation, ...
+  runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
   app.cpp             window, input, layout
@@ -305,6 +326,7 @@ tests/delete_test.cpp   permanent delete: links, read-only, locked files, long p
 tests/devjunk_test.cpp  developer junk: project markers, grouping, app folders left alone (ctest)
 tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the model folders (ctest)
 tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
+tests/wintools_test.cpp Windows: DISM report parsing, which driver packages count as old (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

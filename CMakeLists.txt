@@ -23,10 +23,12 @@ add_library(winncdu_core STATIC
   src/devjunk.cpp
   src/aimodels.cpp
   src/vdisks.cpp
+  src/runtool.cpp
+  src/wintools.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil)
 
 # Windowed app (Direct2D): build\winncdu.exe
 add_executable(winncdu WIN32
@@ -125,5 +127,13 @@ if(MSVC)
   target_compile_options(winncdu-vdisks-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME vdisks COMMAND winncdu-vdisks-test)
+
+# Windows tools (DISM report parsing, which driver packages are old): build\winncdu-wintools-test.exe
+add_executable(winncdu-wintools-test tests/wintools_test.cpp)
+target_link_libraries(winncdu-wintools-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-wintools-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME wintools COMMAND winncdu-wintools-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)
