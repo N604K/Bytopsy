@@ -84,9 +84,10 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
   Properties and Rescan.
-- **Cleanup** (works without a scan): Recycle Bin, temporary files, browser caches, thumbnail cache,
-  crash dumps, Windows Update downloads, Delivery Optimization, shader caches, game launcher caches
-  (Steam, Epic, Battle.net) and package caches:
+- **Cleanup** (works without a scan): Recycle Bin, temporary files, browser caches, chat app caches
+  (new and classic Teams, Discord, Slack: only their web caches, never sign-ins or message stores),
+  thumbnail cache, crash dumps, Windows Update downloads, Delivery Optimization, shader caches, game
+  launcher caches (Steam, Epic, Battle.net) and package caches:
   npm, Yarn, pnpm, Bun, Deno, pip, uv, Poetry, NuGet, Go, Cargo, Composer and vcpkg; Maven and
   Gradle; conda archives; Conan. Where a tool keeps more than downloads in its cache folder, only the
   downloads are taken (Poetry's virtualenvs, Deno's localStorage data and conda's hard-linked
@@ -94,7 +95,10 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   (`conan remove "*" -c`), with the space it freed measured before and after. The Delivery
   Optimization cache is emptied with Windows' own `Delete-DeliveryOptimizationCache`; previous
   Windows installations and upgrade leftovers (`Windows.old`, `$Windows.~BT`, `$Windows.~WS`) are
-  measured and handed to Windows Disk Cleanup.
+  measured and handed to Windows Disk Cleanup. Media you received in WhatsApp Desktop
+  (`LocalState\shared	ransfers`) and Telegram Desktop (`Downloads\Telegram Desktop` and its media
+  cache, never the rest of `tdata`, which holds the sign-in) is shown with its size but never
+  preselected: apart from Telegram's cache, those files are gone from the PC for good.
   Each category is measured first, and only the safe ones are preselected. *Review* lists exactly
   what a category would delete (files, folders or Recycle Bin items) so you can uncheck anything to
   keep; cleaning deletes only that list, and skips entries that changed since they were measured.
@@ -171,7 +175,8 @@ details panel (`i`).
 | **Caution** | A heads-up in the delete dialog. | Local AI models (Ollama, LM Studio, Hugging Face), `.env`, `.pem`, virtual disks, project `.claude`/`.cursor` folders, Downloads, Windows Temp |
 
 Caches inside protected folders stay deletable: browser `Cache`/`Code Cache`/`GPUCache`, the
-caches of VS Code, Cursor, Windsurf and the Claude desktop app, and so on.
+caches of VS Code, Cursor, Windsurf and the Claude desktop app, and so on. WhatsApp's received
+media (`transfers`) is only Caution, so Cleanup can offer it; the rest of WhatsApp stays Important.
 
 **AI assistants.** Sessions, memory, settings and sign-ins of: Claude Code (`~\.claude`,
 `~\.claude.json`), the Claude desktop app, OpenAI Codex CLI (`~\.codex`), ChatGPT desktop, Cursor,

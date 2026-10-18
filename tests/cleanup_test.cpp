@@ -11,6 +11,7 @@
 #include "fsops.h"
 #include "gui/cleanup.h"
 #include "journal.h"
+#include "protect.h"
 #include "util.h"
 
 static int g_fail = 0;
@@ -95,20 +96,41 @@ int main() {
         Check(errs.empty(), L"res/cleaners.ini has no errors" + (errs.empty() ? L"" : L": " + errs[0]));
         std::wstring ids;
         for (auto& k : cats) ids += k.id + L" ";
-        Check(ids == L"recycle temp wintemp browser thumbs crash wu do shader launchers dev jvm conda conan winold winbt ", L"all categories, in order: " + ids);
-        if (cats.size() == 16) {
-            Check(cats[0].recycleBin && cats[14].external && cats[14].needsAdmin && cats[15].external && cats[15].targets.size() == 2,
+        Check(ids == L"recycle temp wintemp browser chat chatmedia thumbs crash wu do shader launchers dev jvm conda conan winold winbt ",
+              L"all categories, in order: " + ids);
+        if (cats.size() == 18) {
+            Check(cats[0].recycleBin && cats[16].external && cats[16].needsAdmin && cats[17].external && cats[17].targets.size() == 2,
                   L"kinds and admin flags");
-            Check(cats[7].command.find(L"Delete-DeliveryOptimizationCache") != std::wstring::npos && cats[7].needsAdmin,
+            Check(cats[9].command.find(L"Delete-DeliveryOptimizationCache") != std::wstring::npos && cats[9].needsAdmin,
                   L"Delivery Optimization is emptied through its own command");
-            Check(cats[13].command == L"conan remove \"*\" -c" && cats[12].targets[0].filePattern == L"*.conda;*.tar.bz2",
+            Check(cats[15].command == L"conan remove \"*\" -c" && cats[14].targets[0].filePattern == L"*.conda;*.tar.bz2",
                   L"conan runs its own command; conda takes only archives");
             Check(cats[1].targets.size() == 1 && cats[1].targets[0].path == L"%TEMP%" && cats[1].targets[0].minAgeHours == 24,
                   L"temp: path and age");
-            Check(cats[4].targets[0].filePattern == L"thumbcache_*.db", L"thumbs: file pattern");
-            Check(cats[1].safe && !cats[10].safe && !cats[9].safe, L"temp preselected, developer and launcher caches not");
+            Check(cats[6].targets[0].filePattern == L"thumbcache_*.db", L"thumbs: file pattern");
+            Check(cats[1].safe && !cats[12].safe && !cats[11].safe, L"temp preselected, developer and launcher caches not");
             Check(cats[3].targets.size() == 11 && cats[3].icon == 0xE774, L"browser: 11 paths and its icon");
+            // Chat apps: only cache folders, never their sign-in, storage or message databases.
+            bool onlyCaches = cats[4].targets.size() == 33;
+            for (auto& t : cats[4].targets) {
+                std::wstring last = util::ToLower(t.path.substr(t.path.rfind(L'\\') + 1));
+                onlyCaches = onlyCaches && t.filePattern.empty() && t.minAgeHours == 0 &&
+                             ((last.size() >= 5 && last.compare(last.size() - 5, 5, L"cache") == 0) || last == L"cachestorage");
+            }
+            Check(onlyCaches && cats[4].safe, L"chat: 33 cache folders (Teams, Discord, Slack), preselected like browser caches");
+            Check(!cats[5].safe && cats[5].targets.size() == 4 && cats[5].desc.find(L"for good") != std::wstring::npos,
+                  L"chat media: 4 folders, never preselected, says what is lost");
         }
+    }
+
+    // ---- WhatsApp's received media is open to Cleanup (with a heads-up); its chat history is not
+    {
+        wchar_t lb[MAX_PATH];
+        std::wstring local(lb, GetEnvironmentVariableW(L"LOCALAPPDATA", lb, MAX_PATH));
+        std::wstring pkg = local + L"\\Packages\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm\\LocalState";
+        Protect media = CheckProtection(pkg + L"\\shared\\transfers\\2025_01\\IMG-1.jpg").level;
+        Protect chats = CheckProtection(pkg + L"\\shared\\messages.db").level;
+        Check(media == Protect::Caution && chats == Protect::Important, L"WhatsApp: received media Caution, the rest Important");
     }
 
     // ---- Mistakes in user rules are reported, and never widen what is deleted

@@ -64,7 +64,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       and download caches.
       *Done: Games view and `winncdu-cli --games`, with leftovers of uninstalled games; a "Game
       launcher caches" Cleanup category. Only Steam could be checked on a real PC so far.*
-- [ ] Chat apps: Teams, Discord, Slack caches; WhatsApp/Telegram media folders (show, don't preselect).
+- [x] Chat apps: Teams, Discord, Slack caches; WhatsApp/Telegram media folders (show, don't preselect).
+      *Done: "Chat app caches" (new and classic Teams, Discord, Slack incl. Store versions; web caches
+      only) and "WhatsApp & Telegram media" (received files and Telegram's media cache, never
+      preselected; WhatsApp's `transfers` folder lowered to Caution so Cleanup may list it).*
 - [ ] Browsers: cookies and history as opt-in categories, with a "keep me signed in to" list.
 
 ## 3. Maintenance beyond disk space

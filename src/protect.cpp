@@ -464,6 +464,9 @@ void BuiltinRules(std::vector<Rule>& v) {
     b.Tree(L"{ROAMING}\\Signal", P::Important, L"Messages", L"Signal Desktop", L"Message history that can't be restored from the server.");
     b.Tree(L"{ROAMING}\\Telegram Desktop", P::Caution, L"Messages", L"Telegram Desktop", L"Your Telegram session; you'll need to sign in again.");
     b.Tree(L"{LOCAL}\\Packages\\5319275A.WhatsAppDesktop_*", P::Important, L"Messages", L"WhatsApp Desktop", L"Local chat history and media.");
+    // Received photos, videos and files (Cleanup → WhatsApp & Telegram media, never preselected).
+    b.Allow(L"{LOCAL}\\Packages\\5319275A.WhatsAppDesktop_*\\LocalState\\shared\\transfers", P::Caution,
+            L"Photos, videos and files WhatsApp received. Deleted here, they are gone from this PC; your phone may still have them.");
 
     // ---- Virtual machines, WSL, containers -------------------------------------------------
     const wchar_t* kVM = L"VM";
