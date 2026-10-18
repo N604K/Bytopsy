@@ -2503,6 +2503,9 @@ void App::ShowMoreMenu() {
     add(m, MF_STRING, CMD_WINAPP2, Tr(L"Import winapp2.ini…"));
     if (PathExists(Winapp2File())) add(m, MF_STRING, CMD_WINAPP2_REMOVE, Tr(L"Remove winapp2.ini cleaners"));
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+    add(m, MF_STRING | (settings_.updates == 1 ? MF_CHECKED : 0), CMD_UPDATE_AUTO, Tr(L"Check for updates daily"));
+    add(m, MF_STRING, CMD_UPDATE_CHECK, Tr(L"Check for updates now"));
+    AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     if (!elevated_) add(m, MF_STRING, CMD_ADMIN, Tr(L"Restart as administrator"));
     add(m, MF_STRING, CMD_ABOUT, Tr(L"About && shortcuts\tF1"));
     RECT rc;
@@ -2516,6 +2519,12 @@ void App::ShowMoreMenu() {
 
 void App::OnCommand(int cmd) {
     if (cmd >= CMD_WIN_ACT && cmd < CMD_WIN_ACT + static_cast<int>(WA_COUNT)) return WinToolAction(cmd - CMD_WIN_ACT);
+    if (cmd >= CMD_UPDATE_CHECK && cmd <= CMD_UPDATE_COPY) {
+        OnUpdateCommand(cmd);
+        SaveSettings(settings_);
+        Invalidate();
+        return;
+    }
     if (cmd >= CMD_LANG && cmd < CMD_LANG + 2 + static_cast<int>(langMenu_.size())) {
         settings_.language = cmd == CMD_LANG ? L"" : cmd == CMD_LANG + 1 ? std::wstring(i18n::kPseudoCode) : langMenu_[cmd - CMD_LANG - 2].code;
         ApplyLanguage(true);

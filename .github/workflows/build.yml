@@ -1,5 +1,5 @@
 # Build and self-tests on every push and pull request; on a tag "v*" also a GitHub release with a
-# zip of both programs and its SHA-256. See docs/RELEASING.md.
+# zip of both programs, its SHA-256 and the signed update.json. See docs/RELEASING.md.
 name: Build
 
 on:
@@ -106,6 +106,28 @@ jobs:
           # sha256sum format: "<hash>  <file>"; check with: sha256sum -c, or Get-FileHash.
           [IO.File]::WriteAllText("$PWD/dist/$name.zip.sha256", "$hash  $name.zip`n")
           Get-Content "dist/$name.zip.sha256"
+
+      # Signed update information for Bytopsy's self-update, attached to the release as update.json
+      # (docs/RELEASING.md). Without the secret BYTOPSY_UPDATE_KEY it is left out with a warning:
+      # the release works as before, installed copies just don't see it. The verify step fails the
+      # build when the secret doesn't match the public key in src/updatekey.h.
+      - name: Update manifest
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          BYTOPSY_UPDATE_KEY: ${{ secrets.BYTOPSY_UPDATE_KEY }}
+          MINIMUM_VERSION: ${{ vars.BYTOPSY_MINIMUM_VERSION }}
+        run: |
+          if (-not $env:BYTOPSY_UPDATE_KEY) {
+            "::warning::The secret BYTOPSY_UPDATE_KEY is not set: no update.json, so Bytopsy's self-update won't offer this release."
+            exit 0
+          }
+          $v = "${{ steps.version.outputs.version }}"
+          $extra = @{}
+          if ($env:MINIMUM_VERSION) { $extra.MinimumVersion = $env:MINIMUM_VERSION }
+          tools/update-key.ps1 manifest -Version $v -Zip "dist/bytopsy-$v-x64.zip" -Out update-manifest.json @extra
+          tools/update-key.ps1 sign -In update-manifest.json -Out dist/update.json
+          tools/update-key.ps1 verify -In dist/update.json -Header src/updatekey.h
 
       - uses: actions/upload-artifact@v4
         with:

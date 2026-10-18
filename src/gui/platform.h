@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,11 @@ struct Settings {
     bool hasWindow = false;
     bool maximized = false;
     std::wstring language;  // "" Windows' display language, "en", "qps-ploc" (pseudo), or a code from res/lang
+    // Update checks: 0 off, 1 once a day (notify). Asked once, on the first start; off until answered.
+    int updates = 0;
+    bool updatesAsked = false;
+    int64_t updateLastCheck = 0;  // Unix seconds of the last automatic check
+    std::wstring updateSkip;      // a version the user chose to skip
 };
 
 Settings LoadSettings();

@@ -28,6 +28,7 @@
 #include "../vdisks.h"
 #include "../wintools.h"
 #include "../tree.h"
+#include "../update.h"
 #include "cleanup.h"
 #include "gfx.h"
 #include "history.h"
@@ -112,6 +113,13 @@ enum Cmd : int {
     CMD_APP_LEFT_DONE,
     CMD_PHOTO_FIND,
     CMD_PHOTO_MARK,
+    CMD_UPDATE_CHECK,    // ⋯ > Check for updates now (also when daily checks are off)
+    CMD_UPDATE_AUTO,     // ⋯ > Check for updates daily
+    CMD_UPDATE_NOTES,    // the update banner's buttons
+    CMD_UPDATE_INSTALL,
+    CMD_UPDATE_LATER,
+    CMD_UPDATE_SKIP,
+    CMD_UPDATE_COPY,
     CMD_WIN_ACT = 600,  // + WinAction
     CMD_LANG = 800,     // + 0 Windows' language, 1 the pseudo-language, 2 + an index into langMenu_
 };
@@ -249,7 +257,9 @@ struct ToastInfo {
 class App : private AccHost {
 public:
     // `show`: how the program was started (wWinMain's nCmdShow), e.g. minimized from a shortcut.
-    bool Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show = SW_SHOWDEFAULT);
+    // `updated`: started by the update that just replaced the program (--updated).
+    bool Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show = SW_SHOWDEFAULT,
+                bool updated = false);
     int Run();
 
 private:
@@ -371,6 +381,17 @@ private:
     void ShowDialog(Dialog d);
     void ShowAbout();
     void ConfirmNewScan(const std::wstring& path);
+
+    // ---- self-update (update_gui.cpp)
+    void StartupUpdates(bool updated);  // .old files of the last update, the "updated" message
+    void AskAboutUpdates();             // once, on the first start
+    void MaybeCheckForUpdates();        // at most once a day, when turned on
+    void StartUpdateCheck(bool manual);
+    void OnUpdateChecked(const UpdateCheck& c, bool manual);
+    void OnUpdateCommand(int cmd);
+    void ShowUpdateInstall();
+    void StartUpdateInstall();
+    void DrawUpdateBanner();
 
     // ---- accessibility (uia_app.cpp): the UI Automation tree, rebuilt from each frame
     HWND AccWindow() const override { return hwnd_; }
@@ -602,6 +623,12 @@ private:
     std::unordered_map<std::wstring, std::wstring> fitCache_;  // parent folder, relative to the scan root
 
     std::unique_ptr<Task> task_;
+    // Self-update: the last check that found a newer version, and whether its banner shows.
+    UpdateCheck update_;
+    bool updateBanner_ = false;
+    bool updateCheckRunning_ = false;  // the daily check, in the background
+    float bannerTop_ = 0;              // where the banner starts (the toast goes above it)
+    PackageManager pkgMgr_ = PackageManager::None;
     Dialog dialog_;
     ToastInfo toast_;
     bool timerOn_ = false;
@@ -639,3 +666,4 @@ constexpr UINT WM_APP_CLEANUP = WM_APP + 2;
 constexpr UINT WM_APP_UNINSTALL = WM_APP + 3;  // an uninstaller Bytopsy waits for made progress
 constexpr UINT WM_APP_ACC = WM_APP + 4;        // raise UI Automation events for the last frame
 constexpr UINT WM_APP_ACCDO = WM_APP + 5;      // run a UI Automation action: wParam AccAct, lParam element key
+constexpr UINT WM_APP_UPDATE = WM_APP + 6;     // the daily update check is done: lParam a new UpdateCheck*

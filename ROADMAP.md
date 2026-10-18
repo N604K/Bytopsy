@@ -173,7 +173,8 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       capped at 16384 levels), `>`/`<` were inclusive, a sub-folder export lost its full path.*
 - [x] Privacy statement: no telemetry, no network access (except an optional update check).
       *Done: "Privacy" in the README, checked against the source (no networking APIs or libraries).
-      There is no update check, so the statement has no exception.*
+      There is no update check, so the statement has no exception.* (Since then: the opt-in
+      update check of section 5, the statement's one exception.)
 
 ## 5. Updates: the PC's and Bytopsy's own
 
@@ -193,7 +194,7 @@ databases, and every install through Windows' or the app's own mechanism.
 - [ ] **Low disk space alerts**: a notification when a drive's free space drops below a limit you
       choose, from the same per-user scheduled task as the scheduled cleanup (no background
       process), linking straight to the drive in Bytopsy.
-- [ ] **Bytopsy updates itself** (opt-in; asked on first start, default *Off*):
+- [x] **Bytopsy updates itself** (opt-in; asked on first start, default *Off*):
       - `https://bytopsy.com/update.json` names the latest version, its download (the GitHub
         release zip), SHA-256 and release notes. The release workflow writes and publishes it, and
         signs it with a key kept in a GitHub secret (ECDSA P-256; the app holds the public key and
@@ -206,6 +207,18 @@ databases, and every install through Windows' or the app's own mechanism.
         of updating behind its back.
       - The README's privacy statement gets its one exception: these two addresses, only when
         update checks are on.
+      *Done: `src/update.cpp` (WinHTTP, HTTPS only, system proxy, size limits) and
+      `src/gui/update_gui.cpp`. The release workflow attaches a signed `update.json` to each GitHub
+      release (`tools/update-key.ps1`, secret `BYTOPSY_UPDATE_KEY`); bytopsy.com only serves that
+      file, and the fallback is the release's own copy (`releases/latest/download/update.json`, no
+      API). The signature is checked with `bcrypt.dll` before anything inside is read; older or
+      equal versions and downloads from anywhere but the project's GitHub releases are refused.
+      First-start question (default off), daily check, `⋯` > *Check for updates now*, a banner
+      (What's new / Update / Not now / Skip this version), `bytopsy-cli --check-update`. Installing
+      checks size and SHA-256, unpacks with Windows' `tar.exe`, compares the publisher once
+      releases are signed, swaps the programs with a full rollback, journals it and restarts; a
+      folder Bytopsy can't write to (Program Files) gets "restart as administrator" instead. The
+      public key in `src/updatekey.h` is still a placeholder (no checks until it is generated).*
 
 Later, maybe:
 

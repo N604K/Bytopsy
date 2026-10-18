@@ -236,6 +236,17 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   single image (the list shows the same items), and the keyboard moves through lists and dialogs
   only, not between a view's buttons (a screen reader's own navigation reaches those). The right-click
   and `⋯` menus are standard Windows menus.
+- **Updates** (opt-in): on the first start Bytopsy asks whether it may look for a new version once
+  a day; the answer is *off* until you say yes (`⋯` > *Check for updates daily* changes it, and
+  `⋯` > *Check for updates now* works either way). A newer version shows a banner: *What's new*,
+  *Update*, *Not now*, *Skip this version*. *Update* downloads the release zip from GitHub and
+  installs it only if it matches the signed update information (see [Privacy](#privacy)), then
+  replaces `bytopsy.exe` and `bytopsy-cli.exe` next to it and restarts; the old programs stay as
+  `.old` files until the next start, and if anything fails everything is put back. Settings,
+  history, rules, `Bytopsy-data`, `lang` and the portable marker are never touched, and the
+  update is written to the journal. Installed with winget, Scoop or Chocolatey, the banner shows
+  that package manager's update command instead. In a folder Bytopsy can't write to (Program
+  Files) it says so and offers *Restart as administrator*.
 - **Languages**: every text of the windowed app comes from a translation table, so Bytopsy can be
   translated without touching the code ([how](#translations)). It starts in Windows' display
   language when a translation for it exists, otherwise in English; `⋯` > *Language* overrides that
@@ -332,9 +343,23 @@ add a rule (or a cleaner) yourself.
 
 ## Privacy
 
-Bytopsy has no telemetry and makes no network connections. It contains no networking code (no
-WinHTTP, WinINet, sockets or URL downloads), links no networking library, has no update check, and
-sends nothing anywhere. What it learns about your disk stays on your PC.
+Bytopsy has no telemetry and sends nothing about you, your PC or your disk anywhere. What it
+learns about your disk stays on your PC.
+
+**Its one network connection: the update check**, and only when you turned on *Check for updates
+daily* (asked once, off until you say yes), pressed `⋯` > *Check for updates now*, or ran
+`bytopsy-cli --check-update`. Bytopsy then fetches `https://bytopsy.com/update.json` and, if that
+doesn't answer, `https://github.com/N604K/Bytopsy/releases/latest/download/update.json`: a small
+file naming the latest version. The request carries nothing but what any download does (your IP
+address, and `Bytopsy/<version>` as the user agent); no cookies, no identifiers. Only if you then
+choose *Update* does it download the release zip from
+`https://github.com/N604K/Bytopsy/releases/download/...` (GitHub serves it from its file storage).
+This is WinHTTP with your Windows proxy settings, HTTPS only. The update file is signed (ECDSA
+P-256, checked with Windows' `bcrypt.dll` against a key built into Bytopsy) and names the zip's
+SHA-256, so a hijacked website can't make Bytopsy install anything; older versions are never
+installed, and nothing is downloaded from anywhere but the project's GitHub releases. The
+publisher check of signed releases works offline (no revocation lookups). There is no other
+networking code.
 
 **What it reads.** Names, sizes, times and attributes of what you scan. File contents only where a
 feature needs them: hashes for Duplicates, the ext4 superblock inside WSL disks, game launcher and
@@ -360,20 +385,27 @@ tasks, and disk health from WMI and the drives' own health logs.
 | `photohash.cache` | Image hashes by path, size and time, so *Similar photos* is fast the second time |
 | `lang\` | Translations you add yourself (only read; see [Translations](#translations)) |
 
+`settings.ini` also holds the update settings (`updates`, `updatesAsked`, the time of the last
+automatic check, a skipped version).
+
 Outside that folder: exports where you save them; the Explorer menu entry, if you add it (three keys
 under `HKCU\Software\Classes`, removed by the same menu item); the scheduled cleanup task
 (`\Bytopsy\Scheduled cleanup` in Task Scheduler), if you create one; when you turn a startup entry
 off or on, the same `StartupApproved` value Task Manager writes, the task's enabled switch, or the
-service's start type; and short-lived files in `%TEMP%` (a
-`diskpart` script while compacting virtual disks, the output of tools run as administrator), deleted
-when the tool finishes. Deleting the `Bytopsy` folder removes everything else.
+service's start type; when you install an update, the new `bytopsy.exe`, `bytopsy-cli.exe`,
+`README.md` and `LICENSE` next to the running ones (the previous files as `<name>.old` until the
+next start; nothing else in that folder is touched); and short-lived files in `%TEMP%` (a
+`diskpart` script while compacting virtual disks, the output of tools run as administrator, an
+update's download in `bytopsy-update-*`), deleted when the tool or update finishes. Deleting the `Bytopsy` folder removes everything else.
 
 **Programs it starts**, only from the views and actions that need them: Windows' own tools (DISM,
 `pnputil`, `vssadmin`, `powercfg`, `compact`, `wevtutil`, `diskpart`, PowerShell for System Restore
 storage and the Delivery Optimization cache, Disk Cleanup, `fsutil` for TRIM, `reg`, `schtasks` and
-`sc` for startup entries that need administrator rights), `wsl.exe`, `docker`, the clean command of a
+`sc` for startup entries that need administrator rights, `tar.exe` to unpack an update),
+`wsl.exe`, `docker`, the clean command of a
 `kind = command` cleanup rule (such as `conan remove`), an app's own uninstaller, and a game
-launcher's uninstall link (`steam://uninstall/...`). Bytopsy itself goes online for none of these,
+launcher's uninstall link (`steam://uninstall/...`), and after an update the new `bytopsy.exe`.
+Bytopsy itself goes online for none of these,
 but the programs behave as they always do: Steam or Docker Desktop, for example, may connect on
 their own.
 
@@ -412,6 +444,9 @@ for keeping a translation up to date.
 Download `bytopsy-<version>-x64.zip` from the GitHub releases, check it against the `.sha256` file
 next to it (see [docs/RELEASING.md](docs/RELEASING.md#checking-a-download)), and unpack it anywhere.
 There is no installer; both programs run from any folder.
+
+To keep it up to date, let it check for updates (asked on the first start; see the *Updates*
+feature above), or run `bytopsy-cli --check-update` now and then.
 
 Manifests for winget, Scoop and Chocolatey are prepared in [packaging/](packaging) but not yet
 published in those repositories.
@@ -455,7 +490,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash, uia and i18n self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash, uia, i18n and update self-tests
 ```
 
 GitHub Actions builds and runs the self-tests on every push and pull request
@@ -515,6 +550,9 @@ bytopsy-cli [options] [path]
   --similar-photos[=strict|normal|loose]
                         Scan path, list groups of photos that look alike (resized,
                         re-saved, lightly edited copies) with the one to keep, and exit
+  --check-update        Ask bytopsy.com (or GitHub) for the latest version, print it
+                        next to this one, and exit; never installs anything. Exit
+                        code 0 = up to date, 2 = a newer version exists, 1 = no answer
 ```
 
 Examples:
@@ -585,6 +623,8 @@ src/                  core engine + terminal app
   apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
   phash.cpp           similar photos: WIC decoding, dHash/pHash, hash index, grouping, cache
   i18n.cpp            translations: Tr/TrF/TrN, .lang files, plural rules, pseudo-language
+  update.cpp          self-update: signed update.json, WinHTTP download, SHA-256, unpack, file swap
+  updatekey.h         the public key update.json is checked with (placeholder until generated)
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -597,6 +637,7 @@ src/gui/              windowed app
   browserdata.cpp     browser cookies (with the keep list) and history, through SQLite
   winapp2.cpp         winapp2.ini import
   apps_view.cpp       Apps view: list, uninstall and wait, leftovers review
+  update_gui.cpp      update question, daily check, update banner, installing and restarting
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
@@ -622,15 +663,17 @@ tests/apps_test.cpp     apps: which entries are listed, which folders count as l
 tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
 tests/uia_test.cpp      accessibility tree: element identity across frames, reading order, names from text, patterns (ctest)
 tests/i18n_test.cpp     translations: .lang parsing, placeholders, plural rules, pseudo-language, res/lang files (ctest)
+tests/update_test.cpp   self-update: signatures (throwaway key), versions, pinned URLs, SHA-256, file swap and rollback, package managers; offline (ctest)
 res/bytopsy.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 res/lang/             translations (<code>.lang, built in) and template.lang, the generated list of texts
 tools/extract_strings.py  collects the texts into template.lang, checks and updates translations
+tools/update-key.ps1  the update signing key: make it, write and sign update.json, verify it
 third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified
 CONTRIBUTING.md       building, testing, adding a protected location, a cleaner or a translation
 .github/ISSUE_TEMPLATE  issue forms: false alarm, missing protected folder, bug report
 .github/workflows/build.yml  CI: build, self-tests, translation template check; release zips with SHA-256 on tags
-docs/RELEASING.md     how releases are built, signed (once set up) and published
+docs/RELEASING.md     how releases are built, signed (once set up) and published, update.json and bytopsy.com
 packaging/signpath/   SignPath artifact configuration for code signing
 packaging/winget/, scoop/, chocolatey/  package manager manifests (templates)
 packaging/update-manifests.ps1  fills them in for a release

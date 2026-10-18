@@ -32,10 +32,11 @@ add_library(bytopsy_core STATIC
   src/apps.cpp
   src/phash.cpp
   src/i18n.cpp
+  src/update.cpp
 )
 target_include_directories(bytopsy_core PUBLIC src)
 target_compile_definitions(bytopsy_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(bytopsy_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32 version wevtapi windowscodecs)
+target_link_libraries(bytopsy_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32 version wevtapi windowscodecs winhttp wintrust crypt32)
 
 # SQLite (public domain, https://www.sqlite.org), for reading and editing browsers' cookie and
 # history databases. Third-party code: compiled as C, its warnings are not ours to fix.
@@ -65,6 +66,7 @@ add_executable(bytopsy WIN32
   src/gui/accmodel.cpp
   src/gui/uia.cpp
   src/gui/uia_app.cpp
+  src/gui/update_gui.cpp
   src/gui/bytopsy-gui.rc
 )
 target_link_libraries(bytopsy PRIVATE bytopsy_core sqlite3 d2d1 dwrite windowscodecs dwmapi comctl32 uxtheme gdi32 advapi32 uiautomationcore oleacc)
@@ -273,5 +275,14 @@ if(MSVC)
   target_compile_options(bytopsy-i18n-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME i18n COMMAND bytopsy-i18n-test)
+
+# Self-update (signed manifest, versions, SHA-256, file swap, package managers; local files only,
+# never the network): build/bytopsy-update-test.exe
+add_executable(bytopsy-update-test tests/update_test.cpp)
+target_link_libraries(bytopsy-update-test PRIVATE bytopsy_core)
+if(MSVC)
+  target_compile_options(bytopsy-update-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME update COMMAND bytopsy-update-test)
 
 install(TARGETS bytopsy bytopsy-cli RUNTIME DESTINATION bin)
