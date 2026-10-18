@@ -126,6 +126,18 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   that rate) from free-space measurements Bytopsy notes in `%LOCALAPPDATA%\Bytopsy\freespace.log`
   when the view opens or a scan finishes, or else from earlier scans of the drive. The disks are
   only queried (handles opened without read or write access); nothing is ever sent to them.
+- **Low disk space alerts** (Disk health → *Turn on…*, off unless you turn them on): a Windows
+  notification when a drive's free space drops below a limit you choose, as a percentage or in GiB,
+  for every fixed drive or per drive (or a drive left out). No program stays running: a Task
+  Scheduler task of your own (`\Bytopsy\Disk space check`, no administrator rights, only while you
+  are signed in) runs `bytopsy.exe --check-space` every 1 to 24 hours and, if you like, at logon.
+  Each check notes the drives' free space for the trend above and notifies once per drive, then
+  again only after the drive has been back above its limit or a day later. The notification's
+  buttons open Disk health or scan the drive; *Test* shows a sample one. The card shows each
+  drive against its limit, the next and last check, and says when the task was removed or
+  notifications for Bytopsy are turned off in Windows Settings. Turning alerts on registers
+  Bytopsy for notifications (see [Privacy](#privacy)); *Turn off* removes the task and that
+  registration again. Changes are logged in `cleanup.log`.
 - **Startup** (works without a scan): what starts with Windows: the Run keys (this user, all users,
   32-bit), Run once entries, both Startup folders, scheduled tasks with an "at log on" or "at
   startup" trigger (Windows' own `\Microsoft\Windows\` tasks are left out), and services that start
@@ -282,7 +294,10 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   lengthens and accents every text, for checking that layouts cope with longer languages. The
   terminal app, the journal, logs and command lines stay English.
 
-Command line: `bytopsy.exe [folder]` scans a folder, `bytopsy.exe -f scan.json` opens a saved scan.
+Command line: `bytopsy.exe [folder]` scans a folder, `bytopsy.exe -f scan.json` opens a saved scan,
+`bytopsy.exe --check-space` runs the low disk space check without opening a window (what the alert
+task runs), and `bytopsy.exe --alert-link bytopsy:disk-health` opens Disk health (what a
+notification's link runs; `bytopsy:scan?drive=C` scans that drive, anything else just opens the app).
 The window opens as it was started (e.g. minimized from a shortcut set to "Run: Minimized").
 
 | Key | Action |
@@ -393,7 +408,8 @@ feature needs them: hashes for Duplicates, the ext4 superblock inside WSL disks,
 AI model manifests, scans you import, and its rule files; pixels of images for *Similar photos*; the
 cookie and history databases of browsers for those two Cleanup categories (cookies are counted per
 site, never read out). From Windows it reads the Uninstall, Run and service registry keys, scheduled
-tasks, and disk health from WMI and the drives' own health logs. For *Drivers*: each device's
+tasks, disk health from WMI and the drives' own health logs, and, while alerts are on, whether
+notifications are turned off in Windows Settings. For *Drivers*: each device's
 hardware ids and installed driver (SetupAPI), the PC maker and model from
 `HKLM\HARDWARE\DESCRIPTION\System\BIOS`, and the current user's Store app packages (to find the
 vendors' driver tools).
@@ -409,15 +425,17 @@ by Windows Update too, after a System Restore point.
 
 | File | Contents |
 | --- | --- |
-| `settings.ini` | Window position, theme, view options and exclude patterns of the windowed app |
+| `settings.ini` | Window position, theme, view options and exclude patterns of the windowed app; the low disk space alert limits |
 | `history\` | Folder sizes of each completed scan, for *History & compare* |
 | `journal.log` (`journal.1.log` after 4 MB) | What was deleted or cleaned: time, path, size, Recycle Bin or permanent |
 | `protect.txt` | Your protection rules (created with commented examples) |
 | `cleaners.ini` | Your cleanup rules (created when you open *Cleanup rules…*) |
 | `winapp2.ini` | A copy of the winapp2.ini you imported |
 | `keep-signed-in.txt` | The sites whose cookies Cleanup keeps (created when cookies are first measured) |
-| `cleanup.log` | One line per `bytopsy-cli --clean --yes` run and per schedule change |
+| `cleanup.log` | One line per `bytopsy-cli --clean --yes` run, per schedule or alert change, and per low disk space notification |
 | `freespace.log` | Each drive's free space, at most every 6 hours, for *Disk health* trends |
+| `space-alerts.txt` | Per drive: whether it was under its alert limit and when it was last notified |
+| `notify-icon.png` | Bytopsy's icon for its notifications (while alerts are on) |
 | `photohash.cache` | Image hashes by path, size and time, so *Similar photos* is fast the second time |
 | `lang\` | Translations you add yourself (only read; see [Translations](#translations)) |
 
@@ -426,7 +444,12 @@ automatic check, a skipped version).
 
 Outside that folder: exports where you save them; the Explorer menu entry, if you add it (three keys
 under `HKCU\Software\Classes`, removed by the same menu item); the scheduled cleanup task
-(`\Bytopsy\Scheduled cleanup` in Task Scheduler), if you create one; when you turn a startup entry
+(`\Bytopsy\Scheduled cleanup` in Task Scheduler), if you create one; while low disk space alerts
+are on, the `\Bytopsy\Disk space check` task and two keys under `HKCU\Software\Classes`:
+`AppUserModelId\Bytopsy.App` (the name and icon Windows shows on the notifications) and `bytopsy`
+(the `bytopsy:` link a notification opens, which only opens Disk health or scans a drive), all
+removed by *Turn off*, together with the record Windows itself keeps once a notification was shown
+(`HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Bytopsy.App`); when you turn a startup entry
 off or on, the same `StartupApproved` value Task Manager writes, the task's enabled switch, or the
 service's start type; when you install driver updates, a System Restore point and the drivers
 Windows Update installs; when you install an update of Bytopsy, the new `bytopsy.exe`,
@@ -530,7 +553,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, appupdates, phash, uia, i18n, driverupdates and update self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, appupdates, phash, uia, i18n, driverupdates, update and alerts self-tests
 ```
 
 GitHub Actions builds and runs the self-tests on every push and pull request
@@ -592,6 +615,13 @@ bytopsy-cli [options] [path]
                         it and append a line to cleanup.log. Exit code 0 = done,
                         1 = some items in use, 2 = bad ids, 3 = all skipped (admin)
     --quiet             ...print nothing (used by the scheduled task)
+  --check-space         Low disk space alerts: check each fixed drive's free space
+                        against the limits set in the windowed app (Disk health) and
+                        show a notification for a drive under its limit (once, then
+                        after it was above it again or a day later). Exit code 1 = a
+                        drive is under its limit
+    --dry-run           ...only print what it would notify (nothing is shown or written)
+    --quiet             ...print nothing
   --startup             List what starts with Windows (Run keys, Startup folders,
                         logon/boot tasks, services) with impact estimates, and exit
   --apps                List installed apps (size, install date, version, publisher)
@@ -670,6 +700,8 @@ src/                  core engine + terminal app
   games.cpp           games of every launcher, uninstall through the launcher, leftovers
   diskhealth.cpp      disk health: WMI storage, NVMe health log, TRIM, used-space trends
   schedule.cpp        scheduled cleanup: --clean arguments, Task Scheduler task, cleanup.log
+  alerts.cpp          low disk space alerts: limits, settings.ini lines, once-a-day state, --check-space
+  notify.cpp          Windows notifications for an unpackaged exe: toast XML, AUMID and bytopsy: link registration, balloon fallback
   startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
   apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
   appupdates.cpp      app updates through winget: upgrade table parsing, matching to apps, updating
@@ -713,6 +745,7 @@ tests/export_test.cpp   ncdu JSON round trips with odd names and flags, Linux nc
 tests/importfuzz_test.cpp fuzzing the ncdu JSON importer with mutated exports, fixed seed (ctest)
 tests/diskhealth_test.cpp disk health: WMI/fsutil/NVMe log parsing, verdicts, used-space trends (ctest)
 tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --clean --yes on a fixture (ctest)
+tests/alerts_test.cpp   low disk space alerts: % and GiB limits, settings lines, once-a-day state, toast XML escaping, links, --check-space (ctest)
 tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
 tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
 tests/appupdates_test.cpp app updates: winget upgrade tables (cut names, pins, other languages, spinner), matching, a fake winget (ctest)

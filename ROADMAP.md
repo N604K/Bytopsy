@@ -206,9 +206,17 @@ databases, and every install through Windows' or the app's own mechanism.
       by name, then version; Apps gets an Update column, an Updates filter (winget asked only when
       chosen), Update one app or the checked ones in turn (`winget upgrade --id <id> --exact`),
       per-app results, journaled; `bytopsy-cli --app-updates` lists them.*
-- [ ] **Low disk space alerts**: a notification when a drive's free space drops below a limit you
+- [x] **Low disk space alerts**: a notification when a drive's free space drops below a limit you
       choose, from the same per-user scheduled task as the scheduled cleanup (no background
       process), linking straight to the drive in Bytopsy.
+      *Done: Disk health → Alerts card (`src/alerts.cpp`, `src/notify.cpp`): a limit in % or GiB for
+      all fixed drives or per drive, kept in settings.ini; a task of its own
+      (`\Bytopsy\Disk space check`, every 1–24 hours and at logon) runs `bytopsy.exe --check-space`
+      (no console window), which records a free-space sample and shows a toast once per drive, again
+      after it was above the limit or a day later. Toasts use an AppUserModelID and a `bytopsy:` link
+      registered under HKCU while alerts are on ("Open Disk health", "Scan C:"), with a balloon as
+      the fallback; *Turn off* removes the task and the registration. `bytopsy-cli --check-space
+      [--dry-run]` from a terminal.*
 - [x] **Bytopsy updates itself** (opt-in; asked on first start, default *Off*):
       - `https://bytopsy.com/update.json` names the latest version, its download (the GitHub
         release zip), SHA-256 and release notes. The release workflow writes and publishes it, and

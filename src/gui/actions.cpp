@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "../export.h"
+#include "../notify.h"
 #include "../util.h"
 #include "../version.h"
 
@@ -1211,6 +1212,7 @@ void App::LoadDiskHealth() {
         disk_ = std::move(st->rep);
         diskTrends_ = std::move(st->trends);
         diskLoaded_ = true;
+        LoadAlerts();
         Invalidate();
     };
     StartTask(std::move(t), [st] {
@@ -2127,6 +2129,169 @@ void App::ShowScheduleDialog() {
 }
 
 // =============================================================================================
+// Low disk space alerts: a per-user task runs `bytopsy.exe --check-space` (alerts.h); turning
+// them on registers Bytopsy for notifications (notify.h), turning them off removes both.
+
+void App::LoadAlerts() {
+    alerts_ = LoadAlertSettings();
+    TaskInfo info;
+    std::wstring err;
+    if (TaskQuery(ScheduleFolder(), kAlertTask, info, err)) {
+        alertTask_ = info;
+        alertTaskErr_.clear();
+    } else {
+        alertTask_ = TaskInfo{};
+        alertTaskErr_ = err;
+    }
+    NotifyNames names = DefaultNotifyNames();
+    alertRegistered_ = NotificationsRegistered(names);
+    notifySetting_ = alertRegistered_ ? NotificationSetting(names) : -1;
+    Invalidate();
+}
+
+void App::ShowAlertsDialog() {
+    LoadAlerts();
+    if (!alertTaskErr_.empty()) return Toast(alertTaskErr_, 1);
+    const bool on = alerts_.enabled;
+    const std::wstring exe = ExePath();
+    // The limits offered, plus any other one settings.ini names (edited by hand).
+    std::vector<SpaceLimit> limits = LimitChoices();
+    auto offer = [&](const SpaceLimit& l) {
+        if (std::find(limits.begin(), limits.end(), l) == limits.end()) limits.push_back(l);
+    };
+    offer(alerts_.all);
+    for (auto& r : alerts_.drives)
+        if (r.watched) offer(r.limit);
+    std::sort(limits.begin(), limits.end(), [](const SpaceLimit& a, const SpaceLimit& b) {
+        return a.unit != b.unit ? a.unit == LimitUnit::Percent : a.value < b.value;
+    });
+    auto indexOf = [&](const SpaceLimit& l) {
+        return static_cast<int>(std::find(limits.begin(), limits.end(), l) - limits.begin());
+    };
+    std::vector<std::wstring> limitNames;
+    for (auto& l : limits) limitNames.push_back(DescribeLimit(l));
+
+    Dialog d;
+    d.title = on ? Tr(L"Low disk space alerts") : Tr(L"Turn on low disk space alerts");
+    d.icon = 0xEA8F;  // bell
+    d.message = TrF(L"Windows runs “bytopsy.exe {0}” as you, without administrator rights, only while you're signed in; no program stays running. "
+                    L"Each check notes the drives' free space for the trend in this view and shows a notification when a drive is under its "
+                    L"limit: once, then again after it has been above it or a day later. Turning alerts on also registers Bytopsy for "
+                    L"notifications and bytopsy: links in your part of the registry, so that a click on one opens Bytopsy; turning them off "
+                    L"removes the task and both entries.",
+                    std::wstring(kAlertTaskArgs));
+    DialogChoice all{Tr(L"All drives"), limitNames, std::max(0, indexOf(alerts_.all)), true};
+    d.choices.push_back(all);
+    // Each fixed drive (the first six): like all drives, not watched, or a limit of its own.
+    std::vector<std::wstring> drives, labels;
+    for (auto& t : diskTrends_)
+        if (drives.size() < 6) {
+            drives.push_back(t.drive);
+            labels.push_back(TrF(L"{0} ({1} free)", t.drive, util::FormatSizeShort(t.free)));
+        }
+    for (size_t i = 0; i < drives.size(); ++i) {
+        const std::wstring& drive = drives[i];
+        DialogChoice c{labels[i], {Tr(L"like all drives"), Tr(L"not watched")}, 0, true};
+        c.options.insert(c.options.end(), limitNames.begin(), limitNames.end());
+        EffectiveRule r = RuleFor(alerts_, drive);
+        if (r.own) c.value = r.watched ? 2 + std::max(0, indexOf(r.limit)) : 1;
+        d.choices.push_back(c);
+    }
+    const std::vector<int>& every = CheckIntervals();
+    DialogChoice check{Tr(L"Check"), {}, 0, true};
+    for (size_t i = 0; i < every.size(); ++i) {
+        AlertSettings t;
+        t.everyHours = every[i];
+        t.atLogon = false;
+        check.options.push_back(DescribeCheckInterval(t));
+        if (every[i] == alerts_.everyHours) check.value = static_cast<int>(i);
+    }
+    d.choices.push_back(check);
+    d.choices.push_back(DialogChoice{Tr(L"At logon"), {Tr(L"Check too"), Tr(L"No")}, alerts_.atLogon ? 0 : 1});
+    if (on) {
+        d.buttons = {Tr(L"Cancel"), Tr(L"Turn off"), Tr(L"Save")};
+        d.primary = 2;
+    } else {
+        d.buttons = {Tr(L"Cancel"), Tr(L"Turn on")};
+        d.primary = 1;
+    }
+    d.cancel = 0;
+    d.onCloseWith = [this, limits, drives, on, exe](int b, const Dialog& dd) {
+        if (b == 0) return;
+        NotifyNames names = DefaultNotifyNames();
+        std::wstring where = ScheduleFolder() + L"\\" + kAlertTask, err;
+        if (on && b == 1) {
+            bool ok = TaskRemove(ScheduleFolder(), kAlertTask, err);
+            UnregisterNotifications(names);
+            DeleteFileW(AlertStatePath().c_str());
+            AlertSettings s = LoadAlertSettings();
+            s.enabled = false;
+            SaveAlertSettings(s);
+            CleanLogAppend(L"space alerts off: task " + where + (ok ? std::wstring(L" removed") : L" not removed (" + err + L")") +
+                           L", notification registration removed");
+            if (ok)
+                Toast(Tr(L"Low disk space alerts turned off"), 0);
+            else
+                Toast(err, 1);
+            LoadAlerts();
+            return;
+        }
+        const size_t n = drives.size();
+        if (dd.choices.size() < n + 3) return;
+        auto limitAt = [&](int i) { return limits[static_cast<size_t>(std::clamp(i, 0, static_cast<int>(limits.size()) - 1))]; };
+        AlertSettings s = LoadAlertSettings();
+        s.enabled = true;
+        s.all = limitAt(dd.choices[0].value);
+        for (size_t i = 0; i < n; ++i) {
+            int v = dd.choices[1 + i].value;
+            SetDriveRule(s, drives[i], v == 0, v != 1, v >= 2 ? limitAt(v - 2) : s.all);
+        }
+        s.everyHours = CheckIntervals()[static_cast<size_t>(std::clamp(dd.choices[1 + n].value, 0, static_cast<int>(CheckIntervals().size()) - 1))];
+        s.atLogon = dd.choices[2 + n].value == 0;
+        if (!RegisterNotifications(names, exe, err)) {
+            Toast(Tr(L"Could not write to the registry"), 1);
+            LoadAlerts();
+            return;
+        }
+        std::wstring desc = L"Bytopsy low disk space alerts: checks each fixed drive's free space and shows a notification when one is under "
+                            L"its limit. Change or turn off in Bytopsy: Disk health.";
+        if (!TaskSaveRepeating(ScheduleFolder(), kAlertTask, s.everyHours, s.atLogon, exe, kAlertTaskArgs, desc, err) || !SaveAlertSettings(s)) {
+            if (err.empty()) err = Tr(L"Couldn't save the settings");
+            if (!on) {  // leave nothing behind
+                std::wstring ignore;
+                TaskRemove(ScheduleFolder(), kAlertTask, ignore);
+                UnregisterNotifications(names);
+            }
+            Toast(err, 1);
+            LoadAlerts();
+            return;
+        }
+        std::wstring english;  // cleanup.log is kept in English
+        {
+            i18n::EnglishScope en;
+            english = L"below " + DescribeLimit(s.all);
+            for (auto& r : s.drives) english += L", " + r.drive + L" " + (r.watched ? DescribeLimit(r.limit) : std::wstring(L"not watched"));
+            english += L", " + DescribeCheckInterval(s);
+        }
+        CleanLogAppend(L"space alerts " + std::wstring(on ? L"changed: " : L"on: ") + english + L" (task " + where + L"; notifications: HKCU\\" +
+                       AumidKey(names) + L", HKCU\\" + SchemeKey(names) + L")");
+        Toast(TrF(L"Low disk space alerts on: checked {0}", DescribeCheckInterval(s)), 0);
+        LoadAlerts();
+    };
+    ShowDialog(std::move(d));
+}
+
+void App::TestAlertNotification() {
+    if (!alertRegistered_) return Toast(Tr(L"Turn alerts on first: notifications need Bytopsy's registration"), 2);
+    std::wstring err;
+    if (ShowTestNotification(err))
+        Toast(Tr(L"Test notification sent"), 0);
+    else
+        Toast(err.empty() ? Tr(L"The notification couldn't be shown") : err, 1);
+    notifySetting_ = NotificationSetting(DefaultNotifyNames());
+}
+
+// =============================================================================================
 // Navigation & views
 
 void App::NavigateTo(Node* dir, bool remember) {
@@ -2689,6 +2854,8 @@ void App::OnCommand(int cmd) {
         case CMD_GAME_UNINSTALL: StartGameUninstall(); break;
         case CMD_GAMES_DELETE: StartGameLeftoversDelete(); break;
         case CMD_DISK_REFRESH: LoadDiskHealth(); break;
+        case CMD_ALERTS: ShowAlertsDialog(); break;
+        case CMD_ALERT_TEST: TestAlertNotification(); break;
         case CMD_STARTUP_REFRESH: LoadStartup(); break;
             break;
         case CMD_APPS_REFRESH: LoadApps(); break;

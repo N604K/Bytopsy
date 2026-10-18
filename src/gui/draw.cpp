@@ -24,7 +24,7 @@ constexpr wchar_t IC_SEARCH = 0xE721, IC_CLEAR = 0xE711, IC_MORE = 0xE712, IC_RE
                   IC_CHEV_D = 0xE70D, IC_CHEV_U = 0xE70E, IC_CHECK = 0xE73E, IC_INFO = 0xE946, IC_WARN = 0xE7BA,
                   IC_OPEN = 0xE8E5, IC_DELETE = 0xE74D, IC_COMPARE = 0xE8AB, IC_DRIVE = 0xEDA2, IC_GRID = 0xF0E2,
                   IC_UNDO = 0xE7A7, IC_CODE = 0xE943, IC_AI = 0xE99A, IC_TERMINAL = 0xE756, IC_SYSTEM = 0xE770, IC_GAME = 0xE7FC,
-                  IC_CALENDAR = 0xE787, IC_POWER = 0xE7E8, IC_PHOTO = 0xE91B;
+                  IC_CALENDAR = 0xE787, IC_POWER = 0xE7E8, IC_PHOTO = 0xE91B, IC_BELL = 0xEA8F;
 
 std::wstring Pct(double v) {
     if (v >= 99.95) return L"100%";
@@ -2175,10 +2175,87 @@ void App::DrawDiskHealth(const RectF& area) {
         cards.push_back(std::move(c));
     }
 
+    // Low disk space alerts: what they are set to, problems, and each drive against its limit.
+    struct AlertLine {
+        std::wstring text;
+        D2D1_COLOR_F color;
+        bool warn;
+    };
+    std::vector<AlertLine> alertLines;
+    std::wstring alertTitle, alertSub;
+    if (alerts_.enabled) {
+        alertTitle = Tr(L"Low disk space alerts: on");
+        std::vector<std::wstring> parts{TrF(L"checked {0}", DescribeCheckInterval(alerts_))};
+        if (alertTask_.exists && alertTask_.nextRun) parts.push_back(TrF(L"next check {0}", util::FormatDateTimeLocal(alertTask_.nextRun)));
+        if (alertTask_.exists && alertTask_.lastRun)
+            parts.push_back(TrF(L"last check {0}: {1}", util::FormatDateTimeLocal(alertTask_.lastRun), DescribeCheckResult(alertTask_.lastResult)));
+        alertSub = Dots(parts);
+        if (!alertTaskErr_.empty())
+            alertLines.push_back({alertTaskErr_, P_.warning, true});
+        else if (!alertTask_.exists)
+            alertLines.push_back({Tr(L"The task that checks is missing (removed in Task Scheduler?): Change, then Save, puts it back"), P_.warning, true});
+        else if (!alertTask_.enabled)
+            alertLines.push_back({Tr(L"The task that checks is turned off in Task Scheduler"), P_.warning, true});
+        else if (_wcsicmp(alertTask_.path.c_str(), ExePath().c_str()) != 0)
+            alertLines.push_back({TrF(L"The task runs {0}: Change, then Save, points it at this copy", alertTask_.path), P_.warning, true});
+        if (!alertRegistered_)
+            alertLines.push_back({Tr(L"Bytopsy's notification registration is missing: Change, then Save, writes it again"), P_.warning, true});
+        else if (notifySetting_ > 0)
+            alertLines.push_back({Tr(L"Notifications from Bytopsy are turned off in Windows Settings (System, Notifications)"), P_.warning, true});
+        for (auto& t : diskTrends_) {
+            EffectiveRule rule = RuleFor(alerts_, t.drive);
+            if (!rule.watched) {
+                alertLines.push_back({TrF(L"{0}  not watched", t.drive), P_.textFaint, false});
+                continue;
+            }
+            uint64_t limit = LimitBytes(rule.limit, t.total);
+            std::wstring lt = rule.limit.unit == LimitUnit::Percent ? TrF(L"{0} ({1})", util::FormatSizeShort(limit), DescribeLimit(rule.limit))
+                                                                    : DescribeLimit(rule.limit);
+            bool low = t.free < limit;
+            std::wstring text = TrF(L"{0}  {1} free  ·  alert below {2}", t.drive, util::FormatSizeShort(t.free), lt);
+            if (low) text += L"  ·  " + Tr(L"under the limit now");
+            alertLines.push_back({text, low ? P_.warning : P_.textDim, false});
+        }
+    } else {
+        alertTitle = Tr(L"Low disk space alerts");
+        alertSub = Tr(L"Off. Bytopsy can check the drives' free space every few hours and show a Windows notification when one drops below a limit "
+                      L"you choose; no program stays running.");
+    }
+    // Buttons at the right; the text beside them and the lines below wrap (translations run longer).
+    struct AlertButton {
+        std::wstring text;
+        wchar_t icon;
+        int cmd, style;
+        float w;
+    };
+    std::vector<AlertButton> alertButtons;
+    if (alerts_.enabled) {
+        alertButtons.push_back({Tr(L"Change"), 0, CMD_ALERTS, 0, 0});
+        if (alertRegistered_) alertButtons.push_back({Tr(L"Test"), 0, CMD_ALERT_TEST, 0, 0});
+    } else {
+        alertButtons.push_back({Tr(L"Turn on…"), IC_BELL, CMD_ALERTS, 1, 0});
+    }
+    float alertButtonsW = 0;
+    for (auto& b : alertButtons) alertButtonsW += (b.w = ButtonWidth(b.text, b.icon, 96)) + 10;
+    TextStyle wrapStyle = Small(12.5f);
+    wrapStyle.wrap = true;
+    wrapStyle.center = false;
+    const float alertTx = area.left + 24 + 72, alertTextR = area.right - 24 - 16 - alertButtonsW - 8;
+    const float alertSubH = std::max(22.0f, gfx_.MeasureHeight(alertSub, std::max(80.0f, alertTextR - alertTx), wrapStyle) + 4);
+    std::vector<float> alertLineH;
+    float alertLinesH = 0;
+    for (auto& l : alertLines) {
+        float w = area.right - 24 - 18 - alertTx - (l.warn ? 24 : 0);
+        alertLineH.push_back(std::max(22.0f, gfx_.MeasureHeight(l.text, std::max(80.0f, w), wrapStyle) + 4));
+        alertLinesH += alertLineH.back();
+    }
+    const float alertTop = alertLines.empty() ? std::max(66.0f, 35 + alertSubH + 9) : std::max(60.0f, 35 + alertSubH + 3);
+    const float alertH = alertTop + alertLinesH + (alertLines.empty() ? 0.0f : 10.0f);
+
     float y = top + 62;
     RectF body = R(area.left, y, area.right, area.bottom);
     ListState& ls = lists_[static_cast<int>(View::DiskHealth)];
-    float contentH = (needAdmin && !elevated_ ? 64.0f : 0.0f) + (disk_.error.empty() ? 0.0f : 64.0f) + 46 + 20;
+    float contentH = (needAdmin && !elevated_ ? 64.0f : 0.0f) + (disk_.error.empty() ? 0.0f : 64.0f) + alertH + 12 + 46 + 20;
     for (auto& c : cards) contentH += c.h + 12;
     contentH += diskTrends_.size() * 76.0f + 60;
     ls.scroll = std::clamp(ls.scroll, 0.0f, std::max(0.0f, contentH - H(body)));
@@ -2198,6 +2275,36 @@ void App::DrawDiskHealth(const RectF& area) {
     if (needAdmin && !elevated_)
         banner(Tr(L"Wear, temperature and error counts of some disks need administrator rights. Nothing is changed either way."), P_.warning,
                true);
+
+    {
+        RectF card = R(area.left + 24, y, area.right - 24, y + alertH);
+        gfx_.FillRound(card, 12, P_.surface);
+        gfx_.StrokeRound(card, 12, P_.border);
+        D2D1_COLOR_F tone = alerts_.enabled ? P_.accent : P_.textFaint;
+        gfx_.FillRound(RWH(card.left + 18, card.top + 13, 40, 40), 10, WithAlpha(tone, 0.16f));
+        gfx_.Icon(IC_BELL, RWH(card.left + 18, card.top + 13, 40, 40), tone, 17);
+        float bx = card.right - 16;
+        for (auto& b : alertButtons) {
+            bx -= b.w;
+            Button(RWH(bx, card.top + 16, b.w, 34), b.icon, b.text, b.cmd, b.style);
+            bx -= 10;
+        }
+        float tx = alertTx;
+        gfx_.Text(alertTitle, R(tx, card.top + 11, alertTextR, card.top + 33), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD));
+        gfx_.Text(alertSub, R(tx, card.top + 35, alertTextR, card.top + 35 + alertSubH), P_.textDim, wrapStyle);
+        float ly = card.top + alertTop;
+        for (size_t i = 0; i < alertLines.size(); ++i) {
+            const AlertLine& l = alertLines[i];
+            float lx = tx;
+            if (l.warn) {
+                gfx_.Icon(IC_WARN, RWH(tx, ly, 18, 20), l.color, 12);
+                lx += 24;
+            }
+            gfx_.Text(l.text, R(lx, ly + 2, card.right - 18, ly + alertLineH[i]), l.color, wrapStyle);
+            ly += alertLineH[i];
+        }
+        y += alertH + 12;
+    }
 
     gfx_.Text(Tr(L"PHYSICAL DISKS"), R(area.left + 26, y + 10, area.right, y + 30), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     y += 36;
@@ -2277,7 +2384,8 @@ void App::DrawDiskHealth(const RectF& area) {
     std::wstring overTime = Tr(L"USED SPACE OVER TIME");
     float otw = gfx_.Measure(overTime, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     gfx_.Text(overTime, R(area.left + 26, y, area.right, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-    gfx_.Text(Tr(L"Bytopsy notes each drive's free space when this view opens or a scan finishes"),
+    gfx_.Text(alerts_.enabled ? Tr(L"Bytopsy notes each drive's free space when this view opens, a scan finishes or an alert check runs")
+                              : Tr(L"Bytopsy notes each drive's free space when this view opens or a scan finishes"),
               R(std::max(area.left + 200, area.left + 46 + otw), y, area.right - 26, y + 20), P_.textFaint,
               Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
     y += 28;
@@ -3170,8 +3278,13 @@ void App::DrawDialog() {
             if (ch.stepper) {
                 chip(L"‹", 32, false, ch.value - 1);
                 std::wstring v = ch.value >= 0 && ch.value < static_cast<int>(ch.options.size()) ? ch.options[ch.value] : L"";
-                gfx_.Text(v, R(cx, y, cx + 72, y + 32), P_.text, TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
-                cx += 78;
+                // As wide as the longest option ("like all drives"), so the arrows don't move.
+                TextStyle vs = TS(14, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center);
+                float vw = 72;
+                for (auto& o : ch.options) vw = std::max(vw, gfx_.Measure(o, vs) + 12);
+                vw = std::min(vw, std::max(72.0f, card.right - 24 - cx - 44));
+                gfx_.Text(v, R(cx, y, cx + vw, y + 32), P_.text, vs);
+                cx += vw + 6;
                 chip(L"›", 32, false, ch.value + 1);
             } else {
                 for (int oi = 0; oi < static_cast<int>(ch.options.size()); ++oi)

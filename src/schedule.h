@@ -105,6 +105,13 @@ struct TaskInfo {
 // after 2 hours. `description` goes into the task's registration info.
 bool TaskSave(const std::wstring& folder, const std::wstring& name, const ScheduleSpec& when, const std::wstring& exe,
               const std::wstring& args, const std::wstring& description, std::wstring& err);
+// Creates or replaces a task that runs `exe args` every `everyHours` hours from a few minutes from
+// now (and, with `atLogon`, two minutes after you sign in): as the current user, only while
+// logged on, without administrator rights, also on battery, stopped after 10 minutes. For the
+// low disk space check.
+bool TaskSaveRepeating(const std::wstring& folder, const std::wstring& name, int everyHours, bool atLogon, const std::wstring& exe,
+                       const std::wstring& args, const std::wstring& description, std::wstring& err);
+std::wstring RepetitionInterval(int hours);  // "PT4H" (1..24)
 // exists = false (and true returned) when there is no such task.
 bool TaskQuery(const std::wstring& folder, const std::wstring& name, TaskInfo& info, std::wstring& err);
 // Deletes that one task, then the folder if nothing else is in it. A missing task is fine.

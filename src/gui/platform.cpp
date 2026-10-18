@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <sstream>
 
+#include "../alerts.h"
 #include "../i18n.h"
 #include "../util.h"
 #include "history.h"
@@ -16,7 +17,12 @@
 
 namespace {
 
-std::wstring SettingsFile() { return AppDataDir() + L"\\settings.ini"; }
+// settings.ini also holds the low disk space alert lines (alerts.h), which the scheduled check
+// reads; SaveSettings keeps them as they are in the file.
+std::wstring SettingsFile() {
+    AppDataDir();  // created when missing
+    return SettingsFilePath();
+}
 
 std::wstring Trim(const std::wstring& s) {
     size_t b = s.find_first_not_of(L" \t\r\n");
@@ -111,6 +117,7 @@ void SaveSettings(const Settings& s) {
     ss << L"updatesAsked=" << s.updatesAsked << L"\n";
     if (s.updateLastCheck) ss << L"updateLastCheck=" << s.updateLastCheck << L"\n";
     if (!s.updateSkip.empty()) ss << L"updateSkip=" << s.updateSkip << L"\n";
+    ss << AlertLinesOf(ReadSettingsText());
     std::string data = util::WideToUtf8(ss.str());
     FILE* f = nullptr;
     if (_wfopen_s(&f, SettingsFile().c_str(), L"wb") != 0 || !f) return;

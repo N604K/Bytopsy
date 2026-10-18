@@ -35,10 +35,12 @@ add_library(bytopsy_core STATIC
   src/phash.cpp
   src/i18n.cpp
   src/update.cpp
+  src/alerts.cpp
+  src/notify.cpp
 )
 target_include_directories(bytopsy_core PUBLIC src)
 target_compile_definitions(bytopsy_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(bytopsy_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32 version wevtapi windowscodecs winhttp wintrust crypt32)
+target_link_libraries(bytopsy_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil wbemuuid oleaut32 taskschd secur32 version wevtapi windowscodecs winhttp wintrust crypt32 runtimeobject)
 
 # SQLite (public domain, https://www.sqlite.org), for reading and editing browsers' cookie and
 # history databases. Third-party code: compiled as C, its warnings are not ours to fix.
@@ -305,5 +307,15 @@ if(MSVC)
   target_compile_options(bytopsy-update-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME update COMMAND bytopsy-update-test)
+
+# Low disk space alerts (limits, settings.ini lines, once-a-day state, toast XML, links): build/bytopsy-alerts-test.exe.
+# Never registers notifications or touches Task Scheduler unless BYTOPSY_TEST_NOTIFY=1 / BYTOPSY_TEST_TASKSCHED=1.
+add_executable(bytopsy-alerts-test tests/alerts_test.cpp)
+target_link_libraries(bytopsy-alerts-test PRIVATE bytopsy_core)
+add_dependencies(bytopsy-alerts-test bytopsy-cli)
+if(MSVC)
+  target_compile_options(bytopsy-alerts-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME alerts COMMAND bytopsy-alerts-test)
 
 install(TARGETS bytopsy bytopsy-cli RUNTIME DESTINATION bin)
