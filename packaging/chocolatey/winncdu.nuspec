@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Template: packaging/update-manifests.ps1 fills in the version, download URL and SHA-256 (see docs/RELEASING.md).
-     TODO(owner): add <license type="expression">...</license> or a licenseUrl once the repository
-     has a LICENSE file. -->
+<!-- Template: packaging/update-manifests.ps1 fills in the version, download URL and SHA-256 (see docs/RELEASING.md). -->
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>winncdu</id>
@@ -14,6 +12,7 @@
     <bugTrackerUrl>https://github.com/N604K/WinNCDU/issues</bugTrackerUrl>
     <docsUrl>https://github.com/N604K/WinNCDU#readme</docsUrl>
     <releaseNotes>https://github.com/N604K/WinNCDU/releases/tag/v__VERSION__</releaseNotes>
+    <license type="expression">MIT</license>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <tags>disk-usage disk-space ncdu treemap cleanup duplicates portable</tags>
     <summary>Fast disk usage analyzer and cleaner for Windows, inspired by ncdu.</summary>

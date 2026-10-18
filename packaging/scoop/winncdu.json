@@ -2,7 +2,7 @@
     "version": "__VERSION__",
     "description": "Fast disk usage analyzer and cleaner for Windows, inspired by ncdu.",
     "homepage": "https://github.com/N604K/WinNCDU",
-    "license": "LICENSE-PLACEHOLDER",
+    "license": "MIT",
     "notes": "Runs in portable mode: settings, history, journal and rules are kept in $persist_dir\\WinNCDU-data.",
     "architecture": {
         "64bit": {

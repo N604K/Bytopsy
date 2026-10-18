@@ -109,7 +109,8 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 
 ## 4. Open-source project health
 
-- [ ] Add a LICENSE file (MIT or GPL-3.0); without one, nobody may legally reuse or contribute.
+- [x] Add a LICENSE file (MIT or GPL-3.0); without one, nobody may legally reuse or contribute.
+      *Done: MIT (`LICENSE`), also set in the winget, Scoop and Chocolatey manifests.*
 - [x] GitHub Actions on `windows-latest`: build, `ctest`, upload release zips with SHA-256.
       *Done: `.github/workflows/build.yml`; tags `v*` must match `src/version.h` and create a
       release with the zip and its `.sha256` (docs/RELEASING.md). Not yet run on GitHub: the tests
@@ -118,8 +119,8 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       SmartScreen and antivirus don't flag a tool that deletes files.
       *Prepared, not done: the release workflow signs through SignPath once the
       `SIGNPATH_ORGANIZATION_ID` variable and `SIGNPATH_API_TOKEN` secret are set (docs/RELEASING.md,
-      `packaging/signpath/artifact-configuration.xml`). Left: a LICENSE, applying to SignPath
-      Foundation, and the SignPath project setup. Releases are unsigned until then.*
+      `packaging/signpath/artifact-configuration.xml`). Left: applying to SignPath Foundation and
+      the SignPath project setup. Releases are unsigned until then.*
 - [x] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
       *Done: portable mode (a `winncdu.portable` file next to the exe puts all data in
       `WinNCDU-data` beside it; one place decides, `util::DataDir()`). Manifest templates in

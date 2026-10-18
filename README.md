@@ -625,6 +625,11 @@ packaging/winget/, scoop/, chocolatey/  package manager manifests (templates)
 packaging/update-manifests.ps1  fills them in for a release
 ```
 
+## License
+
+MIT: see [LICENSE](LICENSE). You may use, change and share WinNCDU, also commercially, as long as
+the copyright notice and the license text come along.
+
 ## Third-party code
 
 [SQLite](https://www.sqlite.org) (`third_party/sqlite`, version 3.54.1, the amalgamation from

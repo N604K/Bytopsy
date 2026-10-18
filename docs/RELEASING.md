@@ -10,7 +10,7 @@ On every push and pull request (`windows-latest`, MSVC x64, Ninja, Release):
 1. builds `winncdu.exe`, `winncdu-cli.exe` and the self-tests (`cmake --build build`);
 2. runs the self-tests (`ctest --test-dir build --output-on-failure`);
 3. on tags, signs both programs if code signing is set up (see below);
-4. packs both programs and `README.md` (and `LICENSE`, once there is one) into
+4. packs both programs, `README.md` and `LICENSE` into
    `winncdu-<version>-x64.zip` with `winncdu-<version>-x64.zip.sha256` next to it, and keeps both as
    a workflow artifact. Untagged builds are named `<version>-<commit>`.
 
@@ -46,7 +46,8 @@ instead of the unsigned ones. If signing fails, the release is not created.
 
 To turn it on:
 
-1. Add a LICENSE: SignPath Foundation only accepts projects under an OSI-approved license.
+1. The project is MIT-licensed (`LICENSE`), which SignPath Foundation accepts (it requires an
+   OSI-approved license).
 2. Apply to SignPath Foundation (see <https://signpath.org>) and meet their conditions, among
    them: releases built by this public GitHub workflow, a code signing policy linked from the
    README, and multi-factor authentication for the people who approve signing requests.
@@ -72,8 +73,7 @@ Templates live in `packaging/`: a winget multi-file manifest (schema 1.6, `N604K
 with both programs as portable commands `winncdu` and `winncdu-cli`), a Scoop manifest (with
 `checkver` and `autoupdate` from the GitHub releases; it installs in portable mode and persists
 `WinNCDU-data`), and a Chocolatey package (`winncdu`, downloading the release zip). They use the
-repository URL `https://github.com/N604K/WinNCDU` (from `git remote`) and contain
-`LICENSE-PLACEHOLDER` where the license goes: set it once there is a LICENSE.
+repository URL `https://github.com/N604K/WinNCDU` (from `git remote`) and the MIT license.
 
 `packaging/update-manifests.ps1` fills in the version, URL and SHA-256 and writes the results to
 `packaging/out/`. The release workflow runs it too and keeps the output as the workflow artifact
