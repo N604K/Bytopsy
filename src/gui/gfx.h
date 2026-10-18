@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "theme.h"
 
@@ -88,10 +89,21 @@ public:
 
     bool HasFluentIcons() const { return fluentIcons_; }
 
+    // While recording (a UI Automation client is attached), Text() also remembers what it drew and
+    // where, for the accessible element tree. SetRecording clears what was recorded.
+    struct TextRun {
+        std::wstring s;
+        RectF r;
+    };
+    void SetRecording(bool on);
+    bool Recording() const { return recording_; }
+    const std::vector<TextRun>& Runs() const { return runs_; }
+
 private:
     IDWriteTextFormat* Format(const TextStyle& st);
     void CreateTarget();
     void DiscardTarget();
+    void Record(const std::wstring& s, const RectF& r, const TextStyle& st);
 
     HWND hwnd_ = nullptr;
     ID2D1Factory* d2d_ = nullptr;
@@ -105,4 +117,7 @@ private:
     bool fluentIcons_ = false;
     float dpi_ = 96.0f;
     unsigned generation_ = 1;
+    bool recording_ = false;
+    std::vector<TextRun> runs_;
+    std::vector<RectF> clips_;
 };

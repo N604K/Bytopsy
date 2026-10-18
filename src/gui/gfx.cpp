@@ -1,5 +1,6 @@
 #include "gfx.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -223,6 +224,28 @@ void Gfx::Text(const std::wstring& s, const RectF& r, D2D1_COLOR_F c, const Text
     if (!f) return;
     brush_->SetColor(c);
     rt_->DrawText(s.c_str(), static_cast<UINT32>(s.size()), f, r, brush_, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    if (recording_) Record(s, r, st);
+}
+
+// Where the text actually is (not its layout box), clipped like the drawing: what UI Automation
+// reports and what decides which element the text belongs to.
+void Gfx::Record(const std::wstring& s, const RectF& r, const TextStyle& st) {
+    RectF v;
+    if (st.wrap) {
+        v = R(r.left, r.top, r.right, r.top + std::min(H(r), MeasureHeight(s, W(r), st)));
+    } else {
+        float w = std::min(Measure(s, st), W(r));
+        float h = std::min(H(r), st.size * 1.4f);
+        float x = st.align == Align::Left ? r.left : st.align == Align::Right ? r.right - w : (r.left + r.right - w) / 2;
+        float y = st.center ? (r.top + r.bottom - h) / 2 : r.top;
+        v = R(x, y, x + w, y + h);
+    }
+    if (!clips_.empty()) {
+        const RectF& c = clips_.back();
+        v = R(std::max(v.left, c.left), std::max(v.top, c.top), std::min(v.right, c.right), std::min(v.bottom, c.bottom));
+    }
+    if (W(v) <= 0.5f || H(v) <= 0.5f) return;
+    runs_.push_back({s, v});
 }
 
 float Gfx::Measure(const std::wstring& s, const TextStyle& st) {
@@ -265,5 +288,23 @@ void Gfx::Bitmap(ID2D1Bitmap* bmp, const RectF& r, float opacity) {
     if (bmp) rt_->DrawBitmap(bmp, r, opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
 }
 
-void Gfx::PushClip(const RectF& r) { rt_->PushAxisAlignedClip(r, D2D1_ANTIALIAS_MODE_ALIASED); }
-void Gfx::PopClip() { rt_->PopAxisAlignedClip(); }
+void Gfx::PushClip(const RectF& r) {
+    rt_->PushAxisAlignedClip(r, D2D1_ANTIALIAS_MODE_ALIASED);
+    RectF c = r;
+    if (!clips_.empty()) {
+        const RectF& o = clips_.back();
+        c = R(std::max(c.left, o.left), std::max(c.top, o.top), std::min(c.right, o.right), std::min(c.bottom, o.bottom));
+    }
+    clips_.push_back(c);
+}
+
+void Gfx::PopClip() {
+    rt_->PopAxisAlignedClip();
+    if (!clips_.empty()) clips_.pop_back();
+}
+
+void Gfx::SetRecording(bool on) {
+    recording_ = on;
+    runs_.clear();
+    clips_.clear();
+}

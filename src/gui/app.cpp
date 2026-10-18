@@ -22,6 +22,7 @@ constexpr float kTopH = 56.0f;
 
 bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show) {
     inst_ = inst;
+    acc_ = std::make_unique<AccBridge>(static_cast<AccHost*>(this));
     settings_ = LoadSettings();
     util::g_si = settings_.si;
     elevated_ = IsElevated();
@@ -96,6 +97,7 @@ void App::CreateSearchBox() {
     SetWindowSubclass(search_, SearchProc, 1, reinterpret_cast<DWORD_PTR>(this));
     SendMessageW(search_, EM_SETCUEBANNER, TRUE,
                  reinterpret_cast<LPARAM>(L"Search files & folders   e.g.  *.iso   >1G   older:1y   type:d"));
+    AccNameSearchBox(true);
     UpdateSearchBox();
 }
 
@@ -295,6 +297,17 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_APP_TASKDONE: OnTaskDone(); return 0;
         case WM_APP_CLEANUP: OnCleanupMeasured(reinterpret_cast<std::vector<CleanCategory>*>(lp)); return 0;
         case WM_APP_UNINSTALL: OnAppUninstallProgress(); return 0;
+        case WM_GETOBJECT: {
+            LRESULT r = 0;
+            bool first = acc_ && !acc_->Active();
+            if (acc_ && acc_->OnGetObject(wp, lp, &r)) {
+                if (first) Invalidate();  // start recording what is drawn
+                return r;
+            }
+            break;
+        }
+        case WM_APP_ACC: AccEvents(); return 0;
+        case WM_APP_ACCDO: AccRun(static_cast<uint64_t>(lp), static_cast<AccAct>(wp)); return 0;
         case WM_DROPFILES: OnDrop(reinterpret_cast<HDROP>(wp)); return 0;
         case WM_CTLCOLOREDIT:
             if (reinterpret_cast<HWND>(lp) == search_) {
@@ -344,6 +357,8 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_DESTROY:
+            AccNameSearchBox(false);
+            if (acc_) acc_->Detach();
             SafeRelease(tmBitmap_);
             icons_.Clear();
             ClearThumbs();
@@ -403,6 +418,46 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
         hit.kind = HK_ROW;
     }
     bool ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0;
+    switch (hit.kind) {
+        case HK_SCROLL: {
+            dragKind_ = HK_SCROLL;
+            dragStart_ = y;
+            ListState& ls = lists_[static_cast<int>(view_)];
+            float viewH = H(listArea_);
+            float thumbH = std::max(28.0f, viewH * viewH / std::max(viewH, listContentH_));
+            float thumbY = listArea_.top + (viewH - thumbH) * (ls.scroll / std::max(1.0f, listContentH_ - viewH));
+            if (y < thumbY || y > thumbY + thumbH) {
+                // Jump so the thumb centers on the click.
+                ls.scroll = (y - listArea_.top - thumbH / 2) / std::max(1.0f, viewH - thumbH) * (listContentH_ - viewH);
+            }
+            dragValue_ = ls.scroll;
+            SetCapture(hwnd_);
+            break;
+        }
+        case HK_SPLITTER:
+            dragKind_ = HK_SPLITTER;
+            SetCapture(hwnd_);
+            break;
+        case HK_TREEMAP: {
+            int i = HitTreemap(tm_, x, y);
+            if (i < 0) break;
+            Node* n = tm_[i].node;
+            if (dbl) {
+                // Zoom into the folder (the item's own folder for files).
+                Node* target = n->CanEnter() ? n : n->parent;
+                if (target && target != tmRoot_) NavigateTo(target);
+            } else {
+                RevealInBrowse(n);
+            }
+            break;
+        }
+        default: ActivateHit(hit, dbl, ctrl, shift); break;
+    }
+    Invalidate();
+}
+
+// A click on a region (also what UI Automation's Invoke / Toggle / Select run).
+void App::ActivateHit(const Hit& hit, bool dbl, bool ctrl, bool shift) {
     switch (hit.kind) {
         case HK_BUTTON: OnCommand(hit.a); break;
         case HK_NAV: ShowView(static_cast<View>(hit.a)); break;
@@ -512,38 +567,6 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 SortResults();
             }
             break;
-        case HK_SCROLL: {
-            dragKind_ = HK_SCROLL;
-            dragStart_ = y;
-            ListState& ls = lists_[static_cast<int>(view_)];
-            float viewH = H(listArea_);
-            float thumbH = std::max(28.0f, viewH * viewH / std::max(viewH, listContentH_));
-            float thumbY = listArea_.top + (viewH - thumbH) * (ls.scroll / std::max(1.0f, listContentH_ - viewH));
-            if (y < thumbY || y > thumbY + thumbH) {
-                // Jump so the thumb centers on the click.
-                ls.scroll = (y - listArea_.top - thumbH / 2) / std::max(1.0f, viewH - thumbH) * (listContentH_ - viewH);
-            }
-            dragValue_ = ls.scroll;
-            SetCapture(hwnd_);
-            break;
-        }
-        case HK_SPLITTER:
-            dragKind_ = HK_SPLITTER;
-            SetCapture(hwnd_);
-            break;
-        case HK_TREEMAP: {
-            int i = HitTreemap(tm_, x, y);
-            if (i < 0) break;
-            Node* n = tm_[i].node;
-            if (dbl) {
-                // Zoom into the folder (the item's own folder for files).
-                Node* target = n->CanEnter() ? n : n->parent;
-                if (target && target != tmRoot_) NavigateTo(target);
-            } else {
-                RevealInBrowse(n);
-            }
-            break;
-        }
         case HK_CHIP:
             if (hit.a == 1) dupMin_ = static_cast<uint64_t>(hit.b);
             if (hit.a == 2) {
@@ -619,6 +642,7 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 if (dialog_.onChoice) dialog_.onChoice(dialog_);
             }
             break;
+        default: break;
     }
     Invalidate();
 }
@@ -679,6 +703,9 @@ void App::OnKeyDown(WPARAM vk) {
         return;
     }
     if (dialog_.active) {
+        if (DialogKey(vk, shift)) return;
+        int focus = DialogFocus();
+        bool onButton = focus >= 0 && focus < static_cast<int>(dialog_.buttons.size());
         int btn = -1;
         if (vk == VK_ESCAPE) {
             // Escape = the non-primary (cancel) button, or just close.
@@ -690,8 +717,10 @@ void App::OnKeyDown(WPARAM vk) {
                     break;
                 }
         }
-        if (vk == VK_RETURN) btn = dialog_.primary >= 0 ? dialog_.primary : 0;
-        if (vk == VK_SPACE && dialog_.hasCheck) {
+        // Enter presses the focused button: the primary one unless Tab moved on.
+        if (vk == VK_RETURN) btn = onButton ? focus : (dialog_.primary >= 0 ? dialog_.primary : 0);
+        if (vk == VK_SPACE && dialog_.kbd && onButton) btn = focus;
+        if (vk == VK_SPACE && btn < 0 && dialog_.hasCheck && (!dialog_.kbd || focus == -1)) {
             dialog_.checked = !dialog_.checked;
             if (dialog_.onCheck) dialog_.onCheck(dialog_);
             Invalidate();

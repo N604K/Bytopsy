@@ -2359,6 +2359,7 @@ void App::Toast(const std::wstring& text, int tone) {
     toast_.text = text;
     toast_.tone = tone;
     toast_.until = GetTickCount64() + (tone == 1 ? 6000 : 4000);
+    if (acc_) acc_->Notify(text);  // screen readers say it
     EnsureTimer();
     Invalidate();
 }
@@ -2400,6 +2401,7 @@ void App::ShowProtectedLocations() {
 void App::ShowDialog(Dialog d) {
     d.active = true;
     dialog_ = std::move(d);
+    ++dialogGen_;  // a new dialog: new accessible elements (its title may change while it is open)
     Invalidate();
 }
 

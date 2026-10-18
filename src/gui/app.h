@@ -33,6 +33,7 @@
 #include "icons.h"
 #include "platform.h"
 #include "treemap.h"
+#include "uia.h"
 
 enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, Startup, Apps, CleanReview, DiskHealth, Count };
 
@@ -224,6 +225,10 @@ struct Dialog {
     std::vector<DialogChoice> choices;
     std::function<void(Dialog&)> onChoice;                       // a choice changed
     std::function<void(int button, const Dialog&)> onCloseWith;  // like onClose, with the choices
+    // Keyboard focus (Tab / arrows): -1 the checkbox, 0.. a button, 1000 + i a choice; anything else
+    // means the primary button. kbd: the keyboard moved it, so a focus ring is drawn.
+    int focus = -1000;
+    bool kbd = false;
 };
 
 // One line of the "Recently deleted" view.
@@ -239,7 +244,7 @@ struct ToastInfo {
     ULONGLONG until = 0;
 };
 
-class App {
+class App : private AccHost {
 public:
     // `show`: how the program was started (wWinMain's nCmdShow), e.g. minimized from a shortcut.
     bool Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show = SW_SHOWDEFAULT);
@@ -362,6 +367,25 @@ private:
     void ShowAbout();
     void ConfirmNewScan(const std::wstring& path);
 
+    // ---- accessibility (uia_app.cpp): the UI Automation tree, rebuilt from each frame
+    HWND AccWindow() const override { return hwnd_; }
+    const AccTree* AccCurrent() override;
+    HRESULT AccDo(uint64_t key, AccAct act) override;
+    RECT AccScreenRect(const RectF& r) const override;
+    bool AccClientPoint(double screenX, double screenY, float* x, float* y) const override;
+    void AccFrameBegin();
+    void AccBuild();
+    void AccEvents();
+    void AccRun(uint64_t key, AccAct act);
+    void AccMark(const std::wstring& name, int toggle = -1);  // the last click region's name / toggle state
+    void AccDisabled(const RectF& r, int kind, int a, const std::wstring& name = L"");  // a control drawn disabled
+    void AccNameSearchBox(bool set);
+    std::vector<int> DialogSlots() const;
+    int DialogFocus() const;
+    bool DialogKey(WPARAM vk, bool shift);
+    // What a click on a region does (OnLButtonDown, and UI Automation's patterns).
+    void ActivateHit(const Hit& hit, bool dbl, bool ctrl, bool shift);
+
     // ---- drawing (draw.cpp)
     void Paint();
     void AddHit(const RectF& r, int kind, int a = 0, intptr_t b = 0) { hits_.push_back({r, kind, a, b}); }
@@ -408,7 +432,7 @@ private:
     float Button(const RectF& r, wchar_t icon, const std::wstring& text, int cmd, int style, bool enabled = true);
     float IconButton(float x, float y, wchar_t icon, int cmd, const std::wstring& tip, bool active = false);
     float Chip(float x, float y, const std::wstring& text, bool active, int group, intptr_t value);
-    void Checkbox(const RectF& r, bool checked, bool hover);
+    void Checkbox(const RectF& r, bool checked, bool hover, bool mixed = false);
 
     // ---- state
     HWND hwnd_ = nullptr;
@@ -570,8 +594,37 @@ private:
     Dialog dialog_;
     ToastInfo toast_;
     bool timerOn_ = false;
+
+    // Accessibility
+    std::unique_ptr<AccBridge> acc_;
+    AccTree accTree_;
+    std::vector<Hit> accActs_;  // per element (AccNode::action): the click it stands for
+    struct AccMarkInfo {
+        size_t hit;  // index into hits_, SIZE_MAX: a disabled control (no click region)
+        Hit h;
+        std::wstring name;
+        int toggle;
+        size_t at;  // hits_.size() when it was drawn
+    };
+    std::vector<AccMarkInfo> accMarks_;
+    struct AccCheck {
+        RectF r;
+        bool on, mixed;
+    };
+    std::vector<AccCheck> accChecks_;
+    size_t accTipFrom_ = SIZE_MAX, accTipTo_ = SIZE_MAX, accModalText_ = SIZE_MAX;
+    // Where the sidebar, top bar, status bar and overlays start in hits_ / the recorded text runs.
+    size_t accHitSeg_[4] = {}, accRunSeg_[4] = {};
+    RectF accModalRect_{};
+    bool inPaint_ = false, accEventPosted_ = false;
+    uint64_t accSig_ = 0, accModalKey_ = 0, accFocusKey_ = 0;
+    uint32_t accFocusFlags_ = 0;
+    uint64_t dialogGen_ = 0;
+    std::wstring accFocusName_;
 };
 
 constexpr UINT WM_APP_TASKDONE = WM_APP + 1;
 constexpr UINT WM_APP_CLEANUP = WM_APP + 2;
 constexpr UINT WM_APP_UNINSTALL = WM_APP + 3;  // an uninstaller WinNCDU waits for made progress
+constexpr UINT WM_APP_ACC = WM_APP + 4;        // raise UI Automation events for the last frame
+constexpr UINT WM_APP_ACCDO = WM_APP + 5;      // run a UI Automation action: wParam AccAct, lParam element key

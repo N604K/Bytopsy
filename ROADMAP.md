@@ -130,8 +130,23 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       templates for "false alarm" and "missing protected folder".
       *Done: CONTRIBUTING.md (build, self-tests, both guides) and issue forms in
       `.github/ISSUE_TEMPLATE` (false alarm, missing protected folder, bug report).*
-- [ ] Accessibility: the GUI is custom-drawn with Direct2D, so screen readers see nothing. Add a
+- [x] Accessibility: the GUI is custom-drawn with Direct2D, so screen readers see nothing. Add a
       UI Automation provider for the list, buttons and dialogs.
+      *Done: a UI Automation provider (`src/gui/uia.cpp`, `uia_app.cpp`, `accmodel.cpp`). Each
+      frame, the click regions, the text drawn and the checkboxes drawn become an element tree:
+      toolbar, navigation list, the view (its list with headers and rows), status bar, and dialogs
+      and the progress window as dialog windows. Invoke, Toggle, SelectionItem, Selection,
+      ExpandCollapse and ScrollItem run the same code a click runs; focus, structure, property,
+      window-opened and notification (toasts) events are raised; elements no longer on screen fail
+      with UIA_E_ELEMENTNOTAVAILABLE. Dialogs gained Tab / arrow-key focus with a focus ring.
+      Verified with a native IUIAutomation client and screenshots: tree dumps of Home, a scanned
+      %TEMP% fixture, Cleanup, Startup, AI models, Apps, a running scan and the delete, schedule and
+      About dialogs; switching views, selecting, multi-selecting and expanding rows, toggling a
+      Cleanup checkbox and the delete dialog's checkbox, choosing a schedule option, cancelling
+      dialogs; focus, selection and expand events while arrowing. `tests/uia_test.cpp` covers
+      identity, reading order, naming and patterns. Not verified: Narrator, NVDA or JAWS
+      themselves (nobody can listen here). Not done: rows off screen are not exposed (no
+      virtualized list), the treemap is one image.*
 - [ ] Localization: move strings to a table; start with the languages of the first contributors.
 - [x] Tests: analysis (search syntax, duplicates), export/import round trips, fuzzing the ncdu JSON
       importer.

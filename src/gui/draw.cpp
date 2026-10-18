@@ -138,7 +138,10 @@ float App::Button(const RectF& r, wchar_t icon, const std::wstring& text, int cm
     float x = r.left + (W(r) - tw - iw) / 2;
     if (icon) gfx_.Icon(icon, RWH(x, r.top, 16, H(r)), fg, 14);
     gfx_.Text(text, R(x + iw, r.top, r.right, r.bottom), fg, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-    if (enabled) AddHit(r, HK_BUTTON, cmd);
+    if (enabled)
+        AddHit(r, HK_BUTTON, cmd);
+    else
+        AccDisabled(r, HK_BUTTON, cmd);
     return W(r);
 }
 
@@ -151,6 +154,7 @@ float App::IconButton(float x, float y, wchar_t icon, int cmd, const std::wstrin
         gfx_.FillRound(r, 8, P_.surface3);
     gfx_.Icon(icon, r, active ? P_.accent : (hover ? P_.text : P_.textDim), 16);
     AddHit(r, HK_BUTTON, cmd);
+    AccMark(tip);  // icon only: the tooltip is its name
     if (hover && !tip.empty()) {
         tipText_ = tip;
         tipAnchor_ = r;
@@ -166,10 +170,18 @@ float App::Chip(float x, float y, const std::wstring& text, bool active, int gro
     if (!active) gfx_.StrokeRound(r, 15, P_.border);
     gfx_.Text(text, r, active ? P_.accentText : P_.text, TS(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
     AddHit(r, HK_CHIP, group, value);
+    AccMark(L"", active ? 1 : 0);
     return w;
 }
 
-void App::Checkbox(const RectF& r, bool checked, bool hover) {
+void App::Checkbox(const RectF& r, bool checked, bool hover, bool mixed) {
+    if (gfx_.Recording()) accChecks_.push_back({r, checked, mixed});
+    if (mixed && !checked) {
+        gfx_.FillRound(r, 5, hover ? P_.surface3 : P_.surface);
+        gfx_.StrokeRound(r, 5, hover ? P_.accent : P_.textFaint, 1.2f);
+        gfx_.FillRound(Inset(r, 4, 7), 1, P_.accent);
+        return;
+    }
     if (checked) {
         gfx_.FillRound(r, 5, P_.accent);
         gfx_.Icon(IC_CHECK, r, P_.accentText, 12);
@@ -218,6 +230,8 @@ void App::DrawEmptyState(const RectF& area, wchar_t icon, const std::wstring& ti
 
 void App::Paint() {
     if (!gfx_.Begin()) return;
+    inPaint_ = true;
+    AccFrameBegin();
     SyncSearchBox();
     if (rowsDirty_) BuildRows();
     hits_.clear();
@@ -258,11 +272,21 @@ void App::Paint() {
         case View::CleanReview: DrawCleanReview(contentArea_); break;
         default: break;
     }
+    auto segment = [&](int i) {
+        accHitSeg_[i] = hits_.size();
+        accRunSeg_[i] = gfx_.Runs().size();
+    };
+    segment(0);
     DrawSidebar();
+    segment(1);
     DrawTopBar();
+    segment(2);
     DrawStatusBar();
+    segment(3);
     DrawToast();
+    accTipFrom_ = gfx_.Runs().size();
     DrawTooltip();
+    accTipTo_ = gfx_.Runs().size();
     if (dialog_.active) DrawDialog();
     if (task_) DrawBusy();
     if (!gfx_.End()) {
@@ -270,6 +294,8 @@ void App::Paint() {
         tmDirty_ = true;
         Invalidate();
     }
+    inPaint_ = false;
+    AccBuild();
 }
 
 void App::DrawTopBar() {
@@ -396,7 +422,12 @@ void App::DrawSidebar() {
                   TS(13.5f, active ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL));
         if (!it.badge.empty())
             gfx_.Text(it.badge, R(r.left, r.top, r.right - 10, r.bottom), P_.textFaint, Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
-        if (enabled && r.top >= sb.top && r.bottom <= sb.bottom) AddHit(r, HK_NAV, static_cast<int>(it.v));
+        if (r.top >= sb.top && r.bottom <= sb.bottom) {
+            if (enabled)
+                AddHit(r, HK_NAV, static_cast<int>(it.v));
+            else
+                AccDisabled(r, HK_NAV, static_cast<int>(it.v));
+        }
         y += step;
     };
     for (auto& it : items) drawItem(it);
@@ -710,6 +741,7 @@ void App::DrawBrowse(const RectF& area) {
             }
             gfx_.Text(labels[i], r, active ? P_.text : P_.textDim, Small(12.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
             AddHit(r, HK_BUTTON, cmds[i]);
+            AccMark(L"", active ? 1 : 0);
             sx += w;
         }
         rx = seg.left - 12;
@@ -1438,8 +1470,7 @@ void App::DrawDevJunk(const RectF& area) {
             bool all = std::all_of(p.artifacts.begin(), p.artifacts.end(), [&](const DevArtifact& a) { return sel_.count(a.node) > 0; });
             bool some = !all && std::any_of(p.artifacts.begin(), p.artifacts.end(), [&](const DevArtifact& a) { return sel_.count(a.node) > 0; });
             RectF cb = RWH(r.left + 10, (r.top + r.bottom) / 2 - 8, 16, 16);
-            Checkbox(cb, all, Hovered(HK_ROW, i));
-            if (some) gfx_.FillRound(Inset(cb, 4, 7), 1, P_.accent);
+            Checkbox(cb, all, Hovered(HK_ROW, i), some);
             std::wstring size = util::FormatSizeShort(DevProjectSize(p, disk));
             float sw = gfx_.Measure(size, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD)) + 8;
             std::wstring age = L"changed " + AgeText(p.lastChange);
@@ -2888,6 +2919,11 @@ void App::DrawDialog() {
     float choicesH = shownChoices ? shownChoices * 40.0f + 10 : 0;
     float h = 24 + 30 + msgH + (listH ? listH + 14 : 0) + (dialog_.hasCheck ? 40 : 0) + choicesH + 24 + 40 + 24;
     RectF card = RWH((sz.width - w) / 2, std::max(20.0f, (sz.height - h) / 2 - 20), w, h);
+    accModalText_ = gfx_.Runs().size();
+    accModalRect_ = card;
+    // Keyboard focus ring (after Tab or an arrow key moved it).
+    int focus = dialog_.kbd ? DialogFocus() : -1000;
+    auto ring = [&](const RectF& r, float radius) { gfx_.StrokeRound(Inset(r, -3, -3), radius + 3, P_.accent, 2.0f); };
     gfx_.Shadow(card, 16, 24);
     gfx_.FillRound(card, 16, P_.surface);
     gfx_.StrokeRound(card, 16, P_.border);
@@ -2930,6 +2966,7 @@ void App::DrawDialog() {
         Checkbox(RWH(tx, y + 4, 18, 18), dialog_.checked, hv);
         gfx_.Text(dialog_.checkText, R(tx + 28, y, cr.right, cr.bottom), dialog_.checked && dialog_.checkDanger ? P_.danger : P_.text, TS(13));
         AddHit(cr, HK_DIALOG, -1);
+        if (focus == -1) ring(R(tx - 4, cr.top, std::min(cr.right, tx + 36 + gfx_.Measure(dialog_.checkText, TS(13))), cr.bottom), 6);
         y += 28;
     }
     if (shownChoices) {
@@ -2959,6 +2996,7 @@ void App::DrawDialog() {
                 for (int oi = 0; oi < static_cast<int>(ch.options.size()); ++oi)
                     chip(ch.options[oi], gfx_.Measure(ch.options[oi], cs) + 22, oi == ch.value, oi);
             }
+            if (focus == 1000 + ci) ring(R(tx + 88, y + 1, cx - 6, y + 31), 15);
             y += 40;
         }
     }
@@ -2976,6 +3014,7 @@ void App::DrawDialog() {
         if (!primary && !danger) gfx_.StrokeRound(br, 9, P_.border);
         gfx_.Text(t, br, primary || danger ? P_.accentText : P_.text, TS(13, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
         AddHit(br, HK_DIALOG, i);
+        if (focus == i) ring(br, 9);
         bx -= bw + 10;
     }
 }
@@ -2990,6 +3029,8 @@ void App::DrawBusy() {
     float w = std::min(560.0f, sz.width - 40);
     float h = 24 + 34 + lines.size() * 26.0f + 18 + 10 + 38 + 24;
     RectF card = RWH((sz.width - w) / 2, (sz.height - h) / 2 - 20, w, h);
+    accModalText_ = gfx_.Runs().size();
+    accModalRect_ = card;
     gfx_.Shadow(card, 16, 24);
     gfx_.FillRound(card, 16, P_.surface);
     gfx_.StrokeRound(card, 16, P_.border);

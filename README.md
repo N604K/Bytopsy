@@ -216,6 +216,23 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
 - **Run as administrator** to read protected folders; disk usage vs. apparent size; JSON/CSV export
   and import of ncdu JSON (including scans made with Linux `ncdu -o`); per-monitor DPI; dark, light
   or system theme. Window size and preferences are remembered.
+- **Accessibility**: the window is drawn with Direct2D, so it describes itself to screen readers
+  (Narrator, NVDA, JAWS) and other UI Automation clients: the toolbar buttons (by name, also the
+  icon-only ones), the sidebar as a list of views with the current one selected, each view's text,
+  buttons, cards and checkboxes, the list with its column headers and rows (a row is read as its
+  cells: "Photos, 3.8 MiB, 44%, 3, 2026-10-18 18:51"), the status bar, and dialogs as dialog
+  windows with their title, message, checkbox, choices and buttons. Buttons and cards can be
+  invoked, checkboxes, chips and the startup switches toggled, rows selected, opened, expanded and
+  collapsed: each runs exactly what a click runs, so deleting still asks first. Moving through a
+  list with the arrow keys moves the reader along (each row is read), changed checkboxes and
+  selections are announced, a dialog is read when it opens, and messages at the bottom of the
+  window are spoken. The search box is a regular edit control. In dialogs, Tab / Shift+Tab and the
+  arrow keys move between the checkbox, the choices and the buttons (a focus ring shows where),
+  Enter presses the focused button and Escape cancels. Not covered yet: only the rows on screen are
+  exposed (a reader sees the list as far as it is scrolled, not its full length), the treemap is a
+  single image (the list shows the same items), and the keyboard moves through lists and dialogs
+  only, not between a view's buttons (a screen reader's own navigation reaches those). The right-click
+  and `⋯` menus are standard Windows menus.
 
 Command line: `winncdu.exe [folder]` scans a folder, `winncdu.exe -f scan.json` opens a saved scan.
 The window opens as it was started (e.g. minimized from a shortcut set to "Run: Minimized").
@@ -232,6 +249,7 @@ The window opens as it was started (e.g. minimized from a shortcut set to "Run: 
 | `Ctrl+O` / `Ctrl+S` | Scan a folder / export as JSON |
 | `Esc` | Clear the selection, then go back to the folder view |
 | `F1` | About and shortcuts |
+| `Tab` / `Shift+Tab`, `←` `→` (in a dialog) | Move between the checkbox, the choices and the buttons; `Enter` presses the focused one |
 
 ## No registry cleaner
 
@@ -388,7 +406,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps and phash self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash and uia self-tests
 ```
 
 GitHub Actions builds and runs the self-tests on every push and pull request
@@ -532,6 +550,9 @@ src/gui/              windowed app
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
+  accmodel.cpp        accessible element tree built from each frame (identity, reading order, names)
+  uia.cpp             UI Automation provider (COM): elements, patterns, events
+  uia_app.cpp         what the window shows to UI Automation, and what acting on an element runs
 tests/protect_test.cpp  self-check of the protection rules (ctest)
 tests/journal_test.cpp  journal format, a real recycle + restore round trip, portable mode's data folder (ctest)
 tests/cleanup_test.cpp  Cleanup deletes exactly the reviewed list; kept sites' cookies and Firefox bookmarks survive (ctest)
@@ -549,6 +570,7 @@ tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --c
 tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
 tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
 tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
+tests/uia_test.cpp      accessibility tree: element identity across frames, reading order, names from text, patterns (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h), unmodified

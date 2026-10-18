@@ -61,9 +61,12 @@ add_executable(winncdu WIN32
   src/gui/winapp2.cpp
   src/gui/apps_view.cpp
   src/gui/platform.cpp
+  src/gui/accmodel.cpp
+  src/gui/uia.cpp
+  src/gui/uia_app.cpp
   src/gui/winncdu-gui.rc
 )
-target_link_libraries(winncdu PRIVATE winncdu_core sqlite3 d2d1 dwrite windowscodecs dwmapi comctl32 uxtheme gdi32 advapi32)
+target_link_libraries(winncdu PRIVATE winncdu_core sqlite3 d2d1 dwrite windowscodecs dwmapi comctl32 uxtheme gdi32 advapi32 uiautomationcore oleacc)
 # The resource script embeds these files; without this, editing them doesn't rebuild the exe.
 set_source_files_properties(src/gui/winncdu-gui.rc PROPERTIES
   OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/res/cleaners.ini;${CMAKE_SOURCE_DIR}/res/winncdu.ico")
@@ -233,5 +236,14 @@ if(MSVC)
   target_compile_options(winncdu-phash-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME phash COMMAND winncdu-phash-test)
+
+# Accessibility tree (element identity, reading order, names from drawn text, patterns): build/winncdu-uia-test.exe
+add_executable(winncdu-uia-test tests/uia_test.cpp src/gui/accmodel.cpp)
+target_include_directories(winncdu-uia-test PRIVATE src/gui)
+target_compile_definitions(winncdu-uia-test PRIVATE UNICODE _UNICODE NOMINMAX)
+if(MSVC)
+  target_compile_options(winncdu-uia-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME uia COMMAND winncdu-uia-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)
