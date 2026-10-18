@@ -77,7 +77,10 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       status, free-space trend from scan history.
 - [ ] **Scheduled cleanup**: `winncdu-cli --clean temp,browser,dev --yes` plus a Task Scheduler entry
       from the GUI.
-- [ ] Duplicate photos with a perceptual hash (not only byte-identical files).
+- [x] Duplicate photos with a perceptual hash (not only byte-identical files).
+      *Done: "Similar photos" tab of Duplicates (`src/phash.cpp`): WIC decode at reduced size with
+      EXIF orientation, dHash + pHash, exact multi-index lookup (fast for tens of thousands of
+      photos), groups built around a suggested keeper, previews, hash cache; `--similar-photos`.*
 - [ ] **No registry cleaner.** Say so in the README: it frees nothing measurable and breaks things.
       This stance is a selling point.
 

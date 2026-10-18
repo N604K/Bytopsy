@@ -26,10 +26,11 @@ add_library(winncdu_core STATIC
   src/runtool.cpp
   src/wintools.cpp
   src/games.cpp
+  src/phash.cpp
 )
 target_include_directories(winncdu_core PUBLIC src)
 target_compile_definitions(winncdu_core PUBLIC UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil)
+target_link_libraries(winncdu_core PUBLIC shell32 ole32 shlwapi bcrypt user32 advapi32 rstrtmgr ntdll setupapi wofutil windowscodecs)
 
 # Windowed app (Direct2D): build\winncdu.exe
 add_executable(winncdu WIN32
@@ -144,5 +145,13 @@ if(MSVC)
   target_compile_options(winncdu-games-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
 endif()
 add_test(NAME games COMMAND winncdu-games-test)
+
+# Similar photos (perceptual hashes, BK-tree, EXIF orientation, hash cache): build/winncdu-phash-test.exe
+add_executable(winncdu-phash-test tests/phash_test.cpp)
+target_link_libraries(winncdu-phash-test PRIVATE winncdu_core)
+if(MSVC)
+  target_compile_options(winncdu-phash-test PRIVATE /W4 /utf-8 /permissive- /EHsc)
+endif()
+add_test(NAME phash COMMAND winncdu-phash-test)
 
 install(TARGETS winncdu winncdu-cli RUNTIME DESTINATION bin)

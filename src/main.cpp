@@ -11,6 +11,7 @@
 #include "aimodels.h"
 #include "games.h"
 #include "journal.h"
+#include "phash.h"
 #include "protect.h"
 #include "scanner.h"
 #include "ui.h"
@@ -54,6 +55,9 @@ void PrintUsage() {
         "                        Restore, event logs) and exit\n"
         "  --games               List installed games of every launcher (size, last played)\n"
         "                        and leftovers of uninstalled ones, and exit\n"
+        "  --similar-photos[=strict|normal|loose]\n"
+        "                        Scan path, list groups of photos that look alike (resized,\n"
+        "                        re-saved, lightly edited copies) with the one to keep, and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -254,10 +258,14 @@ int Fail(const std::wstring& msg) {
     return 2;
 }
 
-int HeadlessExport(const AppConfig& cfg, const std::wstring& outJson, const std::wstring& outCsv) {
+// Scans cfg.path with progress on stderr. Null (after a message) when the path can't be scanned.
+std::unique_ptr<Node> HeadlessScan(const AppConfig& cfg) {
     std::wstring err;
     std::wstring path = NormalizeDirPath(cfg.path.empty() ? L"." : cfg.path, err);
-    if (path.empty()) return Fail(L"cannot scan " + cfg.path + L": " + err);
+    if (path.empty()) {
+        Fail(L"cannot scan " + cfg.path + L": " + err);
+        return nullptr;
+    }
     auto root = std::make_unique<Node>();
     root->name = path;
     root->flags = NF_DIR;
@@ -279,6 +287,13 @@ int HeadlessExport(const AppConfig& cfg, const std::wstring& outJson, const std:
     fwprintf(stderr, L"\rScanned %ls items (%ls) in %ls, %ls errors\n", util::FormatCount(root->items).c_str(),
              util::FormatSizeShort(root->disk).c_str(), util::FormatDuration((GetTickCount64() - start) / 1000.0).c_str(),
              util::FormatCount(stats.errors).c_str());
+    return root;
+}
+
+int HeadlessExport(const AppConfig& cfg, const std::wstring& outJson, const std::wstring& outCsv) {
+    auto root = HeadlessScan(cfg);
+    if (!root) return 2;
+    std::wstring err;
     std::atomic<uint64_t> count{0};
     if (!outJson.empty()) {
         if (!ExportNcduJson(root.get(), outJson, count, err)) return Fail(err);
@@ -291,12 +306,67 @@ int HeadlessExport(const AppConfig& cfg, const std::wstring& outJson, const std:
     return 0;
 }
 
+// Read-only: images are decoded small to compare them; only the hash cache in the app's data folder is written.
+int ListSimilarPhotos(const AppConfig& cfg, PhotoMatch match) {
+    auto root = HeadlessScan(cfg);
+    if (!root) return 2;
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    const uint64_t minSize = 100 << 10;
+    PhotoHashCache cache(PhotoHashCache::DefaultFile());
+    PhotoProgress prog;
+    std::vector<PhotoGroup> groups;
+    std::atomic<bool> done{false};
+    std::thread th([&] {
+        groups = FindSimilarPhotos(root.get(), minSize, match, cfg.scan.threads, prog, &cache);
+        done = true;
+    });
+    ULONGLONG start = GetTickCount64();
+    while (!done) {
+        Sleep(250);
+        fwprintf(stderr, L"\rReading images: %ls / %ls   ", util::FormatCount(prog.filesDone).c_str(), util::FormatCount(prog.filesTotal).c_str());
+    }
+    th.join();
+    fwprintf(stderr, L"\rCompared %ls images in %ls                \n", util::FormatCount(prog.filesTotal).c_str(),
+             util::FormatDuration((GetTickCount64() - start) / 1000.0).c_str());
+    uint64_t waste = 0;
+    for (auto& g : groups) waste += g.Reclaimable();
+    std::wstring out = L"Similar photos in " + root->name + L" (" + PhotoMatchName(match) + L" match, images of " +
+                       util::FormatSizeShort(minSize) + L" or more). Read-only: nothing was changed.\n" + util::FormatCount(prog.filesTotal) +
+                       L" images compared";
+    if (prog.failed) out += L" (" + util::FormatCount(prog.failed) + L" unreadable)";
+    if (prog.cached) out += L", " + util::FormatCount(prog.cached) + L" remembered from an earlier search";
+    out += L"; " + util::FormatCount(groups.size()) + L" groups, " + util::FormatSizeShort(waste) + L" in the photos not suggested to keep.\n";
+    if (groups.empty()) out += L"\n  No similar photos found.\n";
+    for (size_t gi = 0; gi < groups.size(); ++gi) {
+        auto& g = groups[gi];
+        out += L"\n[" + util::FormatCount(gi + 1) + L"] " + util::FormatCount(g.photos.size()) +
+               (g.maxDist == 0 ? L" photos that look the same" : L" similar photos") + L", " + util::FormatSizeShort(g.Reclaimable()) +
+               L" in the others\n";
+        for (size_t i = 0; i < g.photos.size(); ++i) {
+            auto& p = g.photos[i];
+            wchar_t head[128];
+            swprintf(head, 128, L"  %-5ls %6u x %-6u %10ls  %ls  ", i == 0 ? L"keep" : L"", p.hash.width, p.hash.height,
+                     util::FormatSizeShort(p.node->size).c_str(), util::FormatTime(p.node->mtime).c_str());
+            out += head + NodePath(p.node) + L"\n";
+        }
+    }
+    out += L"\nReview and delete (to the Recycle Bin) in the windowed app: Duplicates, Similar photos.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
     AppConfig cfg;
     cfg.scan.threads = static_cast<int>(std::clamp(std::thread::hardware_concurrency(), 2u, 8u));
     std::wstring outJson, outCsv;
+    bool similar = false;
+    PhotoMatch match = PhotoMatch::Normal;
 
     for (int i = 1; i < argc; ++i) {
         std::wstring a = argv[i];
@@ -370,6 +440,12 @@ int wmain(int argc, wchar_t** argv) {
             return ListWindowsTools();
         } else if (a == L"--games") {
             return ListGames();
+        } else if (a == L"--similar-photos" || a.rfind(L"--similar-photos=", 0) == 0) {
+            similar = true;
+            std::wstring m = a.size() > 17 ? a.substr(17) : L"normal";
+            if (m == L"strict") match = PhotoMatch::Strict;
+            else if (m == L"loose") match = PhotoMatch::Loose;
+            else if (m != L"normal") return Fail(L"--similar-photos takes strict, normal or loose");
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {
@@ -379,6 +455,7 @@ int wmain(int argc, wchar_t** argv) {
         }
     }
 
+    if (similar) return ListSimilarPhotos(cfg, match);
     if (!outJson.empty() || !outCsv.empty()) return HeadlessExport(cfg, outJson, outCsv);
     return RunApp(cfg);
 }

@@ -200,6 +200,11 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
             BeginPaint(hwnd_, &ps);
             Paint();
             EndPaint(hwnd_, &ps);
+            // Photo previews are decoded a few per frame: paint again until the visible ones are done.
+            if (thumbsPending_) {
+                thumbsPending_ = false;
+                Invalidate();
+            }
             return 0;
         }
         case WM_ERASEBKGND: return 1;
@@ -330,6 +335,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DESTROY:
             SafeRelease(tmBitmap_);
             icons_.Clear();
+            ClearThumbs();
             gfx_.Shutdown();
             PostQuitMessage(0);
             return 0;
@@ -523,6 +529,18 @@ void App::OnLButtonDown(float x, float y, bool dbl) {
                 gamesByAge_ = hit.b != 0;
                 SortGames();
             }
+            if (hit.a == 6 && dupPhotos_ != (hit.b != 0)) {  // Duplicates view: identical files / similar photos
+                dupPhotos_ = hit.b != 0;
+                sel_.clear();  // a selection made in the other mode would be invisible here
+                rowsDirty_ = true;
+                lists_[static_cast<int>(View::Duplicates)] = ListState{};
+            }
+            if (hit.a == 7 && photoMatch_ != static_cast<PhotoMatch>(hit.b)) {
+                photoMatch_ = static_cast<PhotoMatch>(hit.b);
+                // Hashes are remembered, so grouping again with the new threshold is quick.
+                if (photosDone_) StartSimilarPhotos();
+            }
+            if (hit.a == 8) photoMin_ = static_cast<uint64_t>(hit.b);
             break;
         case HK_CHECK:
             if (hit.a >= 0 && hit.a < static_cast<int>(cleanup_.size())) cleanup_[hit.a].selected = !cleanup_[hit.a].selected;
