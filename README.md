@@ -137,6 +137,15 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   inside another app's folder) are never offered; folders with protected data inside (wallets, keys,
   chat history, browser profiles) are shown with a shield and left alone. Checked folders go to the
   Recycle Bin and the journal. Registry entries are never touched (no registry cleaning).
+  *Updates* asks winget (App Installer) which apps have a newer version (`winget upgrade`, only when
+  you choose the filter; it only lists) and shows them in an *Update* column and an *Updates* filter,
+  matched to the apps by name (apps the list doesn't have, such as Store apps, are listed too). Update
+  one app (*Update to …*) or the ones you check, one after another, each with
+  `winget upgrade --id <id> --exact`: winget downloads the update and runs the app's own installer,
+  which may show its own UAC prompt; winget accepts the package and source agreements for you, which
+  the confirmation says. Results are shown per app and journaled (id, old and new version), then the
+  list is read again. Never `winget upgrade --all`, and nothing is updated without your confirmation.
+  Without winget the view says so and links to App Installer in the Microsoft Store.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -372,10 +381,12 @@ when the tool finishes. Deleting the `Bytopsy` folder removes everything else.
 `pnputil`, `vssadmin`, `powercfg`, `compact`, `wevtutil`, `diskpart`, PowerShell for System Restore
 storage and the Delivery Optimization cache, Disk Cleanup, `fsutil` for TRIM, `reg`, `schtasks` and
 `sc` for startup entries that need administrator rights), `wsl.exe`, `docker`, the clean command of a
-`kind = command` cleanup rule (such as `conan remove`), an app's own uninstaller, and a game
-launcher's uninstall link (`steam://uninstall/...`). Bytopsy itself goes online for none of these,
-but the programs behave as they always do: Steam or Docker Desktop, for example, may connect on
-their own.
+`kind = command` cleanup rule (such as `conan remove`), an app's own uninstaller, a game
+launcher's uninstall link (`steam://uninstall/...`), and `winget` for *Apps > Updates* (listing
+when you choose that filter, updating the apps you confirm). Bytopsy itself goes online for none of
+these, but the programs behave as they always do: Steam or Docker Desktop, for example, may connect
+on their own, and winget contacts its sources (the winget community repository and the Microsoft
+Store) to list and download updates.
 
 ## Translations
 
@@ -455,7 +466,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, phash, uia and i18n self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games, analysis, export, importfuzz, diskhealth, schedule, startup, apps, appupdates, phash, uia and i18n self-tests
 ```
 
 GitHub Actions builds and runs the self-tests on every push and pull request
@@ -512,6 +523,8 @@ bytopsy-cli [options] [path]
                         logon/boot tasks, services) with impact estimates, and exit
   --apps                List installed apps (size, install date, version, publisher)
                         from the Uninstall registry keys, and exit
+  --app-updates         List app updates winget knows of (winget upgrade: it only
+                        lists, nothing is updated) matched to the installed apps
   --similar-photos[=strict|normal|loose]
                         Scan path, list groups of photos that look alike (resized,
                         re-saved, lightly edited copies) with the one to keep, and exit
@@ -583,6 +596,7 @@ src/                  core engine + terminal app
   schedule.cpp        scheduled cleanup: --clean arguments, Task Scheduler task, cleanup.log
   startup.cpp         startup manager: Run keys, Startup folders, tasks, services; reversible off/on
   apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
+  appupdates.cpp      app updates through winget: upgrade table parsing, matching to apps, updating
   phash.cpp           similar photos: WIC decoding, dHash/pHash, hash index, grouping, cache
   i18n.cpp            translations: Tr/TrF/TrN, .lang files, plural rules, pseudo-language
   runtool.cpp         running console tools without a window, and as administrator
@@ -596,7 +610,7 @@ src/gui/              windowed app
   cleanup.cpp         cleanup rules: parsing, measuring, cleaning
   browserdata.cpp     browser cookies (with the keep list) and history, through SQLite
   winapp2.cpp         winapp2.ini import
-  apps_view.cpp       Apps view: list, uninstall and wait, leftovers review
+  apps_view.cpp       Apps view: list, uninstall and wait, leftovers review, updates through winget
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
@@ -619,6 +633,7 @@ tests/diskhealth_test.cpp disk health: WMI/fsutil/NVMe log parsing, verdicts, us
 tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --clean --yes on a fixture (ctest)
 tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
 tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
+tests/appupdates_test.cpp app updates: winget upgrade tables (cut names, pins, other languages, spinner), matching, a fake winget (ctest)
 tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
 tests/uia_test.cpp      accessibility tree: element identity across frames, reading order, names from text, patterns (ctest)
 tests/i18n_test.cpp     translations: .lang parsing, placeholders, plural rules, pseudo-language, res/lang files (ctest)

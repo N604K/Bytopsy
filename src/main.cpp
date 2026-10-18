@@ -12,6 +12,7 @@
 #include "diskhealth.h"
 #include "apps.h"
 #include "games.h"
+#include "appupdates.h"
 #include "gui/cleanup.h"
 #include "journal.h"
 #include "phash.h"
@@ -74,6 +75,8 @@ void PrintUsage() {
         "                        logon/boot tasks, services) with impact estimates, and exit\n"
         "  --apps                List installed apps (size, install date, version, publisher)\n"
         "                        from the Uninstall registry keys, and exit\n"
+        "  --app-updates         List app updates winget knows of (winget upgrade: it only\n"
+        "                        lists, nothing is updated) matched to the installed apps\n"
         "  --similar-photos[=strict|normal|loose]\n"
         "                        Scan path, list groups of photos that look alike (resized,\n"
         "                        re-saved, lightly edited copies) with the one to keep, and exit\n"
@@ -418,6 +421,55 @@ int ListApps() {
     return 0;
 }
 
+// --app-updates: `winget upgrade` (a read-only listing), matched to the Apps list.
+int ListAppUpdates() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    std::wstring out;
+    int rc = 0;
+    std::wstring winget = FindWinget();
+    if (winget.empty()) {
+        out = L"winget isn't installed. It comes with App Installer from the Microsoft Store:\n  " + std::wstring(kAppInstallerStoreLink) + L"\n";
+        rc = 1;
+    } else {
+        fputs("Asking winget for updates (winget contacts its sources) ...\n", stdout);
+        fflush(stdout);
+        WingetList l = ListWingetUpdates(winget);
+        if (!l.ok) {
+            out = L"winget failed: " + l.error + L"\n";
+            rc = 1;
+        } else {
+            auto apps = FindInstalledApps(false);
+            std::vector<int> m = MatchUpdatesToApps(l.updates, apps);
+            out = L"\nUpdates winget knows of (" + winget + L"):\n\n";
+            if (l.updates.empty()) out += L"  None: every app winget knows is up to date.\n";
+            size_t unmatched = 0;
+            for (size_t i = 0; i < l.updates.size(); ++i) {
+                const WingetUpdate& u = l.updates[i];
+                std::wstring name = m[i] >= 0 ? apps[m[i]].e.displayName : u.name;
+                out += L"  " + name + L"  " + u.version + L" -> " + u.available + L"  [" + u.id + (u.source.empty() ? L"" : L", " + u.source) + L"]";
+                if (m[i] < 0) {
+                    out += L" +";
+                    ++unmatched;
+                }
+                if (u.explicitOnly) out += L"  (pinned: updated only when chosen)";
+                if (!u.Updatable()) out += L"  (id cut off: update it with winget in a terminal)";
+                out += L"\n";
+            }
+            if (unmatched) out += L"\n+ not in the Apps list (a Store/MSIX app, or one Installed apps leaves out).\n";
+            if (l.unknownCount)
+                out += L"\n" + std::to_wstring(l.unknownCount) + L" more app(s) have versions winget can't tell; they aren't listed.\n";
+            if (l.pinnedCount) out += std::to_wstring(l.pinnedCount) + L" app(s) are pinned in winget and aren't listed.\n";
+            out += L"\nNothing was updated. Update apps, each through its own installer, in the windowed app: Apps > Updates.\n";
+        }
+    }
+    std::string u8 = util::WideToUtf8(out);
+    fwrite(u8.data(), 1, u8.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return rc;
+}
+
 int Fail(const std::wstring& msg) {
     fwprintf(stderr, L"bytopsy-cli: %s\n", msg.c_str());
     return 2;
@@ -732,6 +784,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListStartup();
         } else if (a == L"--apps") {
             return ListApps();
+        } else if (a == L"--app-updates") {
+            return ListAppUpdates();
         } else if (a == L"--similar-photos" || a.rfind(L"--similar-photos=", 0) == 0) {
             similar = true;
             std::wstring m = a.size() > 17 ? a.substr(17) : L"normal";

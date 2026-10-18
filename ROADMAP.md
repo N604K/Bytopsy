@@ -187,9 +187,14 @@ databases, and every install through Windows' or the app's own mechanism.
       vendor's own tool (NVIDIA app, AMD Software: Adrenalin, Intel Driver & Support Assistant) and
       open it rather than installing a graphics driver another way. Never a third-party driver
       database.
-- [ ] **App updates through winget**: an *Updates* column and filter in Apps (`winget upgrade`),
+- [x] **App updates through winget**: an *Updates* column and filter in Apps (`winget upgrade`),
       update one app or all of them, each through its own installer. If winget (App Installer) is
       missing, say so and link to it in the Microsoft Store.
+      *Done: src/appupdates.cpp parses `winget upgrade` by the header's column positions (any
+      language, names cut with "…", pinned tables, spinner output) and matches rows to the Apps list
+      by name, then version; Apps gets an Update column, an Updates filter (winget asked only when
+      chosen), Update one app or the checked ones in turn (`winget upgrade --id <id> --exact`),
+      per-app results, journaled; `bytopsy-cli --app-updates` lists them.*
 - [ ] **Low disk space alerts**: a notification when a drive's free space drops below a limit you
       choose, from the same per-user scheduled task as the scheduled cleanup (no background
       process), linking straight to the drive in Bytopsy.
