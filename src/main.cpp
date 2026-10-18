@@ -96,7 +96,8 @@ void PrintUsage() {
         "  --apps                List installed apps (size, install date, version, publisher)\n"
         "                        from the Uninstall registry keys, and exit\n"
         "  --app-updates         List app updates winget knows of (winget upgrade: it only\n"
-        "                        lists, nothing is updated) matched to the installed apps\n"
+        "                        lists, nothing is updated) matched to the installed apps;\n"
+        "                        without winget, says why and how to get it back\n"
         "  --similar-photos[=strict|normal|loose]\n"
         "                        Scan path, list groups of photos that look alike (resized,\n"
         "                        re-saved, lightly edited copies) with the one to keep, and exit\n"
@@ -487,9 +488,12 @@ int ListAppUpdates() {
     SetConsoleOutputCP(CP_UTF8);
     std::wstring out;
     int rc = 0;
-    std::wstring winget = FindWinget();
+    WingetDiagnosis diag = DiagnoseWinget();
+    std::wstring winget = diag.winget;
     if (winget.empty()) {
-        out = L"winget isn't installed. It comes with App Installer from the Microsoft Store:\n  " + std::wstring(kAppInstallerStoreLink) + L"\n";
+        out = WingetMissingText(diag);
+        if (diag.CanRepair()) out += L"\nThe windowed app can run this for you: Apps > Updates > Repair winget.\n";
+        out += L"\nNothing was changed or installed.\n";
         rc = 1;
     } else {
         fputs("Asking winget for updates (winget contacts its sources) ...\n", stdout);

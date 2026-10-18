@@ -1,8 +1,10 @@
 // Self-check of app updates through winget: bytopsy-appupdates-test.exe
 // Parses `winget upgrade` tables (real output, shortened names, unknown versions, pinned packages,
 // nothing to update, localized headers, spinner and escape-sequence garbage, wide characters),
-// matches them to installed apps, and runs a fake winget (.cmd in %TEMP%, via BYTOPSY_WINGET). Never
-// runs the real winget, never updates or installs anything.
+// matches them to installed apps, and runs a fake winget (.cmd in %TEMP%, via BYTOPSY_WINGET). Tells
+// why winget is missing from injected inputs (BYTOPSY_APPINSTALLER) and runs Repair winget with a
+// stand-in .cmd (BYTOPSY_WINGET_REPAIR), and checks bytopsy-cli --app-updates' advice. Never runs the
+// real winget or Add-AppxPackage, never updates, registers or installs anything.
 #include <windows.h>
 
 #include <cstdio>
@@ -10,6 +12,7 @@
 #include <vector>
 
 #include "appupdates.h"
+#include "runtool.h"
 #include "util.h"
 
 static int g_fail = 0;
@@ -279,6 +282,136 @@ int main() {
         SetEnvironmentVariableW(L"BYTOPSY_WINGET", nullptr);
         DeleteFileW(fixture.c_str());
         DeleteFileW(cmd.c_str());
+        RemoveDirectoryW(dir.c_str());
+    }
+
+    // ---- winget missing: the diagnosis from injected inputs (the real system is not read)
+    {
+        const std::wstring app = L"Microsoft.DesktopAppInstaller_1.29.379.0_x64__8wekyb3d8bbwe",
+                           bundle = L"Microsoft.DesktopAppInstaller_2026.917.151.0_neutral_~_8wekyb3d8bbwe";
+        Check(IsAppInstallerPackage(app) && IsAppInstallerPackage(bundle) && IsAppInstallerPackage(L"microsoft.desktopappinstaller_1.0.0.0_arm64__8WEKYB3D8BBWE"),
+              L"App Installer package names");
+        Check(!IsAppInstallerPackage(L"Microsoft.WindowsStore_22409.1401.5.0_x64__8wekyb3d8bbwe") &&
+                  !IsAppInstallerPackage(L"Microsoft.DesktopAppInstaller_1.0_x64__otherpublisher") && !IsAppInstallerPackage(L"Microsoft.DesktopAppInstaller_8wekyb3d8bbwe"),
+              L"other packages aren't App Installer");
+
+        WingetProbe p;
+        p.winget = L"C:\\x\\winget.exe";
+        p.userPackages = {app};
+        WingetDiagnosis d = DiagnoseWinget(p);
+        Check(d.state == WingetState::Found && d.winget == p.winget && !d.CanRepair(), L"winget found");
+        p.winget.clear();
+        p.packageAlias = true;
+        d = DiagnoseWinget(p);
+        Check(d.state == WingetState::AliasOff && d.package == app && d.CanRepair(), L"registered, package link there: the alias is off");
+        p.packageAlias = false;
+        d = DiagnoseWinget(p);
+        Check(d.state == WingetState::NotReachable && d.CanRepair(), L"registered, no winget.exe: not reachable");
+        p.userPackages.clear();
+        p.machinePackages = {bundle, app};
+        d = DiagnoseWinget(p);
+        Check(d.state == WingetState::NotRegistered && d.package == app && d.CanRepair(), L"on this PC, not for this user (the app package named, not the bundle)");
+        p.machinePackages.clear();
+        d = DiagnoseWinget(p);
+        Check(d.state == WingetState::NotInstalled && d.package.empty() && !d.CanRepair(), L"not on this PC");
+
+        // What the CLI prints.
+        const std::wstring cmd = L"powershell.exe -NoProfile -NonInteractive -Command \"Add-AppxPackage -RegisterByFamilyName -MainPackage "
+                                 L"Microsoft.DesktopAppInstaller_8wekyb3d8bbwe\"";
+        Check(L"powershell.exe " + WingetRepairArgs() == cmd, L"the repair command");
+        std::wstring t = WingetMissingText(d);
+        Check(t.find(L"isn't on this PC") != std::wstring::npos && t.find(kAppInstallerStoreLink) != std::wstring::npos &&
+                  t.find(L"https://github.com/microsoft/winget-cli/releases/latest") != std::wstring::npos && t.find(L"Add-AppxPackage") == std::wstring::npos,
+              L"not installed: the Store and Microsoft's release page, no repair");
+        p.machinePackages = {app};
+        t = WingetMissingText(DiagnoseWinget(p));
+        Check(t.find(L"isn't registered for your account") != std::wstring::npos && t.find(cmd) != std::wstring::npos && t.find(app) != std::wstring::npos,
+              L"not registered: the exact PowerShell command");
+        p.userPackages = {app};
+        t = WingetMissingText(DiagnoseWinget(p));
+        Check(t.find(cmd) != std::wstring::npos && t.find(L"ms-settings:advanced-apps") != std::wstring::npos, L"not reachable: repair, then the alias");
+        p.packageAlias = true;
+        t = WingetMissingText(DiagnoseWinget(p));
+        Check(t.find(L"alias is turned off") != std::wstring::npos && t.find(L"ms-settings:advanced-apps") < t.find(cmd), L"alias off: Settings first, then repair");
+    }
+
+    // ---- ProbeWinget and RepairWinget with stand-ins (BYTOPSY_APPINSTALLER, BYTOPSY_WINGET_REPAIR):
+    // the real App Installer is never registered.
+    {
+        wchar_t tmp[MAX_PATH];
+        std::wstring dir = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"bytopsy-wingetrepair-test";
+        CreateDirectoryW(dir.c_str(), nullptr);
+        std::wstring winget = dir + L"\\winget.cmd", fail = dir + L"\\fail.cmd", noop = dir + L"\\noop.cmd", fix = dir + L"\\fix.cmd",
+                     journal = dir + L"\\journal.log";
+        DeleteFileW(winget.c_str());
+        SetEnvironmentVariableW(L"BYTOPSY_JOURNAL", journal.c_str());
+        SetEnvironmentVariableW(L"BYTOPSY_WINGET", winget.c_str());  // not there yet
+        for (auto [env, want] : std::initializer_list<std::pair<const wchar_t*, WingetState>>{{L"user", WingetState::NotReachable}, {L"alias", WingetState::AliasOff},
+                                 {L"pc", WingetState::NotRegistered}, {L"none", WingetState::NotInstalled}}) {
+            SetEnvironmentVariableW(L"BYTOPSY_APPINSTALLER", env);
+            Check(DiagnoseWinget().state == want, std::wstring(L"BYTOPSY_APPINSTALLER=") + env);
+        }
+
+        // Simulated, no stand-in: nothing runs.
+        SetEnvironmentVariableW(L"BYTOPSY_APPINSTALLER", L"user");
+        SetEnvironmentVariableW(L"BYTOPSY_WINGET_REPAIR", nullptr);
+        WingetRepairResult r = RepairWinget();
+        Check(r.outcome == WingetRepairOutcome::NotRun && r.code == -1, L"simulated winget: the real repair is never run");
+
+        WriteFile(fail, std::string("@echo off\r\necho.\r\necho Add-AppxPackage : Deployment failed with HRESULT: 0x80073CF9 1>&2\r\necho second line\r\nexit /b 1\r\n"));
+        SetEnvironmentVariableW(L"BYTOPSY_WINGET_REPAIR", fail.c_str());
+        r = RepairWinget();
+        Check(r.outcome == WingetRepairOutcome::Failed && r.code == 1 && r.detail.find(L"0x80073CF9") != std::wstring::npos,
+              L"repair failed: PowerShell's first line (" + r.detail + L")");
+        std::wstring note = WingetRepairJournalNote(r);
+        Check(note.find(L"Add-AppxPackage -RegisterByFamilyName") != std::wstring::npos && note.find(L"failed: ") != std::wstring::npos &&
+                  note.find(L"exit code 1") != std::wstring::npos,
+              L"journal note: the command and the error");
+
+        WriteFile(noop, std::string("@echo off\r\nexit /b 0\r\n"));
+        SetEnvironmentVariableW(L"BYTOPSY_WINGET_REPAIR", noop.c_str());
+        r = RepairWinget();
+        Check(r.outcome == WingetRepairOutcome::StillAlias && r.detail.empty(), L"registered but still no winget: the alias is what's left");
+        SetEnvironmentVariableW(L"BYTOPSY_APPINSTALLER", L"pc");
+        r = RepairWinget();
+        Check(r.outcome == WingetRepairOutcome::StillMissing, L"succeeded but still not registered");
+
+        // The stand-in "repair" brings winget (a .cmd) back.
+        WriteFile(fix, "@echo off\r\n> \"" + util::WideToUtf8(winget) + "\" echo @echo off\r\nexit /b 0\r\n");
+        SetEnvironmentVariableW(L"BYTOPSY_WINGET_REPAIR", fix.c_str());
+        r = RepairWinget();
+        Check(r.outcome == WingetRepairOutcome::Fixed && r.after.state == WingetState::Found && _wcsicmp(r.after.winget.c_str(), winget.c_str()) == 0,
+              L"repaired: winget found again");
+        Check(WingetRepairJournalNote(r).find(L"winget found again") != std::wstring::npos, L"journal note: fixed");
+        DeleteFileW(winget.c_str());
+        SetEnvironmentVariableW(L"BYTOPSY_WINGET_REPAIR", (dir + L"\\missing.cmd").c_str());
+        r = RepairWinget();
+        Check(r.outcome == WingetRepairOutcome::NoPowerShell, L"a missing stand-in runs nothing else");
+
+        // bytopsy-cli --app-updates prints the diagnosis (it runs nothing: winget is missing).
+        wchar_t self[MAX_PATH];
+        std::wstring exe(self, GetModuleFileNameW(nullptr, self, MAX_PATH));
+        std::wstring cli = exe.substr(0, exe.rfind(L'\\')) + L"\\bytopsy-cli.exe";
+        if (GetFileAttributesW(cli.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            SetEnvironmentVariableW(L"BYTOPSY_WINGET_REPAIR", nullptr);
+            std::string out;
+            SetEnvironmentVariableW(L"BYTOPSY_APPINSTALLER", L"pc");
+            int code = RunTool(cli, L"--app-updates", out, 60000);
+            std::wstring o = DecodeToolOutput(out);
+            Check(code == 1 && o.find(L"Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe") != std::wstring::npos &&
+                      o.find(L"Repair winget") != std::wstring::npos && o.find(L"Nothing was changed") != std::wstring::npos,
+                  L"cli --app-updates: not registered, the PowerShell command");
+            SetEnvironmentVariableW(L"BYTOPSY_APPINSTALLER", L"none");
+            code = RunTool(cli, L"--app-updates", out = {}, 60000);
+            o = DecodeToolOutput(out);
+            Check(code == 1 && o.find(L"https://github.com/microsoft/winget-cli/releases/latest") != std::wstring::npos &&
+                      o.find(L"ms-windows-store://") != std::wstring::npos && o.find(L"Add-AppxPackage") == std::wstring::npos,
+                  L"cli --app-updates: not installed, the two links");
+        } else {
+            Check(false, L"bytopsy-cli.exe next to this test");
+        }
+        for (const wchar_t* v : {L"BYTOPSY_APPINSTALLER", L"BYTOPSY_WINGET", L"BYTOPSY_WINGET_REPAIR", L"BYTOPSY_JOURNAL"}) SetEnvironmentVariableW(v, nullptr);
+        for (auto& f : {winget, fail, noop, fix, journal}) DeleteFileW(f.c_str());
         RemoveDirectoryW(dir.c_str());
     }
 

@@ -163,6 +163,170 @@ std::wstring FindWinget() {
     return L"";
 }
 
+// ---- When winget can't be found
+
+const wchar_t* const kAppInstallerFamily = L"Microsoft.DesktopAppInstaller_8wekyb3d8bbwe";
+const wchar_t* const kWingetReleasesLink = L"https://github.com/microsoft/winget-cli/releases/latest";
+const wchar_t* const kAppAliasesSettings = L"ms-settings:advanced-apps";
+
+bool IsAppInstallerPackage(const std::wstring& fullName) {
+    const std::wstring name = L"microsoft.desktopappinstaller_", publisher = L"_8wekyb3d8bbwe";
+    std::wstring l = util::ToLower(fullName);
+    return l.size() > name.size() + publisher.size() && l.compare(0, name.size(), name) == 0 &&
+           l.compare(l.size() - publisher.size(), publisher.size(), publisher) == 0;
+}
+
+namespace {
+
+// The App Installer packages among a registry key's subkeys (each named after a package full name).
+void AppInstallerKeys(HKEY root, const wchar_t* path, std::vector<std::wstring>& out) {
+    HKEY k = nullptr;
+    if (RegOpenKeyExW(root, path, 0, KEY_READ, &k) != ERROR_SUCCESS) return;
+    wchar_t name[512];
+    for (DWORD i = 0;; ++i) {
+        DWORD n = 512;
+        LONG rc = RegEnumKeyExW(k, i, name, &n, nullptr, nullptr, nullptr, nullptr);
+        if (rc == ERROR_MORE_DATA) continue;
+        if (rc != ERROR_SUCCESS) break;
+        std::wstring s(name, n);
+        if (IsAppInstallerPackage(s) && std::find(out.begin(), out.end(), s) == out.end()) out.push_back(s);
+    }
+    RegCloseKey(k);
+}
+
+// The package to name: an app package before its bundle ("..._neutral_~_...").
+std::wstring PickPackage(const std::vector<std::wstring>& v) {
+    for (auto& p : v)
+        if (p.find(L"_~_") == std::wstring::npos) return p;
+    return v.empty() ? L"" : v.front();
+}
+
+}  // namespace
+
+WingetProbe ProbeWinget() {
+    WingetProbe p;
+    p.winget = FindWinget();
+    std::wstring test = util::ToLower(Env(L"BYTOPSY_APPINSTALLER"));  // tests only
+    if (!test.empty()) {
+        std::wstring pkg = L"Microsoft.DesktopAppInstaller_1.29.379.0_x64__8wekyb3d8bbwe";
+        if (test == L"user" || test == L"alias") p.userPackages.push_back(pkg);
+        if (test != L"none") p.machinePackages.push_back(pkg);
+        p.packageAlias = test == L"alias";
+        return p;
+    }
+    AppInstallerKeys(HKEY_CURRENT_USER,
+                     L"Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\Repository\\Packages",
+                     p.userPackages);
+    AppInstallerKeys(HKEY_LOCAL_MACHINE,
+                     L"SOFTWARE\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\PackageRepository\\Packages",
+                     p.machinePackages);
+    AppInstallerKeys(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Appx\\AppxAllUserStore\\Applications",
+                     p.machinePackages);
+    std::wstring local = Env(L"LOCALAPPDATA");
+    if (!local.empty())
+        p.packageAlias = Exists(local + L"\\Microsoft\\WindowsApps\\" + kAppInstallerFamily + L"\\winget.exe");
+    return p;
+}
+
+WingetDiagnosis DiagnoseWinget(const WingetProbe& p) {
+    WingetDiagnosis d;
+    d.winget = p.winget;
+    if (!p.winget.empty()) {
+        d.state = WingetState::Found;
+        d.package = PickPackage(p.userPackages);
+    } else if (!p.userPackages.empty()) {
+        d.state = p.packageAlias ? WingetState::AliasOff : WingetState::NotReachable;
+        d.package = PickPackage(p.userPackages);
+    } else if (!p.machinePackages.empty()) {
+        d.state = WingetState::NotRegistered;
+        d.package = PickPackage(p.machinePackages);
+    } else {
+        d.state = WingetState::NotInstalled;
+    }
+    return d;
+}
+
+std::wstring WingetRepairCommand() { return L"Add-AppxPackage -RegisterByFamilyName -MainPackage " + std::wstring(kAppInstallerFamily); }
+
+std::wstring WingetRepairArgs() { return L"-NoProfile -NonInteractive -Command \"" + WingetRepairCommand() + L"\""; }
+
+WingetRepairResult RepairWinget() {
+    WingetRepairResult r;
+    std::wstring standIn = Env(L"BYTOPSY_WINGET_REPAIR");  // tests only: a .cmd run instead
+    bool simulated = !Env(L"BYTOPSY_WINGET").empty() || !Env(L"BYTOPSY_APPINSTALLER").empty();
+    std::string raw;
+    if (!standIn.empty())
+        r.code = Exists(standIn) ? RunWinget(standIn, L"", raw, 5 * 60 * 1000, nullptr) : -1;
+    else if (simulated) {
+        r.outcome = WingetRepairOutcome::NotRun;  // never touch the real App Installer while winget is simulated
+        r.after = DiagnoseWinget();
+        return r;
+    } else
+        r.code = RunTool(SystemTool(L"WindowsPowerShell\\v1.0\\powershell.exe"), WingetRepairArgs(), raw, 5 * 60 * 1000, nullptr);
+    r.after = DiagnoseWinget();
+    for (auto& l : ConsoleLines(DecodeToolOutput(raw)))
+        if (!Trim(l).empty()) {
+            r.detail = Trim(l).substr(0, 300);
+            break;
+        }
+    if (r.after.state == WingetState::Found)
+        r.outcome = WingetRepairOutcome::Fixed;
+    else if (r.code == -1)
+        r.outcome = WingetRepairOutcome::NoPowerShell;
+    else if (r.code == -2)
+        r.outcome = WingetRepairOutcome::TimedOut;
+    else if (r.code != 0)
+        r.outcome = WingetRepairOutcome::Failed;
+    else if (r.after.state == WingetState::AliasOff || r.after.state == WingetState::NotReachable)
+        r.outcome = WingetRepairOutcome::StillAlias;
+    else
+        r.outcome = WingetRepairOutcome::StillMissing;
+    if (r.outcome != WingetRepairOutcome::Failed) r.detail.clear();
+    return r;
+}
+
+std::wstring WingetRepairJournalNote(const WingetRepairResult& r) {
+    std::wstring what;
+    switch (r.outcome) {
+        case WingetRepairOutcome::Fixed: what = L"winget found again (" + r.after.winget + L")"; break;
+        case WingetRepairOutcome::StillAlias: what = L"registered, but winget.exe still isn't reachable (App execution alias off?)"; break;
+        case WingetRepairOutcome::Failed: what = L"failed: " + r.detail; break;
+        case WingetRepairOutcome::StillMissing: what = L"PowerShell succeeded, but App Installer still isn't registered"; break;
+        case WingetRepairOutcome::NoPowerShell: what = L"powershell.exe couldn't be started"; break;
+        case WingetRepairOutcome::TimedOut: what = L"stopped after 5 minutes"; break;
+        case WingetRepairOutcome::NotRun: what = L"not run (a test setting stands in for winget)"; break;
+    }
+    std::wstring s = L"powershell.exe " + WingetRepairArgs() + L": " + what;
+    if (r.code > 0 || r.code < -2) s += L" (exit code " + std::to_wstring(r.code) + L")";
+    return s;
+}
+
+std::wstring WingetMissingText(const WingetDiagnosis& d) {
+    const std::wstring repair = L"  powershell.exe " + WingetRepairArgs() + L"\n";
+    const std::wstring aliases = L"  Settings > Apps > Advanced app settings > App execution aliases: turn on App Installer (winget.exe)\n  " +
+                                 std::wstring(kAppAliasesSettings) + L"\n";
+    const std::wstring pkg = d.package.empty() ? L"" : L" (" + d.package + L")";
+    switch (d.state) {
+        case WingetState::Found: return L"winget: " + d.winget + L"\n";
+        case WingetState::AliasOff:
+            return L"winget can't be found: App Installer" + pkg + L" is registered for your account, but its winget.exe App execution alias is turned off.\n\n"
+                   L"Turn the alias on:\n" + aliases +
+                   L"\nIf that doesn't help, register App Installer again for your account (no admin, nothing is downloaded):\n" + repair;
+        case WingetState::NotReachable:
+            return L"winget can't be found: App Installer" + pkg + L" is registered for your account, but winget.exe isn't there "
+                   L"(a new account before the Microsoft Store finished setting it up, or its alias is turned off).\n\n"
+                   L"Register App Installer again for your account (no admin, nothing is downloaded):\n" + repair +
+                   L"\nIf winget is still missing afterwards, turn its alias on:\n" + aliases;
+        case WingetState::NotRegistered:
+            return L"winget can't be found: App Installer" + pkg + L" is on this PC, but isn't registered for your account.\n\n"
+                   L"Register it for your account (no admin, nothing is downloaded):\n" + repair;
+        case WingetState::NotInstalled: break;
+    }
+    return L"winget isn't installed: App Installer isn't on this PC (Windows LTSC or Server, or the Microsoft Store was removed).\n\n"
+           L"Get App Installer from the Microsoft Store (the easy way):\n  " + std::wstring(kAppInstallerStoreLink) +
+           L"\nOn a PC without the Store, Microsoft's winget releases:\n  " + kWingetReleasesLink + L"\n";
+}
+
 std::vector<std::wstring> ConsoleLines(const std::wstring& text) {
     std::vector<std::wstring> lines;
     std::wstring cur;

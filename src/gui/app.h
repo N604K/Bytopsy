@@ -121,6 +121,9 @@ enum Cmd : int {
     CMD_APP_UPD_SELALL,    // check every update (or none)
     CMD_APP_UPD_CHECK,     // ask winget again
     CMD_APP_GET_WINGET,    // App Installer in the Microsoft Store
+    CMD_APP_WINGET_REPAIR,    // register App Installer again for this user (asks first)
+    CMD_APP_WINGET_ALIASES,   // Settings > Apps > Advanced app settings (App execution aliases)
+    CMD_APP_WINGET_DOWNLOAD,  // Microsoft's winget releases page (PCs without the Store)
     CMD_DRV_CHECK,
     CMD_DRV_INSTALL,
     CMD_DRV_RESULTS_DONE,
@@ -372,6 +375,7 @@ private:
     void OnAppUpdRow(size_t i);
     void StartAppUpdates(std::vector<size_t> which);
     void ShowAppUpdateResults();
+    void StartWingetRepair();
     void OnSearchChanged();
     void WinToolAction(int action);
     void RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
@@ -468,6 +472,7 @@ private:
     void DrawDiskHealth(const RectF& area);
     void DrawStartup(const RectF& area);
     void DrawApps(const RectF& area);
+    void DrawWingetMissing(const RectF& body);  // Apps > Updates without winget: why, and the fix
     void DrawDrivers(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
@@ -621,6 +626,9 @@ private:
     // Updates (winget): asked only when the Updates filter is first chosen.
     std::wstring winget_;              // winget.exe, "" when App Installer is missing
     bool appUpdChecked_ = false;       // winget was asked (or found missing)
+    WingetDiagnosis wingetDiag_;       // why winget_ is empty
+    int wingetRepair_ = -1;            // the last Repair winget's WingetRepairOutcome, -1 none
+    std::wstring wingetRepairDetail_;  // PowerShell's error then
     bool appShowUpdates_ = false;      // the Updates filter is on
     WingetList appUpd_;
     std::vector<int> appUpdApp_;       // per update: index into apps_, -1 (an MSIX app, or not listed)

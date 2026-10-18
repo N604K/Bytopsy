@@ -2897,6 +2897,13 @@ void App::OnCommand(int cmd) {
         case CMD_APP_GET_WINGET:
             if (!OpenWithDefault(kAppInstallerStoreLink)) Toast(Tr(L"Couldn't open the Microsoft Store"), 1);
             break;
+        case CMD_APP_WINGET_REPAIR: StartWingetRepair(); break;
+        case CMD_APP_WINGET_ALIASES:
+            if (!OpenWithDefault(kAppAliasesSettings)) Toast(Tr(L"Couldn't open Settings"), 1);
+            break;
+        case CMD_APP_WINGET_DOWNLOAD:
+            if (!OpenWithDefault(kWingetReleasesLink)) Toast(Tr(L"Couldn't open the browser"), 1);
+            break;
         case CMD_CLEAN_SELECTED: StartCleanup(); break;
         case CMD_CLEAN_MEASURE:
             MeasureCleanup();

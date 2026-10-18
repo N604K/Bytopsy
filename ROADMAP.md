@@ -205,7 +205,11 @@ databases, and every install through Windows' or the app's own mechanism.
       language, names cut with "…", pinned tables, spinner output) and matches rows to the Apps list
       by name, then version; Apps gets an Update column, an Updates filter (winget asked only when
       chosen), Update one app or the checked ones in turn (`winget upgrade --id <id> --exact`),
-      per-app results, journaled; `bytopsy-cli --app-updates` lists them.*
+      per-app results, journaled; `bytopsy-cli --app-updates` lists them. Without winget it tells
+      "App Installer registered but winget unreachable" (alias off, or not yet set up) and "on the PC
+      but not registered for you" (*Repair winget*: `Add-AppxPackage -RegisterByFamilyName`, as the
+      user, confirmed and journaled, or the App execution aliases page) from "not installed" (the Store,
+      or Microsoft's winget release page), in the CLI too.*
 - [x] **Low disk space alerts**: a notification when a drive's free space drops below a limit you
       choose, from the same per-user scheduled task as the scheduled cleanup (no background
       process), linking straight to the drive in Bytopsy.

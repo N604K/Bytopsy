@@ -12,7 +12,8 @@
 namespace {
 
 constexpr wchar_t IC_APPS = 0xE71D, IC_DELETE = 0xE74D, IC_REFRESH = 0xE72C, IC_CLOCK = 0xE823, IC_SHIELD = 0xEA18,
-                  IC_FOLDER = 0xE8B7, IC_UPDATE = 0xE896, IC_STORE = 0xE719;
+                  IC_FOLDER = 0xE8B7, IC_UPDATE = 0xE896, IC_STORE = 0xE719,
+                  IC_SETTINGS = 0xE713, IC_REPAIR = 0xE90F, IC_GLOBE = 0xE774;
 
 TextStyle Small(float size = 12.0f, DWRITE_FONT_WEIGHT w = DWRITE_FONT_WEIGHT_NORMAL, Align a = Align::Left) { return TS(size, w, a); }
 
@@ -33,6 +34,7 @@ void App::LoadApps() {
     struct State {
         std::vector<InstalledApp> apps;
         std::wstring winget;
+        WingetDiagnosis diag;
         WingetList upd;
         std::atomic<bool> cancel{false};
         std::atomic<int> phase{0};
@@ -51,6 +53,7 @@ void App::LoadApps() {
         appsLoaded_ = true;
         if (updates && !st->cancel) {
             winget_ = st->winget;
+            wingetDiag_ = st->diag;
             appUpd_ = std::move(st->upd);
         }
         SortApps();
@@ -63,7 +66,8 @@ void App::LoadApps() {
         st->apps = FindInstalledApps();
         if (!updates || st->cancel) return;
         st->phase = 1;
-        st->winget = FindWinget();
+        st->diag = DiagnoseWinget();
+        st->winget = st->diag.winget;
         if (!st->winget.empty()) st->upd = ListWingetUpdates(st->winget, &st->cancel);
     });
 }
@@ -79,6 +83,7 @@ void App::CheckAppUpdates() {
     }
     struct State {
         std::wstring winget;
+        WingetDiagnosis diag;
         WingetList upd;
         std::atomic<bool> cancel{false};
     };
@@ -93,12 +98,14 @@ void App::CheckAppUpdates() {
         if (st->cancel) return;
         appUpdChecked_ = true;
         winget_ = st->winget;
+        wingetDiag_ = st->diag;
         appUpd_ = std::move(st->upd);
         MatchAppUpdates();
         if (!winget_.empty() && !appUpd_.ok) Toast(TrF(L"winget couldn't list updates: {0}", Tr(appUpd_.error)), 1);
     };
     StartTask(std::move(t), [st] {
-        st->winget = FindWinget();
+        st->diag = DiagnoseWinget();
+        st->winget = st->diag.winget;
         if (!st->winget.empty()) st->upd = ListWingetUpdates(st->winget, &st->cancel);
     });
 }
@@ -243,6 +250,66 @@ void App::ShowAppUpdateResults() {
     d.tone = ok == res.size() ? 0 : 2;
     d.buttons = {Tr(L"OK")};
     d.primary = 0;
+    ShowDialog(std::move(d));
+}
+
+// winget is missing but App Installer is there: register it again for this user (PowerShell's
+// Add-AppxPackage, as this user, no admin, nothing downloaded), then look for winget again.
+void App::StartWingetRepair() {
+    if (task_ || !wingetDiag_.CanRepair() || !winget_.empty()) return;
+    Dialog d;
+    d.title = Tr(L"Repair winget?");
+    d.message = Tr(L"Registers Microsoft's App Installer, which brings winget, again for your account. It runs as you, without "
+                   L"administrator permission. Nothing is downloaded or installed, and nothing is deleted.");
+    // "Microsoft.DesktopAppInstaller_1.29.379.0_x64__8wekyb3d8bbwe" -> "Microsoft.DesktopAppInstaller 1.29.379.0"
+    const std::wstring& pkg = wingetDiag_.package;
+    size_t v = pkg.find(L'_'), ve = v == std::wstring::npos ? v : pkg.find(L'_', v + 1);
+    if (ve != std::wstring::npos) d.lines.push_back(Tr(L"Package") + L"\t" + pkg.substr(0, v) + L" " + pkg.substr(v + 1, ve - v - 1));
+    // The command, cut where it reads well (WingetRepairCommand()).
+    d.lines.push_back(Tr(L"Runs") + L"\tpowershell.exe -NoProfile -NonInteractive -Command");
+    d.lines.push_back(L"\tAdd-AppxPackage -RegisterByFamilyName -MainPackage");
+    d.lines.push_back(L"\t" + std::wstring(kAppInstallerFamily));
+    d.icon = IC_REPAIR;
+    d.tone = 0;
+    d.buttons = {Tr(L"Cancel"), Tr(L"Repair winget")};
+    d.primary = 1;
+    d.onClose = [this](int b, bool) {
+        if (b != 1 || task_) return;
+        auto st = std::make_shared<WingetRepairResult>();
+        auto t = std::make_unique<Task>();
+        t->title = Tr(L"Repairing winget");
+        t->lines = [] {
+            return std::vector<std::pair<std::wstring, std::wstring>>{
+                {L"", Tr(L"Registering App Installer for your account (PowerShell Add-AppxPackage)")}};
+        };
+        // Registering is never interrupted: no Cancel.
+        t->onDone = [this, st] {
+            appUpdChecked_ = true;
+            wingetDiag_ = st->after;
+            winget_ = st->after.winget;
+            wingetRepairDetail_ = st->detail;
+            if (st->outcome == WingetRepairOutcome::Fixed) {
+                wingetRepair_ = -1;
+                Toast(Tr(L"winget works again: asking it for updates"), 0);
+                return CheckAppUpdates();
+            }
+            wingetRepair_ = static_cast<int>(st->outcome);
+            Toast(st->outcome == WingetRepairOutcome::StillAlias ? Tr(L"App Installer is registered: turn on the winget.exe alias")
+                                                                 : Tr(L"winget is still missing"),
+                  st->outcome == WingetRepairOutcome::StillAlias ? 2 : 1);
+            rowsDirty_ = true;
+            Invalidate();
+        };
+        StartTask(std::move(t), [st] {
+            *st = RepairWinget();
+            i18n::EnglishScope english;  // the journal is kept in English
+            JournalEntry je;
+            je.action = JournalAction::Clean;
+            je.path = L"Repair winget: App Installer";
+            je.note = WingetRepairJournalNote(*st);
+            JournalAppend(je);
+        });
+    };
     ShowDialog(std::move(d));
 }
 
@@ -558,7 +625,8 @@ void App::DrawApps(const RectF& area) {
         if (!appUpdChecked_)
             sub = Tr(L"Asking winget …");
         else if (winget_.empty())
-            sub = Tr(L"Updates come through winget, which isn't installed");
+            sub = wingetDiag_.CanRepair() ? Tr(L"Updates come through winget, which can't be reached right now")
+                                          : Tr(L"Updates come through winget, which isn't installed");
         else if (!appUpd_.ok)
             sub = Tr(L"winget couldn't list updates");
         else
@@ -651,12 +719,7 @@ void App::DrawApps(const RectF& area) {
             Button(RWH(cx - w / 2, cy + 136, w, 36), icon, t, cmd, 1);
         };
         if (!appUpdChecked_) return;
-        if (winget_.empty()) {
-            DrawEmptyState(body, IC_UPDATE, Tr(L"winget isn't installed"),
-                           Tr(L"Updates come through winget, which is part of App Installer from the Microsoft Store. Bytopsy doesn't install "
-                              L"it for you: get it there, then come back."));
-            return bodyButton(Tr(L"Get App Installer"), IC_STORE, CMD_APP_GET_WINGET);
-        }
+        if (winget_.empty()) return DrawWingetMissing(body);
         if (!appUpd_.ok) {
             DrawEmptyState(body, IC_UPDATE, Tr(L"winget couldn't list updates"), Tr(appUpd_.error));
             return bodyButton(Tr(L"Try again"), IC_REFRESH, CMD_APP_UPD_CHECK);
@@ -777,4 +840,90 @@ void App::DrawApps(const RectF& area) {
             gfx_.Text(title, R(r.left + 36, r.top, r.left + 36 + tw, r.bottom), P_.text, ts);
             gfx_.Text(note, R(r.left + 48 + tw, r.top, right, r.bottom), P_.textFaint, Small(12));
         });
+}
+
+// Apps > Updates when winget can't be found: what is missing, and the buttons that fix it.
+void App::DrawWingetMissing(const RectF& body) {
+    struct Btn {
+        std::wstring text;
+        wchar_t icon;
+        int cmd;
+    };
+    std::vector<Btn> btns;
+    std::wstring title, text;
+    const WingetDiagnosis& wd = wingetDiag_;
+    const std::wstring aliases = Tr(L"Settings > Apps > Advanced app settings > App execution aliases");
+    const Btn repair{Tr(L"Repair winget"), IC_REPAIR, CMD_APP_WINGET_REPAIR}, store{Tr(L"Get App Installer"), IC_STORE, CMD_APP_GET_WINGET},
+        openAliases{Tr(L"Open App execution aliases"), IC_SETTINGS, CMD_APP_WINGET_ALIASES};
+    int rep = wingetRepair_;
+    if (wd.CanRepair() && rep == static_cast<int>(WingetRepairOutcome::StillAlias)) {
+        title = Tr(L"Turn on the winget.exe alias");
+        text = TrF(L"App Installer is registered for your account again, but winget.exe still can't be reached: its App execution alias "
+                   L"is off. In {0}, turn on App Installer (winget.exe), then try again.",
+                   aliases);
+        btns = {openAliases, {Tr(L"Try again"), IC_REFRESH, CMD_APP_UPD_CHECK}};
+    } else if (wd.CanRepair() && rep >= 0) {
+        title = Tr(L"winget couldn't be repaired");
+        auto o = static_cast<WingetRepairOutcome>(rep);
+        std::wstring why = o == WingetRepairOutcome::Failed         ? TrF(L"PowerShell said: {0}", wingetRepairDetail_)
+                           : o == WingetRepairOutcome::NoPowerShell ? Tr(L"PowerShell couldn't be started.")
+                           : o == WingetRepairOutcome::TimedOut     ? Tr(L"PowerShell took longer than 5 minutes and was stopped.")
+                           : o == WingetRepairOutcome::NotRun       ? Tr(L"A test setting stands in for winget, so nothing was run.")
+                                                                    : Tr(L"PowerShell finished, but App Installer still isn't registered for your account.");
+        text = TrF(L"{0} Get App Installer from the Microsoft Store to install it again, or try the repair once more.", why);
+        btns = {store, repair};
+    } else if (wd.state == WingetState::AliasOff) {
+        title = Tr(L"winget's alias is turned off");
+        text = TrF(L"App Installer is set up for your account, but the winget.exe App execution alias is off, so winget can't be "
+                   L"started. Turn it on in {0}, or repair winget.",
+                   aliases);
+        btns = {openAliases, repair};
+    } else if (wd.state == WingetState::NotReachable) {
+        title = Tr(L"winget can't be reached");
+        text = Tr(L"App Installer is registered for your account, but winget.exe isn't there yet: a new account before the Microsoft "
+                  L"Store finishes setting it up, or its alias is turned off. Repair winget registers App Installer again for you, "
+                  L"without administrator permission; nothing is downloaded.");
+        btns = {repair, openAliases};
+    } else if (wd.state == WingetState::NotRegistered) {
+        title = Tr(L"App Installer isn't set up for your account");
+        text = Tr(L"App Installer, which brings winget, is on this PC but isn't registered for your account. Repair winget registers it "
+                  L"for you, without administrator permission; nothing is downloaded.");
+        btns = {repair, store};
+    } else {
+        title = Tr(L"winget isn't installed");
+        text = Tr(L"Updates come through winget, part of Microsoft's App Installer, which isn't on this PC. The Microsoft Store is the "
+                  L"easy way to get it; Microsoft's winget release page is for PCs without the Store. Bytopsy doesn't install it "
+                  L"for you: get it, then come back.");
+        btns = {store, {Tr(L"Download from Microsoft"), IC_GLOBE, CMD_APP_WINGET_DOWNLOAD}};
+    }
+
+    float cx = (body.left + body.right) / 2, cy = (body.top + body.bottom) / 2 - 70;
+    gfx_.FillCircle(cx, cy - 10, 34, WithAlpha(P_.accent, 0.12f));
+    gfx_.Icon(IC_UPDATE, RWH(cx - 30, cy - 40, 60, 60), P_.accent, 26);
+    gfx_.Text(title, R(body.left + 24, cy + 34, body.right - 24, cy + 60), P_.text, TS(16, DWRITE_FONT_WEIGHT_SEMI_BOLD, Align::Center));
+    TextStyle s = TS(13, DWRITE_FONT_WEIGHT_NORMAL, Align::Center);
+    s.wrap = true;
+    s.center = false;
+    float tw = std::max(200.0f, std::min(580.0f, W(body) - 48));
+    float th = gfx_.MeasureHeight(text, tw, s);
+    gfx_.Text(text, R(cx - tw / 2, cy + 64, cx + tw / 2, cy + 68 + th), P_.textDim, s);
+    float by = cy + 64 + th + 18;
+    std::vector<float> ws;
+    float total = 0;
+    for (auto& b : btns) {
+        ws.push_back(ButtonWidth(b.text, b.icon, 140));
+        total += ws.back();
+    }
+    total += 10 * (btns.size() - 1);
+    bool stack = total > W(body) - 48;  // long translations: one under the other
+    float x = cx - total / 2;
+    for (size_t i = 0; i < btns.size(); ++i) {
+        if (stack) {
+            Button(RWH(cx - ws[i] / 2, by, ws[i], 36), btns[i].icon, btns[i].text, btns[i].cmd, i == 0 ? 1 : 0);
+            by += 44;
+        } else {
+            Button(RWH(x, by, ws[i], 36), btns[i].icon, btns[i].text, btns[i].cmd, i == 0 ? 1 : 0);
+            x += ws[i] + 10;
+        }
+    }
 }

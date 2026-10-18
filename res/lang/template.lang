@@ -67,22 +67,22 @@
 # src/protect.cpp:443
 1Password local data. =
 
-# src/appupdates.cpp:299
+# src/appupdates.cpp:463
 A dependency is missing =
 
 # src/alerts.cpp:519
 a drive was under its limit =
 
-# src/appupdates.cpp:298
+# src/appupdates.cpp:462
 A file is in use by a running app: close it and try again =
 
 # src/gui/drivers_view.cpp:112
 A graphics driver: the GPU vendor's own tool is usually the better source =
 
-# src/appupdates.cpp:307
+# src/appupdates.cpp:471
 A newer version is already installed =
 
-# src/appupdates.cpp:295
+# src/appupdates.cpp:459
 A pin keeps this app from updating (see winget pin list) =
 
 # src/protect.cpp:497
@@ -99,6 +99,9 @@ A self-built PC: chipset, audio, network and other drivers Windows Update doesn'
 
 # src/gui/drivers_view.cpp:143
 A System Restore point first, then Windows Update downloads and installs =
+
+# src/gui/apps_view.cpp:871
+A test setting stands in for winget, so nothing was run. =
 
 # src/gui/draw.cpp:2422
 A trend needs measurements a day or more apart =
@@ -130,13 +133,13 @@ access denied =
 # src/driverupdates.cpp:559
 Access denied: run as administrator =
 
-# src/gui/actions.cpp:2995
+# src/gui/actions.cpp:3002
 Add your own cleanup categories, then click Measure in Cleanup =
 
 # src/gui/actions.cpp:2687
 Add “Analyze with Bytopsy” to Explorer =
 
-# src/gui/actions.cpp:2978
+# src/gui/actions.cpp:2985
 Added “Analyze with Bytopsy” to the Explorer right-click menu =
 
 # src/gui/draw.cpp:560
@@ -169,7 +172,7 @@ Aider chat history =
 # src/protect.cpp:506
 Aider conversation log. =
 
-# src/gui/apps_view.cpp:627
+# src/gui/apps_view.cpp:695
 All apps =
 
 # src/gui/actions.cpp:2183
@@ -205,7 +208,7 @@ and sign-in. =
 # src/gui/drivers_view.cpp:468
 and {0} more device|and {0} more devices =
 
-# src/appupdates.cpp:297
+# src/appupdates.cpp:461
 Another installation is in progress: try again later =
 
 # src/protect.cpp:287
@@ -214,13 +217,31 @@ Antivirus definitions and quarantine. =
 # src/gui/draw.cpp:1131, src/gui/draw.cpp:1402
 Any =
 
-# src/gui/apps_view.cpp:672
+# src/gui/apps_view.cpp:735
 App =
+
+# src/gui/apps_view.cpp:861
+App Installer is registered for your account again, but winget.exe still can't be reached: its App execution alias is off. In {0}, turn on App Installer (winget.exe), then try again. =
+
+# src/gui/apps_view.cpp:883
+App Installer is registered for your account, but winget.exe isn't there yet: a new account before the Microsoft Store finishes setting it up, or its alias is turned off. Repair winget registers App Installer again for you, without administrator permission; nothing is downloaded. =
+
+# src/gui/apps_view.cpp:297
+App Installer is registered: turn on the winget.exe alias =
+
+# src/gui/apps_view.cpp:877
+App Installer is set up for your account, but the winget.exe App execution alias is off, so winget can't be started. Turn it on in {0}, or repair winget. =
+
+# src/gui/apps_view.cpp:888
+App Installer isn't set up for your account =
+
+# src/gui/apps_view.cpp:889
+App Installer, which brings winget, is on this PC but isn't registered for your account. Repair winget registers it for you, without administrator permission; nothing is downloaded. =
 
 # src/protect.cpp:300
 AppData =
 
-# src/gui/apps_view.cpp:595, src/gui/draw.cpp:506, src/gui/uia_app.cpp:48
+# src/gui/apps_view.cpp:663, src/gui/draw.cpp:506, src/gui/uia_app.cpp:48
 Apps =
 
 # src/protect.cpp:309
@@ -241,13 +262,13 @@ Asking the disks =
 # src/gui/drivers_view.cpp:73
 Asking Windows Update for driver updates =
 
-# src/gui/apps_view.cpp:87
+# src/gui/apps_view.cpp:92
 Asking winget for updates =
 
-# src/gui/apps_view.cpp:45
+# src/gui/apps_view.cpp:47
 Asking winget which apps have updates (winget contacts its sources) =
 
-# src/gui/apps_view.cpp:559
+# src/gui/apps_view.cpp:626
 Asking winget … =
 
 # src/startup.cpp:406
@@ -325,7 +346,7 @@ Bitwarden local vault cache and settings. =
 # src/protect.cpp:1027
 Blocked =
 
-# src/appupdates.cpp:308
+# src/appupdates.cpp:472
 Blocked by policy =
 
 # src/gui/cleanup.cpp:743
@@ -451,7 +472,7 @@ Can't find the local app data folder. =
 # src/gui/actions.cpp:1677
 Can't open this file =
 
-# src/gui/actions.cpp:2994, src/gui/actions.cpp:3008
+# src/gui/actions.cpp:3001, src/gui/actions.cpp:3015
 Can't open {0} =
 
 # src/vdisks.cpp:203
@@ -469,10 +490,10 @@ Can't restore this item =
 # src/gui/actions.cpp:1313
 Can't scan this location =
 
-# src/gui/actions.cpp:527, src/gui/actions.cpp:671, src/gui/actions.cpp:802, src/gui/actions.cpp:868 (+19 more)
+# src/gui/actions.cpp:527, src/gui/actions.cpp:671, src/gui/actions.cpp:802, src/gui/actions.cpp:868 (+20 more)
 Cancel =
 
-# src/apps.cpp:427, src/appupdates.cpp:330, src/driverupdates.cpp:543, src/update.cpp:455 (+4 more)
+# src/apps.cpp:427, src/appupdates.cpp:494, src/driverupdates.cpp:543, src/update.cpp:455 (+4 more)
 Cancelled =
 
 # src/vdisks.cpp:428
@@ -529,7 +550,7 @@ Check =
 # src/gui/drivers_view.cpp:229
 Check again =
 
-# src/gui/apps_view.cpp:586
+# src/gui/apps_view.cpp:654
 Check all =
 
 # src/gui/update_gui.cpp:68
@@ -541,7 +562,7 @@ Check for updates daily =
 # src/gui/actions.cpp:2695
 Check for updates now =
 
-# src/gui/apps_view.cpp:586
+# src/gui/apps_view.cpp:654
 Check none =
 
 # src/gui/update_gui.cpp:73
@@ -553,13 +574,13 @@ Check the categories to clean on a schedule first =
 # src/gui/drivers_view.cpp:96
 Check the driver updates to install first =
 
-# src/gui/apps_view.cpp:763
+# src/gui/apps_view.cpp:826
 check the ones to update; each runs its own installer =
 
 # src/gui/actions.cpp:2210
 Check too =
 
-# src/gui/apps_view.cpp:767
+# src/gui/apps_view.cpp:830
 check what to move to the Recycle Bin =
 
 # src/gui/drivers_view.cpp:229
@@ -583,10 +604,10 @@ Choose a folder to analyze =
 # src/gui/actions.cpp:1092
 Choose a game first =
 
-# src/gui/apps_view.cpp:319
+# src/gui/apps_view.cpp:386
 Choose an app first =
 
-# src/gui/apps_view.cpp:153
+# src/gui/apps_view.cpp:160
 Choose an update first =
 
 # src/gui/draw.cpp:3129
@@ -595,7 +616,7 @@ Choose any folder or network share =
 # src/gui/draw.cpp:2068
 choose one to uninstall it through its launcher =
 
-# src/gui/apps_view.cpp:764
+# src/gui/apps_view.cpp:827
 choose one to uninstall it with its own uninstaller =
 
 # src/protect.cpp:455
@@ -694,10 +715,10 @@ Click a model to select it =
 # src/gui/draw.cpp:1525
 Click a project to select all its folders =
 
-# src/gui/apps_view.cpp:632
+# src/gui/apps_view.cpp:700
 Click an app to choose it =
 
-# src/gui/apps_view.cpp:634
+# src/gui/apps_view.cpp:702
 Click an update to check it =
 
 # src/gui/drivers_view.cpp:369
@@ -829,10 +850,10 @@ Continue… =
 # src/gui/actions.cpp:1895
 Cookies and history are removed inside the browsers' own databases; close the browsers first, or they are skipped. =
 
-# src/gui/actions.cpp:2942
+# src/gui/actions.cpp:2949
 Copied {0} path|Copied {0} paths =
 
-# src/gui/actions.cpp:2942, src/gui/update_gui.cpp:167
+# src/gui/actions.cpp:2949, src/gui/update_gui.cpp:167
 Copied: {0} =
 
 # src/protect.cpp:391
@@ -877,8 +898,14 @@ Couldn't create the task =
 # src/gui/browserdata.cpp:458
 couldn't open it: {0} =
 
+# src/gui/actions.cpp:2902
+Couldn't open Settings =
+
 # src/schedule.cpp:396
 Couldn't open Task Scheduler =
+
+# src/gui/actions.cpp:2905
+Couldn't open the browser =
 
 # src/gui/actions.cpp:2898
 Couldn't open the Microsoft Store =
@@ -886,7 +913,7 @@ Couldn't open the Microsoft Store =
 # src/schedule.cpp:399, src/schedule.cpp:574, src/schedule.cpp:647
 Couldn't open the task folder =
 
-# src/gui/actions.cpp:2930, src/gui/drivers_view.cpp:206
+# src/gui/actions.cpp:2937, src/gui/drivers_view.cpp:206
 Couldn't open {0} =
 
 # src/games.cpp:346
@@ -1018,7 +1045,7 @@ Default profile =
 # src/diskhealth.cpp:299
 Degraded =
 
-# src/gui/apps_view.cpp:581, src/gui/draw.cpp:2000
+# src/gui/apps_view.cpp:649, src/gui/draw.cpp:2000
 Delete leftovers {0} =
 
 # src/gui/actions.cpp:527, src/gui/actions.cpp:1549
@@ -1126,7 +1153,7 @@ DISM removes the Windows components that newer updates replaced. Installed updat
 # src/gui/actions.cpp:814
 DISM takes a few minutes =
 
-# src/gui/apps_view.cpp:611
+# src/gui/apps_view.cpp:679
 Dismiss =
 
 # src/vdisks.cpp:414, src/gui/actions.cpp:665
@@ -1183,7 +1210,7 @@ Documents =
 # src/gui/update_gui.cpp:73
 Don't check =
 
-# src/gui/apps_view.cpp:772, src/gui/drivers_view.cpp:376
+# src/gui/apps_view.cpp:835, src/gui/drivers_view.cpp:376
 Done =
 
 # src/diskhealth.cpp:311
@@ -1195,7 +1222,7 @@ double-click a disk to show its file =
 # src/gui/draw.cpp:1176
 double-click a type to list its files =
 
-# src/gui/apps_view.cpp:632, src/gui/draw.cpp:2025
+# src/gui/apps_view.cpp:700, src/gui/draw.cpp:2025
 double-click to open its folder =
 
 # src/gui/draw.cpp:1628
@@ -1203,6 +1230,9 @@ double-click to show its files =
 
 # src/gui/update_gui.cpp:213
 Download =
+
+# src/gui/apps_view.cpp:897
+Download from Microsoft =
 
 # src/aimodels.cpp:468
 download it again in LM Studio (Discover) =
@@ -1264,7 +1294,7 @@ Duplicates =
 # src/gui/draw.cpp:2083
 Each physical disk's health, wear and temperature, and used space over time =
 
-# src/gui/apps_view.cpp:567
+# src/gui/apps_view.cpp:635
 each through the app's own installer =
 
 # src/gui/draw.cpp:2867
@@ -1351,7 +1381,7 @@ every {0} hours =
 # src/gui/draw.cpp:2938
 Everything Bytopsy deleted or cleaned up, newest first =
 
-# src/gui/apps_view.cpp:665
+# src/gui/apps_view.cpp:728
 Everything is up to date =
 
 # src/gui/draw.cpp:2944
@@ -1453,19 +1483,19 @@ Finding images =
 # src/gui/actions.cpp:2609
 Finds out what uses your disk space, cleans it up safely, and looks after the rest. Formerly WinNCDU, inspired by ncdu. =
 
-# src/gui/apps_view.cpp:381
+# src/gui/apps_view.cpp:448
 Finish in {0}'s uninstaller; Bytopsy then looks for leftovers =
 
 # src/gui/actions.cpp:1105
 Finish in {0}, then press Refresh =
 
-# src/gui/apps_view.cpp:142, src/gui/apps_view.cpp:320
+# src/gui/apps_view.cpp:149, src/gui/apps_view.cpp:387
 Finish uninstalling {0} first =
 
 # src/protect.cpp:461
 Firefox profile =
 
-# src/gui/apps_view.cpp:330, src/gui/draw.cpp:1155, src/gui/draw.cpp:1292, src/gui/draw.cpp:1436 (+3 more)
+# src/gui/apps_view.cpp:397, src/gui/draw.cpp:1155, src/gui/draw.cpp:1292, src/gui/draw.cpp:1436 (+3 more)
 Folder =
 
 # src/gui/draw.cpp:3027
@@ -1546,7 +1576,7 @@ gcloud credentials and configurations. =
 # src/protect.cpp:393
 Gemini CLI (chats, GEMINI.md, sign-in) =
 
-# src/gui/apps_view.cpp:658
+# src/gui/apps_view.cpp:856
 Get App Installer =
 
 # src/gui/drivers_view.cpp:252
@@ -1627,10 +1657,10 @@ hard disks don't need it =
 # src/gui/draw.cpp:712
 Hard link =
 
-# src/gui/actions.cpp:2971
+# src/gui/actions.cpp:2978
 Hard link detection off =
 
-# src/gui/actions.cpp:2971
+# src/gui/actions.cpp:2978
 Hard links will be counted once from the next scan =
 
 # src/gui/actions.cpp:1535
@@ -1726,7 +1756,7 @@ Impact: estimated from program size and type (hover for why); measured needs adm
 # src/gui/draw.cpp:2461
 Impact: measured where Windows logged a slow start, else estimated (hover for why) =
 
-# src/gui/actions.cpp:3013
+# src/gui/actions.cpp:3020
 Import winapp2.ini =
 
 # src/gui/actions.cpp:2691
@@ -1741,10 +1771,10 @@ Important: versions before {0} should be updated. You have {1}. =
 # src/gui/actions.cpp:1356
 Imported scans can't be rescanned =
 
-# src/gui/actions.cpp:3022
+# src/gui/actions.cpp:3029
 Imported {0} app cleaner ({1} about personal data left out)|Imported {0} app cleaners ({1} about personal data left out) =
 
-# src/gui/actions.cpp:3021
+# src/gui/actions.cpp:3028
 Imported. Click Measure in a moment to include it. =
 
 # src/diskhealth.cpp:315
@@ -1786,10 +1816,10 @@ Install {0} driver update through Windows Update?|Install {0} driver updates thr
 # src/gui/drivers_view.cpp:228
 Install {0} update|Install {0} updates =
 
-# src/gui/apps_view.cpp:681, src/gui/drivers_view.cpp:386, src/gui/update_gui.cpp:115, src/gui/update_gui.cpp:213
+# src/gui/apps_view.cpp:744, src/gui/drivers_view.cpp:386, src/gui/update_gui.cpp:115, src/gui/update_gui.cpp:213
 Installed =
 
-# src/gui/apps_view.cpp:762
+# src/gui/apps_view.cpp:825
 Installed apps =
 
 # src/gui/draw.cpp:2066
@@ -1801,7 +1831,7 @@ Installed games from every launcher, uninstalled through the launcher itself =
 # src/protect.cpp:276
 Installed program. Uninstall it in Settings → Apps; deleting the folder leaves a broken entry, services and drivers behind. =
 
-# src/gui/apps_view.cpp:556
+# src/gui/apps_view.cpp:623
 Installed programs, uninstalled with their own uninstaller, then their leftovers reviewed =
 
 # src/gui/drivers_view.cpp:379
@@ -1864,16 +1894,16 @@ Item =
 # src/gui/actions.cpp:1672, src/gui/draw.cpp:886
 Items =
 
-# src/gui/apps_view.cpp:401
+# src/gui/apps_view.cpp:468
 Its entry in Installed apps is still there, so its folders still belong to it. Finish (or restart) its uninstaller first: Bytopsy only offers the folders of apps that are gone. =
 
 # src/apps.cpp:618
 Its install folder =
 
-# src/appupdates.cpp:309
+# src/appupdates.cpp:473
 Its installer can't update an installed version =
 
-# src/gui/apps_view.cpp:192
+# src/gui/apps_view.cpp:199
 Its installer may show a window or ask for permission =
 
 # src/startup.cpp:933
@@ -1885,7 +1915,7 @@ Its name can't be passed to sc.exe safely; use Services for this one =
 # src/startup.cpp:968
 Its name can't be passed to schtasks.exe safely; use Task Scheduler for this one =
 
-# src/gui/apps_view.cpp:326
+# src/gui/apps_view.cpp:393
 Its own uninstaller opens and asks you what to remove; Bytopsy deletes nothing itself here. When it is done, Bytopsy looks for folders it left behind and lets you review them. Registry entries are never touched. =
 
 # src/apps.cpp:649
@@ -1996,7 +2026,7 @@ Least recently changed =
 # src/gui/draw.cpp:2024
 Least recently played =
 
-# src/gui/apps_view.cpp:762
+# src/gui/apps_view.cpp:825
 Left behind by {0} =
 
 # src/gui/actions.cpp:2058
@@ -2074,7 +2104,7 @@ Local chat history and media. =
 # src/gui/draw.cpp:72, src/gui/draw.cpp:2396
 Local disk =
 
-# src/gui/apps_view.cpp:612
+# src/gui/apps_view.cpp:680
 Look for leftovers =
 
 # src/gui/draw.cpp:2013
@@ -2104,7 +2134,7 @@ Looking for games =
 # src/gui/actions.cpp:1763
 Looking for similar photos =
 
-# src/gui/apps_view.cpp:417
+# src/gui/apps_view.cpp:484
 Looking for what {0} left behind =
 
 # src/gui/draw.cpp:1399
@@ -2143,7 +2173,7 @@ Manage restore points in System Properties → System Protection. =
 # src/protect.cpp:281
 Managed by Windows. Uninstall Store apps in Settings → Apps. =
 
-# src/gui/apps_view.cpp:634
+# src/gui/apps_view.cpp:702
 marked + : not in Installed apps (a Store app) =
 
 # src/gui/draw.cpp:1396
@@ -2236,7 +2266,7 @@ Monthly =
 # src/schedule.cpp:215
 Monthly on day {0} at {1} =
 
-# src/appupdates.cpp:290
+# src/appupdates.cpp:454
 More than one package matches this id =
 
 # src/gui/draw.cpp:3121
@@ -2248,13 +2278,13 @@ Move this file to the Recycle Bin? =
 # src/gui/actions.cpp:1543
 Move this folder to the Recycle Bin? =
 
-# src/gui/actions.cpp:1130, src/gui/actions.cpp:1549, src/gui/apps_view.cpp:471
+# src/gui/actions.cpp:1130, src/gui/actions.cpp:1549, src/gui/apps_view.cpp:538
 Move to Recycle Bin =
 
 # src/gui/actions.cpp:2647
 Move to Recycle Bin\tDel =
 
-# src/gui/apps_view.cpp:457
+# src/gui/apps_view.cpp:524
 Move {0} folder ({1}) to the Recycle Bin?|Move {0} folders ({1}) to the Recycle Bin? =
 
 # src/gui/actions.cpp:1542
@@ -2269,10 +2299,10 @@ Moved to Recycle Bin: {0} item · {1}|Moved to Recycle Bin: {0} items · {1} =
 # src/games.cpp:333
 Moved to the Recycle Bin =
 
-# src/gui/actions.cpp:1150, src/gui/apps_view.cpp:493
+# src/gui/actions.cpp:1150, src/gui/apps_view.cpp:560
 Moved {0} of leftovers to the Recycle Bin =
 
-# src/gui/actions.cpp:1143, src/gui/apps_view.cpp:486
+# src/gui/actions.cpp:1143, src/gui/apps_view.cpp:553
 Moving leftovers to the Recycle Bin =
 
 # src/gui/actions.cpp:1581
@@ -2362,10 +2392,10 @@ No access =
 # src/gui/actions.cpp:2586
 No AI, key, wallet or synced folders found on this PC. =
 
-# src/appupdates.cpp:288
+# src/appupdates.cpp:452
 No applicable update found =
 
-# src/gui/apps_view.cpp:619
+# src/gui/apps_view.cpp:687
 No apps found =
 
 # src/vdisks.cpp:183
@@ -2407,7 +2437,7 @@ no ext4 file system (or never formatted) =
 # src/gui/draw.cpp:1151
 No files or folders match your search. =
 
-# src/gui/apps_view.cpp:766
+# src/gui/apps_view.cpp:829
 no folders found in Program Files, ProgramData or AppData =
 
 # src/gui/draw.cpp:2012
@@ -2437,7 +2467,7 @@ No longer in the Recycle Bin =
 # src/vdisks.cpp:186
 no metadata in the VHDX =
 
-# src/appupdates.cpp:302
+# src/appupdates.cpp:466
 No network connection =
 
 # src/gui/draw.cpp:1532
@@ -2509,7 +2539,7 @@ Not analyzed yet: DISM takes a few minutes =
 # src/gui/draw.cpp:1282, src/gui/draw.cpp:1422
 Not available for saved scans =
 
-# src/appupdates.cpp:301
+# src/appupdates.cpp:465
 Not enough memory =
 
 # src/update.cpp:561
@@ -2560,10 +2590,10 @@ Nothing deleted yet =
 # src/gui/draw.cpp:1150
 Nothing found =
 
-# src/gui/actions.cpp:3036
+# src/gui/actions.cpp:3043
 Nothing has been deleted yet =
 
-# src/gui/apps_view.cpp:620
+# src/gui/apps_view.cpp:688
 Nothing in the Uninstall registry keys looks like an app (system components, updates and patches are left out). =
 
 # src/schedule.cpp:277
@@ -2650,7 +2680,7 @@ once a day =
 # src/protect.cpp:320
 One of your personal library folders. Delete files inside it, not the folder itself. =
 
-# src/gui/actions.cpp:3009
+# src/gui/actions.cpp:3016
 One site per line; cookies of these sites stay. Save, then click Measure in Cleanup =
 
 # src/protect.cpp:343
@@ -2673,6 +2703,9 @@ Open\tEnter =
 
 # src/gui/draw.cpp:3130, src/gui/platform.cpp:243
 Open a saved scan =
+
+# src/gui/apps_view.cpp:857
+Open App execution aliases =
 
 # src/alerts.cpp:445, src/alerts.cpp:510
 Open Disk health =
@@ -2755,6 +2788,9 @@ Outlook mailbox data (.pst/.ost). =
 # src/diskhealth.cpp:587
 over {0} (up to {1}) =
 
+# src/gui/apps_view.cpp:267
+Package =
+
 # res/cleaners.ini:256
 Package archives and index caches of conda, Miniconda, Anaconda and Miniforge. Installed environments are not touched. =
 
@@ -2833,6 +2869,18 @@ Power Mode =
 # src/gui/draw.cpp:2138
 POWERED ON =
 
+# src/gui/apps_view.cpp:869
+PowerShell couldn't be started. =
+
+# src/gui/apps_view.cpp:872
+PowerShell finished, but App Installer still isn't registered for your account. =
+
+# src/gui/apps_view.cpp:868
+PowerShell said: {0} =
+
+# src/gui/apps_view.cpp:870
+PowerShell took longer than 5 minutes and was stopped. =
+
 # src/diskhealth.cpp:301
 Predictive Failure =
 
@@ -2899,13 +2947,13 @@ Protected locations are never deleted =
 # src/gui/actions.cpp:2688
 Protected locations… =
 
-# src/gui/apps_view.cpp:285
+# src/gui/apps_view.cpp:352
 Protected, so Bytopsy leaves it alone: {0} =
 
 # src/gui/actions.cpp:2675
 Pseudo-language (layout test) =
 
-# src/gui/apps_view.cpp:328, src/gui/apps_view.cpp:673, src/gui/draw.cpp:2474
+# src/gui/apps_view.cpp:395, src/gui/apps_view.cpp:736, src/gui/draw.cpp:2474
 Publisher =
 
 # src/gui/draw.cpp:1747
@@ -2941,7 +2989,7 @@ read-only, works without a scan =
 # src/gui/actions.cpp:1765
 Reading images (small, read-only) =
 
-# src/gui/apps_view.cpp:42
+# src/gui/apps_view.cpp:44
 Reading installed apps =
 
 # src/gui/draw.cpp:555
@@ -2980,7 +3028,7 @@ Reduce the hibernation file? =
 # src/gui/actions.cpp:893
 Reducing the hibernation file =
 
-# src/gui/apps_view.cpp:593, src/gui/draw.cpp:1619, src/gui/draw.cpp:1721, src/gui/draw.cpp:1826 (+3 more)
+# src/gui/apps_view.cpp:661, src/gui/draw.cpp:1619, src/gui/draw.cpp:1721, src/gui/draw.cpp:1826 (+3 more)
 Refresh =
 
 # src/aimodels.cpp:553
@@ -2988,6 +3036,12 @@ Refused (outside the model folders): {0} =
 
 # src/startup.cpp:939
 reg.exe failed: {0} =
+
+# src/gui/apps_view.cpp:283
+Registering App Installer for your account (PowerShell Add-AppxPackage) =
+
+# src/gui/apps_view.cpp:262
+Registers Microsoft's App Installer, which brings winget, again for your account. It runs as you, without administrator permission. Nothing is downloaded or installed, and nothing is deleted. =
 
 # src/protect.cpp:439
 Registry sign-ins and contexts. =
@@ -3022,10 +3076,10 @@ Remove {0} old driver package ({1})?|Remove {0} old driver packages ({1})? =
 # src/gui/actions.cpp:1586
 Removed =
 
-# src/gui/actions.cpp:2978
+# src/gui/actions.cpp:2985
 Removed from the Explorer menu =
 
-# src/gui/actions.cpp:3032
+# src/gui/actions.cpp:3039
 Removed. Click Measure in a moment to update the list. =
 
 # src/protect.cpp:288
@@ -3033,6 +3087,15 @@ Removing it breaks certificates and encryption. =
 
 # src/gui/actions.cpp:854
 Removing old drivers =
+
+# src/gui/apps_view.cpp:274, src/gui/apps_view.cpp:856
+Repair winget =
+
+# src/gui/apps_view.cpp:261
+Repair winget? =
+
+# src/gui/apps_view.cpp:280
+Repairing winget =
 
 # src/gui/actions.cpp:2062
 Repeat =
@@ -3079,10 +3142,10 @@ Restart Bytopsy as administrator and choose ⋯ > Check for updates now, or down
 # src/gui/drivers_view.cpp:183
 restart Windows to finish =
 
-# src/gui/apps_view.cpp:234
+# src/gui/apps_view.cpp:241
 Restart Windows to finish. The apps list was read again. =
 
-# src/appupdates.cpp:304
+# src/appupdates.cpp:468
 Restart Windows, then update again =
 
 # src/gui/draw.cpp:2971
@@ -3157,7 +3220,7 @@ running the code =
 # src/gui/cleanup.cpp:903
 Running {0} =
 
-# src/gui/actions.cpp:997, src/gui/apps_view.cpp:168, src/gui/apps_view.cpp:331
+# src/gui/actions.cpp:997, src/gui/apps_view.cpp:175, src/gui/apps_view.cpp:269, src/gui/apps_view.cpp:398
 Runs =
 
 # src/startup.cpp:293
@@ -3361,6 +3424,9 @@ Set limit =
 # src/gui/cleanup.cpp:426
 setting outside a [section] =
 
+# src/gui/apps_view.cpp:855
+Settings > Apps > Advanced app settings > App execution aliases =
+
 # src/protect.cpp:300, src/protect.cpp:301, src/protect.cpp:302
 Settings and data of every app you use. =
 
@@ -3400,7 +3466,7 @@ Shared system components (mostly hard links). Shrink it with: DISM /Online /Clea
 # src/aimodels.cpp:439
 shares layers with other models =
 
-# src/gui/apps_view.cpp:767
+# src/gui/apps_view.cpp:830
 shielded folders hold protected data and stay =
 
 # src/gui/draw.cpp:2565
@@ -3436,7 +3502,7 @@ Signs you out of websites and forgets their settings, except the sites on your k
 # src/gui/draw.cpp:1267, src/gui/draw.cpp:1388, src/gui/draw.cpp:1392
 Similar photos =
 
-# src/gui/actions.cpp:1273, src/gui/apps_view.cpp:682, src/gui/draw.cpp:777, src/gui/draw.cpp:884 (+10 more)
+# src/gui/actions.cpp:1273, src/gui/apps_view.cpp:745, src/gui/draw.cpp:777, src/gui/draw.cpp:884 (+10 more)
 Size =
 
 # src/gui/update_gui.cpp:309
@@ -3541,7 +3607,7 @@ Steam, Epic and Battle.net web caches and Steam's shader caches; games may stutt
 # src/gui/update_gui.cpp:245
 Step =
 
-# src/gui/apps_view.cpp:611
+# src/gui/apps_view.cpp:679
 Stop waiting =
 
 # src/diskhealth.cpp:306
@@ -3553,13 +3619,13 @@ stopped before it finished =
 # src/gui/draw.cpp:1744
 Stopped containers =
 
-# src/appupdates.cpp:355
+# src/appupdates.cpp:519
 Stopped: it took longer than 30 minutes =
 
 # src/diskhealth.cpp:305
 Stopping =
 
-# src/gui/apps_view.cpp:192
+# src/gui/apps_view.cpp:199
 Stopping after this app =
 
 # src/vdisks.cpp:474
@@ -3688,10 +3754,10 @@ Test notification sent =
 # src/update.cpp:393
 the address couldn't be found (offline?) =
 
-# src/appupdates.cpp:296
+# src/appupdates.cpp:460
 The app is running: close it and try again =
 
-# src/gui/apps_view.cpp:234
+# src/gui/apps_view.cpp:241
 The apps list was read again. =
 
 # src/gui/browserdata.cpp:463, src/gui/browserdata.cpp:469
@@ -3700,7 +3766,7 @@ the browser has it open =
 # src/driverupdates.cpp:553
 The connection to Windows Update was interrupted =
 
-# src/appupdates.cpp:300
+# src/appupdates.cpp:464
 The disk is full =
 
 # src/update.cpp:1273
@@ -3709,7 +3775,7 @@ the download doesn't have the size the update information gives =
 # src/update.cpp:1277
 the download doesn't match the signed update information (SHA-256) =
 
-# src/appupdates.cpp:291
+# src/appupdates.cpp:455
 The download failed =
 
 # src/update.cpp:887, src/update.cpp:1238
@@ -3751,10 +3817,10 @@ the GPU vendor's tool =
 # src/protect.cpp:366, src/protect.cpp:377
 The installed app. Uninstall it in Settings → Apps. =
 
-# src/appupdates.cpp:306
+# src/appupdates.cpp:470
 The installer was cancelled =
 
-# src/appupdates.cpp:292
+# src/appupdates.cpp:456
 The installer's hash doesn't match its manifest =
 
 # src/gui/app.cpp:129, src/gui/app.cpp:140
@@ -3769,7 +3835,7 @@ The notification couldn't be shown =
 # src/gui/uia_app.cpp:347
 the open folder's contents as rectangles sized by the space they use; the list shows the same items =
 
-# src/appupdates.cpp:293
+# src/appupdates.cpp:457
 The package's agreements were not accepted =
 
 # src/update.cpp:395
@@ -3802,7 +3868,7 @@ The task that checks is missing (removed in Task Scheduler?): Change, then Save,
 # src/gui/draw.cpp:2198
 The task that checks is turned off in Task Scheduler =
 
-# src/gui/apps_view.cpp:606
+# src/gui/apps_view.cpp:674
 The uninstaller closed. Waiting for {0} to leave the installed apps … =
 
 # src/gui/update_gui.cpp:263
@@ -3988,7 +4054,7 @@ TRIM {0} ({1}) =
 # src/vdisks.cpp:465
 Trimming free space in {0} =
 
-# src/gui/apps_view.cpp:662
+# src/gui/apps_view.cpp:725, src/gui/apps_view.cpp:864
 Try again =
 
 # src/gui/actions.cpp:2063
@@ -4036,6 +4102,9 @@ Turn on Compact OS? =
 # src/gui/actions.cpp:2175
 Turn on low disk space alerts =
 
+# src/gui/apps_view.cpp:860
+Turn on the winget.exe alias =
+
 # src/gui/actions.cpp:975
 Turn on {0} at startup? =
 
@@ -4072,7 +4141,7 @@ turning one off keeps it, so it can be turned on again =
 # src/gui/draw.cpp:1209
 Type =
 
-# src/gui/apps_view.cpp:632
+# src/gui/apps_view.cpp:700
 type in the search box to filter =
 
 # src/games.cpp:98
@@ -4099,22 +4168,22 @@ unexpected VHDX block size =
 # src/diskhealth.cpp:327
 Unhealthy =
 
-# src/gui/actions.cpp:1099, src/gui/apps_view.cpp:334
+# src/gui/actions.cpp:1099, src/gui/apps_view.cpp:401
 Uninstall =
 
-# src/gui/apps_view.cpp:46
+# src/gui/apps_view.cpp:48
 Uninstall registry keys, and the size of apps that register none =
 
-# src/gui/apps_view.cpp:588, src/gui/draw.cpp:2004
+# src/gui/apps_view.cpp:656, src/gui/draw.cpp:2004
 Uninstall {0} =
 
-# src/gui/actions.cpp:1095, src/gui/apps_view.cpp:324
+# src/gui/actions.cpp:1095, src/gui/apps_view.cpp:391
 Uninstall {0} ({1})? =
 
-# src/gui/apps_view.cpp:325
+# src/gui/apps_view.cpp:392
 Uninstall {0}? =
 
-# src/gui/apps_view.cpp:573
+# src/gui/apps_view.cpp:641
 uninstalled with their own uninstaller, then leftovers reviewed =
 
 # src/diskhealth.cpp:296, src/diskhealth.cpp:328, src/fsops.cpp:55, src/gui/draw.cpp:2542
@@ -4165,7 +4234,7 @@ Unused volumes =
 # src/gui/draw.cpp:768
 Up one level (Backspace) =
 
-# src/gui/apps_view.cpp:171, src/gui/apps_view.cpp:678, src/gui/update_gui.cpp:306
+# src/gui/apps_view.cpp:178, src/gui/apps_view.cpp:741, src/gui/update_gui.cpp:306
 Update =
 
 # src/gui/update_gui.cpp:214
@@ -4183,19 +4252,19 @@ Update pieces shared with other PCs. Emptied through Windows' own command. =
 # src/gui/update_gui.cpp:206
 Update to Bytopsy {0}? =
 
-# src/gui/apps_view.cpp:591
+# src/gui/apps_view.cpp:659
 Update to {0} =
 
-# src/gui/apps_view.cpp:171, src/gui/apps_view.cpp:584
+# src/gui/apps_view.cpp:178, src/gui/apps_view.cpp:652
 Update {0} app|Update {0} apps =
 
-# src/gui/apps_view.cpp:157
+# src/gui/apps_view.cpp:164
 Update {0} app?|Update {0} apps? =
 
-# src/gui/apps_view.cpp:156
+# src/gui/apps_view.cpp:163
 Update {0} to {1}? =
 
-# src/appupdates.cpp:287
+# src/appupdates.cpp:451
 Updated =
 
 # src/gui/update_gui.cpp:60
@@ -4204,34 +4273,37 @@ Updated to Bytopsy {0} =
 # src/gui/update_gui.cpp:285
 Updated to Bytopsy {0}: start it again to use the new version =
 
-# src/gui/apps_view.cpp:237
+# src/gui/apps_view.cpp:244
 Updated to {0} =
 
-# src/appupdates.cpp:303, src/gui/apps_view.cpp:237
+# src/appupdates.cpp:467, src/gui/apps_view.cpp:244
 Updated: restart Windows to finish =
 
-# src/gui/apps_view.cpp:628
+# src/gui/apps_view.cpp:696
 Updates =
 
-# src/gui/apps_view.cpp:628
+# src/gui/apps_view.cpp:696
 Updates ({0}) =
 
-# src/gui/apps_view.cpp:656
-Updates come through winget, which is part of App Installer from the Microsoft Store. Bytopsy doesn't install it for you: get it there, then come back. =
+# src/gui/apps_view.cpp:894
+Updates come through winget, part of Microsoft's App Installer, which isn't on this PC. The Microsoft Store is the easy way to get it; Microsoft's winget release page is for PCs without the Store. Bytopsy doesn't install it for you: get it, then come back. =
 
-# src/gui/apps_view.cpp:561
+# src/gui/apps_view.cpp:628
+Updates come through winget, which can't be reached right now =
+
+# src/gui/apps_view.cpp:629
 Updates come through winget, which isn't installed =
 
-# src/gui/apps_view.cpp:762
+# src/gui/apps_view.cpp:825
 Updates from winget =
 
-# src/gui/apps_view.cpp:186
+# src/gui/apps_view.cpp:193
 Updating apps =
 
 # src/gui/update_gui.cpp:234
 Updating to Bytopsy {0}… =
 
-# src/gui/apps_view.cpp:186
+# src/gui/apps_view.cpp:193
 Updating {0} =
 
 # src/diskhealth.cpp:288
@@ -4267,7 +4339,7 @@ User =
 # src/protect.cpp:499
 Usually holds API keys and passwords. =
 
-# src/gui/apps_view.cpp:329, src/gui/apps_view.cpp:674
+# src/gui/apps_view.cpp:396, src/gui/apps_view.cpp:737
 Version =
 
 # src/protect.cpp:486
@@ -4324,7 +4396,7 @@ VS Code settings plus AI extension data: Copilot Chat sessions, Cline/Roo task h
 # src/protect.cpp:385
 VSCodium (AI chats, settings) =
 
-# src/gui/apps_view.cpp:605
+# src/gui/apps_view.cpp:673
 Waiting for {0}’s uninstaller … finish it in its own window. =
 
 # src/protect.cpp:446
@@ -4369,7 +4441,7 @@ WhatsApp Desktop =
 # src/gui/draw.cpp:2475
 Where =
 
-# src/gui/actions.cpp:3032
+# src/gui/actions.cpp:3039
 winapp2.ini cleaners removed =
 
 # src/gui/draw.cpp:493, src/gui/draw.cpp:1829, src/gui/uia_app.cpp:45
@@ -4411,7 +4483,7 @@ Windows has to restart afterwards. =
 # src/protect.cpp:245
 Windows Installer cache =
 
-# src/appupdates.cpp:305
+# src/appupdates.cpp:469
 Windows is restarting to finish the update =
 
 # src/gui/draw.cpp:2312
@@ -4561,40 +4633,55 @@ Windsurf (Cascade history, settings) =
 # src/protect.cpp:379
 Windsurf Next =
 
-# src/appupdates.cpp:327, src/appupdates.cpp:353
+# src/gui/apps_view.cpp:882
+winget can't be reached =
+
+# src/gui/apps_view.cpp:866
+winget couldn't be repaired =
+
+# src/appupdates.cpp:491, src/appupdates.cpp:517
 winget couldn't be started =
 
-# src/gui/apps_view.cpp:563, src/gui/apps_view.cpp:661
+# src/gui/apps_view.cpp:631, src/gui/apps_view.cpp:724
 winget couldn't list updates =
 
-# src/gui/apps_view.cpp:60, src/gui/apps_view.cpp:98
+# src/gui/apps_view.cpp:63, src/gui/apps_view.cpp:104
 winget couldn't list updates: {0} =
 
-# src/gui/apps_view.cpp:162
+# src/gui/apps_view.cpp:169
 winget downloads each update and runs the app's own installer, one after another. An installer may ask for administrator permission (its own prompt) or close the app while it updates. winget accepts the package's license agreements for you. Bytopsy deletes nothing. =
 
-# src/gui/apps_view.cpp:159
+# src/gui/apps_view.cpp:166
 winget downloads the update and runs the app's own installer. It may ask for administrator permission (its own prompt) or close the app while it updates. winget accepts the package's license agreements for you. Bytopsy deletes nothing. =
 
-# src/appupdates.cpp:336, src/appupdates.cpp:360
+# src/appupdates.cpp:500, src/appupdates.cpp:524
 winget failed =
 
-# src/gui/apps_view.cpp:154, src/gui/apps_view.cpp:655
+# src/gui/apps_view.cpp:298
+winget is still missing =
+
+# src/gui/apps_view.cpp:161, src/gui/apps_view.cpp:893
 winget isn't installed =
 
-# src/gui/apps_view.cpp:665
+# src/gui/apps_view.cpp:728
 winget knows of no newer version of any installed app. =
 
-# src/appupdates.cpp:289
+# src/appupdates.cpp:453
 winget no longer finds this app =
 
-# src/appupdates.cpp:344, src/gui/apps_view.cpp:134
+# src/appupdates.cpp:508, src/gui/apps_view.cpp:141
 winget shortened its id: update it with winget in a terminal =
 
-# src/gui/apps_view.cpp:89
+# src/gui/apps_view.cpp:94
 winget upgrade: it only lists here, and contacts its sources =
 
-# src/appupdates.cpp:294
+# src/gui/apps_view.cpp:293
+winget works again: asking it for updates =
+
+# src/gui/apps_view.cpp:876
+winget's alias is turned off =
+
+# src/appupdates.cpp:458
 winget's source agreements were not accepted =
 
 # src/protect.cpp:311
@@ -4732,16 +4819,16 @@ Zed (settings) =
 # src/fsops.cpp:523, src/gui/draw.cpp:2121
 {0} and {1} =
 
-# src/gui/apps_view.cpp:572
+# src/gui/apps_view.cpp:640
 {0} app|{0} apps =
 
 # src/gui/draw.cpp:2673
 {0} app on this PC has something to clean|{0} apps on this PC have something to clean =
 
-# src/gui/apps_view.cpp:232
+# src/gui/apps_view.cpp:239
 {0} app updated|{0} apps updated =
 
-# src/gui/apps_view.cpp:636
+# src/gui/apps_view.cpp:704
 {0} app with a version winget can't tell isn't listed|{0} apps with versions winget can't tell aren't listed =
 
 # src/gui/draw.cpp:550
@@ -4753,7 +4840,7 @@ Zed (settings) =
 # src/gui/draw.cpp:1246
 {0} can be reclaimed =
 
-# src/gui/apps_view.cpp:566
+# src/gui/apps_view.cpp:634
 {0} checked|{0} checked =
 
 # src/gui/draw.cpp:1499
@@ -4819,6 +4906,9 @@ Zed (settings) =
 # src/gui/draw.cpp:1991
 {0} game|{0} games =
 
+# src/gui/apps_view.cpp:873
+{0} Get App Installer from the Microsoft Store to install it again, or try the repair once more. =
+
 # src/alerts.cpp:111
 {0} GiB =
 
@@ -4870,34 +4960,34 @@ Zed (settings) =
 # src/update.cpp:1197
 {0} is in use: close every Bytopsy window and bytopsy-cli, then try again =
 
-# src/gui/apps_view.cpp:475
+# src/gui/apps_view.cpp:542
 {0} is installed again: its folders are left alone =
 
 # src/gui/draw.cpp:2122
 {0} is on it =
 
-# src/gui/actions.cpp:1163, src/gui/apps_view.cpp:511
+# src/gui/actions.cpp:1163, src/gui/apps_view.cpp:578
 {0} is protected and was left alone =
 
-# src/gui/apps_view.cpp:400
+# src/gui/apps_view.cpp:467
 {0} is still installed =
 
-# src/gui/apps_view.cpp:608
+# src/gui/apps_view.cpp:676
 {0} is still installed: its uninstaller was cancelled or didn’t finish. Nothing was removed. =
 
-# src/gui/apps_view.cpp:434
+# src/gui/apps_view.cpp:501
 {0} is uninstalled and left no folders behind that Bytopsy can tell =
 
-# src/gui/apps_view.cpp:607
+# src/gui/apps_view.cpp:675
 {0} is uninstalled. =
 
-# src/gui/apps_view.cpp:435
+# src/gui/apps_view.cpp:502
 {0} is uninstalled: review the folders it left behind =
 
-# src/gui/apps_view.cpp:461
+# src/gui/apps_view.cpp:528
 {0} is uninstalled; these folders held it or are named after it. If one still holds something you want, restore it from Recently deleted. The registry is not touched. =
 
-# src/gui/apps_view.cpp:458
+# src/gui/apps_view.cpp:525
 {0} is uninstalled; this folder held it or is named after it. If it still holds something you want, restore it from Recently deleted. The registry is not touched. =
 
 # src/gui/actions.cpp:2446
@@ -4969,13 +5059,13 @@ Zed (settings) =
 # src/gui/draw.cpp:3410
 {0} of this folder =
 
-# src/gui/actions.cpp:1585, src/gui/apps_view.cpp:190, src/gui/update_gui.cpp:246
+# src/gui/actions.cpp:1585, src/gui/apps_view.cpp:197, src/gui/update_gui.cpp:246
 {0} of {1} =
 
 # src/gui/drivers_view.cpp:182
 {0} of {1} driver update installed|{0} of {1} driver updates installed =
 
-# src/gui/apps_view.cpp:233
+# src/gui/apps_view.cpp:240
 {0} of {1} updated =
 
 # src/gui/draw.cpp:2399
@@ -4990,7 +5080,7 @@ Zed (settings) =
 # src/gui/draw.cpp:1479
 {0} photo that looks the same|{0} photos that look the same =
 
-# src/gui/apps_view.cpp:638
+# src/gui/apps_view.cpp:706
 {0} pinned app isn't listed|{0} pinned apps aren't listed =
 
 # src/gui/draw.cpp:1498
@@ -5008,7 +5098,7 @@ Zed (settings) =
 # src/gui/draw.cpp:1321
 {0} reclaimable =
 
-# src/gui/apps_view.cpp:322
+# src/gui/apps_view.cpp:389
 {0} says it can't be uninstalled (NoRemove) =
 
 # src/gui/draw.cpp:583
@@ -5041,7 +5131,7 @@ Zed (settings) =
 # src/gui/actions.cpp:1276
 {0} unreadable folder|{0} unreadable folders =
 
-# src/gui/apps_view.cpp:565
+# src/gui/apps_view.cpp:633
 {0} update from winget|{0} updates from winget =
 
 # src/gui/draw.cpp:3107
@@ -5086,7 +5176,7 @@ Zed (settings) =
 # src/gui/actions.cpp:1546
 {0} · you can restore it from the Recycle Bin. =
 
-# src/gui/apps_view.cpp:166, src/gui/drivers_view.cpp:111
+# src/gui/apps_view.cpp:173, src/gui/drivers_view.cpp:111
 {0} → {1} =
 
 # src/diskhealth.cpp:370
@@ -5122,7 +5212,7 @@ Zed (settings) =
 # src/update.cpp:441, src/update.cpp:938, src/update.cpp:961, src/update.cpp:970 (+8 more)
 {0}: {1} =
 
-# src/gui/apps_view.cpp:191
+# src/gui/apps_view.cpp:198
 {0}: {1} → {2} =
 
 # src/fsops.cpp:524
@@ -5131,7 +5221,7 @@ Zed (settings) =
 # src/gui/cleanup.cpp:740
 {1} kept for {0} site|{1} kept for {0} sites =
 
-# src/gui/apps_view.cpp:569
+# src/gui/apps_view.cpp:637
 {1} of {0} app match “{2}”|{1} of {0} apps match “{2}” =
 
 # src/gui/draw.cpp:2789

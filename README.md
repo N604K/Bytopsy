@@ -175,7 +175,15 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   which may show its own UAC prompt; winget accepts the package and source agreements for you, which
   the confirmation says. Results are shown per app and journaled (id, old and new version), then the
   list is read again. Never `winget upgrade --all`, and nothing is updated without your confirmation.
-  Without winget the view says so and links to App Installer in the Microsoft Store.
+  Without winget the view says why and offers the fix. When App Installer is on the PC but winget
+  can't be reached (a new account before the Store finished setting it up, App Installer not yet
+  registered for you, or the `winget.exe` App execution alias turned off), *Repair winget* registers
+  App Installer again for your account (PowerShell `Add-AppxPackage -RegisterByFamilyName`, as you,
+  without administrator rights, nothing downloaded; asked first and journaled), then looks for winget
+  again and lists the updates, or opens *App execution aliases* in Settings if that is what's left.
+  When App Installer isn't on the PC at all (LTSC, Server, Store removed), *Get App Installer* opens
+  the Microsoft Store and *Download from Microsoft* opens Microsoft's winget release page on GitHub
+  in your browser; Bytopsy downloads and installs nothing itself.
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -412,7 +420,9 @@ tasks, disk health from WMI and the drives' own health logs, and, while alerts a
 notifications are turned off in Windows Settings. For *Drivers*: each device's
 hardware ids and installed driver (SetupAPI), the PC maker and model from
 `HKLM\HARDWARE\DESCRIPTION\System\BIOS`, and the current user's Store app packages (to find the
-vendors' driver tools).
+vendors' driver tools). When winget can't be found in *Apps > Updates*: whether App Installer is
+registered for you or on the PC (the per-user and per-PC package repository keys, and the
+provisioned packages).
 
 **Windows Update.** *Check Windows Update* in *Drivers* (and `bytopsy-cli --driver-updates`) asks
 Windows' own Windows Update service which driver updates it offers this PC. Windows contacts Windows
@@ -465,7 +475,8 @@ storage and the Delivery Optimization cache, Disk Cleanup, `fsutil` for TRIM, `r
 `sc` for startup entries that need administrator rights, `tar.exe` to unpack an update), `wsl.exe`,
 `docker`, the clean command of a `kind = command` cleanup rule (such as `conan remove`), an app's
 own uninstaller, a game launcher's uninstall link (`steam://uninstall/...`), `winget` for *Apps >
-Updates* (listing when you choose that filter, updating the apps you confirm), `bytopsy-cli` as
+Updates* (listing when you choose that filter, updating the apps you confirm), PowerShell
+`Add-AppxPackage -RegisterByFamilyName` when you click *Repair winget* there, `bytopsy-cli` as
 administrator to install driver updates, when you click them in *Drivers*, a vendor's driver tool
 (such as the NVIDIA app) or its official web page in your browser, and after an update the new
 `bytopsy.exe`. Bytopsy itself goes online for none of these, but the programs behave as they always
@@ -627,7 +638,8 @@ bytopsy-cli [options] [path]
   --apps                List installed apps (size, install date, version, publisher)
                         from the Uninstall registry keys, and exit
   --app-updates         List app updates winget knows of (winget upgrade: it only
-                        lists, nothing is updated) matched to the installed apps
+                        lists, nothing is updated) matched to the installed apps;
+                        without winget, says why and how to get it back
   --similar-photos[=strict|normal|loose]
                         Scan path, list groups of photos that look alike (resized,
                         re-saved, lightly edited copies) with the one to keep, and exit
@@ -748,7 +760,7 @@ tests/schedule_test.cpp scheduled cleanup: ids, --clean arguments, triggers, --c
 tests/alerts_test.cpp   low disk space alerts: % and GiB limits, settings lines, once-a-day state, toast XML escaping, links, --check-space (ctest)
 tests/startup_test.cpp  startup: StartupApproved values, command lines, impact, journal notes; changes nothing (ctest)
 tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
-tests/appupdates_test.cpp app updates: winget upgrade tables (cut names, pins, other languages, spinner), matching, a fake winget (ctest)
+tests/appupdates_test.cpp app updates: winget upgrade tables (cut names, pins, other languages, spinner), matching, a fake winget, why winget is missing and the repair (stand-ins only) (ctest)
 tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
 tests/uia_test.cpp      accessibility tree: element identity across frames, reading order, names from text, patterns (ctest)
 tests/i18n_test.cpp     translations: .lang parsing, placeholders, plural rules, pseudo-language, res/lang files (ctest)
