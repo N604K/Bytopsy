@@ -80,6 +80,19 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   itself there. Steam runtimes (redistributables, Proton) are not listed. *Leftovers* are what
   launchers leave behind: game folders, workshop items and shader caches of games that are no
   longer installed; they go to the Recycle Bin.
+- **Apps** (works without a scan): installed programs from the Uninstall registry keys (HKLM 64- and
+  32-bit, HKCU), as Settings lists them: system components, updates and patches are left out. Name,
+  publisher, version, install date and size (the registered size, or the measured install folder);
+  sort by any of them and filter by typing in the search box. *Uninstall* runs the app's own
+  registered uninstaller, which asks what to do; WinNCDU waits for it (and for the app's entry to
+  disappear, since many uninstallers hand over to a copy of themselves), then lists the folders the
+  app left behind for review: its former install folder (the only one preselected, and only with
+  nothing protected inside) and folders named after it, or after its publisher and it, in Program
+  Files, ProgramData, AppData (Roaming, Local, LocalLow) and Local\Programs. Folders another installed
+  app may use (same name, a name it begins with, a publisher folder holding other apps, or holding or
+  inside another app's folder) are never offered; folders with protected data inside (wallets, keys,
+  chat history, browser profiles) are shown with a shield and left alone. Checked folders go to the
+  Recycle Bin and the journal. Registry entries are never touched (no registry cleaning).
 - **Delete** to the Recycle Bin (default) or permanently, for one item or a whole selection.
   Junctions and symlinks are never followed.
 - **Locate**: right-click for Open, Open in Explorer, Show in Explorer, Copy path, Open terminal here,
@@ -217,7 +230,7 @@ Manual build:
 ```bat
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools and games self-tests
+ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk, aimodels, vdisks, wintools, games and apps self-tests
 ```
 
 ## The terminal app (`winncdu-cli.exe`)
@@ -255,6 +268,8 @@ winncdu-cli [options] [path]
                         Restore, event logs) and exit
   --games               List installed games of every launcher (size, last played)
                         and leftovers of uninstalled ones, and exit
+  --apps                List installed apps (size, install date, version, publisher)
+                        from the Uninstall registry keys, and exit
 ```
 
 Examples:
@@ -319,6 +334,7 @@ src/                  core engine + terminal app
   vdisks.cpp          WSL and Docker virtual disks: usage, compaction, Docker prune
   wintools.cpp        Windows: component store, old drivers, System Restore, hibernation, ...
   games.cpp           games of every launcher, uninstall through the launcher, leftovers
+  apps.cpp            installed apps (Uninstall registry keys), uninstallers, leftover folders
   runtool.cpp         running console tools without a window, and as administrator
   main.cpp, ui.cpp, console.cpp   terminal app
 src/gui/              windowed app
@@ -329,6 +345,7 @@ src/gui/              windowed app
   treemap.cpp         squarified treemap layout
   cleanup.cpp         cleanup rules: parsing, measuring, cleaning
   winapp2.cpp         winapp2.ini import
+  apps_view.cpp       Apps view: list, uninstall and wait, leftovers review
   history.cpp         scan snapshots and comparison
   platform.cpp        settings, theme, Explorer integration, file dialogs
   icons.cpp           shell icon cache
@@ -341,6 +358,7 @@ tests/aimodels_test.cpp AI models: revisions, shared layers, nothing outside the
 tests/vdisks_test.cpp   WSL/Docker: ext4 usage read from a VHDX, df/docker/wsl output parsing (ctest)
 tests/wintools_test.cpp Windows: DISM report parsing, which driver packages count as old (ctest)
 tests/games_test.cpp    games: Steam libraries and leftovers, Epic manifests, launcher uninstallers (ctest)
+tests/apps_test.cpp     apps: which entries are listed, which folders count as leftovers and which never do (ctest)
 res/winncdu.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 ```

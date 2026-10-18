@@ -9,6 +9,7 @@
 #include "export.h"
 #include "fsops.h"
 #include "aimodels.h"
+#include "apps.h"
 #include "games.h"
 #include "journal.h"
 #include "protect.h"
@@ -54,6 +55,8 @@ void PrintUsage() {
         "                        Restore, event logs) and exit\n"
         "  --games               List installed games of every launcher (size, last played)\n"
         "                        and leftovers of uninstalled ones, and exit\n"
+        "  --apps                List installed apps (size, install date, version, publisher)\n"
+        "                        from the Uninstall registry keys, and exit\n"
         "  -h, --help            Show this help\n"
         "  -V, --version         Show version\n"
         "\n"
@@ -249,6 +252,32 @@ int ListGames() {
     return 0;
 }
 
+int ListApps() {
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    auto apps = FindInstalledApps();
+    uint64_t total = 0;
+    for (auto& a : apps) total += a.bytes;
+    std::wstring out = L"Installed apps (Uninstall registry keys; system components, updates and patches left out), largest first.\n" +
+                       util::FormatCount(apps.size()) + L" apps, " + util::FormatSizeShort(total) + L".\n\n";
+    if (apps.empty()) out += L"  None found.\n";
+    for (auto& a : apps) {
+        wchar_t head[64];
+        swprintf(head, 64, L"  %10ls%lc %-10ls  ", a.bytes ? util::FormatSizeShort(a.bytes).c_str() : L"?", a.measured ? L'*' : L' ',
+                 a.e.installDate ? util::FormatTime(a.e.installDate).substr(0, 10).c_str() : L"");
+        bool versionInName = a.e.displayVersion.empty() || a.e.displayName.find(a.e.displayVersion) != std::wstring::npos;
+        out += head + a.e.displayName + (versionInName ? L"" : L"  " + a.e.displayVersion) +
+               (a.e.publisher.empty() ? L"" : L"  (" + a.e.publisher + L")") + L"\n";
+    }
+    out += L"\n* measured folder size (the app registers none).\n"
+           L"Uninstall through each app's own uninstaller, then review the folders it left behind, in the windowed app: Apps.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return 0;
+}
+
 int Fail(const std::wstring& msg) {
     fwprintf(stderr, L"winncdu-cli: %s\n", msg.c_str());
     return 2;
@@ -370,6 +399,8 @@ int wmain(int argc, wchar_t** argv) {
             return ListWindowsTools();
         } else if (a == L"--games") {
             return ListGames();
+        } else if (a == L"--apps") {
+            return ListApps();
         } else if (a == L"-x") {
             // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {

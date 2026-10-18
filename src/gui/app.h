@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../aimodels.h"
+#include "../apps.h"
 #include "../analysis.h"
 #include "../devjunk.h"
 #include "../fsops.h"
@@ -29,7 +30,7 @@
 #include "platform.h"
 #include "treemap.h"
 
-enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, CleanReview, Count };
+enum class View { Home, Browse, Largest, Types, TypeFiles, Duplicates, Old, Empty, DevJunk, Search, Cleanup, History, Compare, Deleted, AiModels, Wsl, WinTools, Games, Apps, CleanReview, Count };
 
 enum Cmd : int {
     CMD_NONE = 0,
@@ -93,6 +94,12 @@ enum Cmd : int {
     CMD_GAMES_REFRESH,
     CMD_GAME_UNINSTALL,
     CMD_GAMES_DELETE,
+    CMD_APPS_REFRESH,
+    CMD_APP_UNINSTALL,
+    CMD_APP_LEFTOVERS,
+    CMD_APP_STOPWAIT,
+    CMD_APPS_DELETE,
+    CMD_APP_LEFT_DONE,
     CMD_WIN_ACT = 600,  // + WinAction
 };
 
@@ -142,7 +149,7 @@ struct Hit {
     intptr_t b = 0;
 };
 
-enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL, RK_GAME };
+enum RowKind { RK_NODE, RK_GROUP, RK_TYPE, RK_DIFF, RK_CLEAN, RK_AI, RK_WSL, RK_GAME, RK_APP, RK_APPLEFT };
 
 struct Row {
     Node* node = nullptr;
@@ -273,6 +280,17 @@ private:
     void OnGameRow(int row);
     void StartGameUninstall();
     void StartGameLeftoversDelete();
+    // Apps view (apps_view.cpp)
+    void LoadApps();
+    void SortApps();
+    bool AppVisible(const InstalledApp& a) const;
+    void OnAppRow(int row);
+    void StartAppUninstall();
+    void OnAppUninstallProgress();
+    void LookForAppLeftovers(bool askIfInstalled);
+    void StartAppLeftoversDelete();
+    void SyncSearchBox();
+    void OnSearchChanged();
     void WinToolAction(int action);
     void RunWinTool(const std::wstring& title, const std::wstring& journalName, const std::wstring& done,
                     std::function<AdminRun()> work);
@@ -329,6 +347,7 @@ private:
     void DrawWsl(const RectF& area);
     void DrawWinTools(const RectF& area);
     void DrawGames(const RectF& area);
+    void DrawApps(const RectF& area);
     void DrawCleanup(const RectF& area);
     void DrawCleanReview(const RectF& area);
     void DrawHistory(const RectF& area);
@@ -427,6 +446,24 @@ private:
     bool gamesByAge_ = false;       // least recently played first instead of largest
     int gameChosen_ = -1;           // the installed game the Uninstall button acts on
     std::set<size_t> gameLeftSel_;  // checked leftovers
+    std::vector<InstalledApp> apps_;
+    bool appsLoaded_ = false;
+    int appSortKey_ = SK_SIZE;
+    bool appSortDesc_ = true;
+    std::wstring appFilter_;     // what the search box holds while the Apps view is shown
+    bool searchForApps_ = false;  // the search box currently filters apps
+    int appChosen_ = -1;         // index into apps_: the app the Uninstall button acts on
+    // An uninstaller WinNCDU started: a worker waits for it to exit, then for its entry to go.
+    struct AppWait {
+        UninstallEntry e;
+        std::atomic<int> phase{0};  // 0 running, 1 exited (entry still there), 2 entry gone, 3 still installed
+        std::atomic<bool> stop{false};
+    };
+    std::shared_ptr<AppWait> appWait_;
+    std::wstring appLeftFor_;          // the uninstalled app whose leftovers are listed
+    UninstallEntry appLeftEntry_;      // its (former) entry: deleting stops if it is back
+    std::vector<AppLeftover> appLeft_;
+    std::set<size_t> appLeftSel_;      // checked leftovers
     uint64_t dupMin_ = 1 << 20;
     int oldAgeDays_ = 365;
     uint64_t oldMinSize_ = 0;
@@ -478,3 +515,4 @@ private:
 
 constexpr UINT WM_APP_TASKDONE = WM_APP + 1;
 constexpr UINT WM_APP_CLEANUP = WM_APP + 2;
+constexpr UINT WM_APP_UNINSTALL = WM_APP + 3;  // an uninstaller WinNCDU waits for made progress
