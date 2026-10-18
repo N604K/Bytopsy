@@ -185,8 +185,10 @@ databases, and every install through Windows' or the app's own mechanism.
       version and date, and install the chosen ones through Windows Update itself (Microsoft-signed,
       matched to the hardware), with a System Restore point first. For graphics, detect the
       vendor's own tool (NVIDIA app, AMD Software: Adrenalin, Intel Driver & Support Assistant) and
-      open it rather than installing a graphics driver another way. Never a third-party driver
-      database.
+      open it rather than installing a graphics driver another way. Likewise the PC or motherboard
+      maker's own tool (Dell Command Update, Lenovo System Update / Vantage, HP Support Assistant,
+      MyASUS, MSI Center, ...), which delivers the drivers Windows Update lacks, or the maker's
+      support page for the model. Never a third-party driver database.
 - [ ] **App updates through winget**: an *Updates* column and filter in Apps (`winget upgrade`),
       update one app or all of them, each through its own installer. If winget (App Installer) is
       missing, say so and link to it in the Microsoft Store.
