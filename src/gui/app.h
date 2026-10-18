@@ -451,6 +451,7 @@ private:
     uint64_t catTotals_[CAT_COUNT] = {};
     std::vector<DupGroup> dups_;
     bool dupsDone_ = false;
+    float sidebarScroll_ = 0;  // DIPs; only when the window is too short for every sidebar item
     // Similar photos (the Duplicates view's second mode)
     bool dupPhotos_ = false;
     std::vector<PhotoGroup> photos_;

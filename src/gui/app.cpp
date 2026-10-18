@@ -655,8 +655,13 @@ void App::OnRButtonUp(float x, float y) {
     ShowContextMenu(pt.x, pt.y);
 }
 
-void App::OnWheel(float delta, float, float) {
+void App::OnWheel(float delta, float x, float y) {
     if (dialog_.active || task_) return;
+    if (x < kSidebarW && y > kTopH) {  // the sidebar scrolls when the window is too short for it
+        sidebarScroll_ -= delta / 120.0f * 38.0f * 2;
+        Invalidate();
+        return;
+    }
     lists_[static_cast<int>(view_)].scroll -= delta / 120.0f * 32.0f * 3;
     Invalidate();
 }

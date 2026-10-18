@@ -326,7 +326,15 @@ void App::DrawSidebar() {
     RectF sb = R(0, kTopH, kSidebarW, sz.height - kStatusH);
     gfx_.Fill(sb, P_.surface);
     gfx_.Fill(R(kSidebarW - 1, kTopH, kSidebarW, sb.bottom), P_.border);
-    float y = kTopH + 14;
+    // The items get closer together when the window is short, and the sidebar scrolls (mouse wheel)
+    // when even that isn't enough.
+    const int itemCount = 8 + (searchQuery_.empty() ? 0 : 1) + 10;
+    const float fixedH = 14 + (root_ ? 90.0f : 0.0f) + 10 + 24 + 10;
+    float step = std::clamp((H(sb) - fixedH) / itemCount, 30.0f, 38.0f);
+    float contentH = fixedH + itemCount * step;
+    sidebarScroll_ = std::clamp(sidebarScroll_, 0.0f, std::max(0.0f, contentH - H(sb)));
+    gfx_.PushClip(sb);
+    float y = kTopH + 14 - sidebarScroll_;
 
     if (root_) {
         RectF card = R(12, y, kSidebarW - 12, y + 76);
@@ -371,25 +379,25 @@ void App::DrawSidebar() {
     };
     if (!searchQuery_.empty()) items.push_back({View::Search, IC_SEARCH, L"Search results", true, util::FormatCount(searchRes_.size())});
     auto drawItem = [&](const NavItem& it) {
-        RectF r = R(10, y, kSidebarW - 10, y + 36);
+        RectF r = R(10, y, kSidebarW - 10, y + step - 2);
         bool active = view_ == it.v || (it.v == View::Types && view_ == View::TypeFiles) ||
                       (it.v == View::History && view_ == View::Compare) || (it.v == View::Cleanup && view_ == View::CleanReview);
         bool enabled = !it.needsScan || root_;
         bool hover = enabled && Hovered(HK_NAV, static_cast<int>(it.v));
         if (active) {
             gfx_.FillRound(r, 8, P_.selected);
-            gfx_.FillRound(RWH(r.left, r.top + 9, 3, 18), 1.5f, P_.accent);
+            gfx_.FillRound(RWH(r.left, (r.top + r.bottom) / 2 - 9, 3, 18), 1.5f, P_.accent);
         } else if (hover) {
             gfx_.FillRound(r, 8, P_.hover);
         }
         D2D1_COLOR_F c = !enabled ? P_.textFaint : (active ? P_.text : P_.textDim);
-        gfx_.Icon(it.icon, RWH(r.left + 10, r.top, 24, 36), active ? P_.accent : c, 15);
+        gfx_.Icon(it.icon, RWH(r.left + 10, r.top, 24, H(r)), active ? P_.accent : c, 15);
         gfx_.Text(it.label, R(r.left + 42, r.top, r.right - 8, r.bottom), active ? P_.text : (enabled ? P_.text : P_.textFaint),
                   TS(13.5f, active ? DWRITE_FONT_WEIGHT_SEMI_BOLD : DWRITE_FONT_WEIGHT_NORMAL));
         if (!it.badge.empty())
             gfx_.Text(it.badge, R(r.left, r.top, r.right - 10, r.bottom), P_.textFaint, Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
-        if (enabled) AddHit(r, HK_NAV, static_cast<int>(it.v));
-        y += 38;
+        if (enabled && r.top >= sb.top && r.bottom <= sb.bottom) AddHit(r, HK_NAV, static_cast<int>(it.v));
+        y += step;
     };
     for (auto& it : items) drawItem(it);
     y += 10;
@@ -447,6 +455,7 @@ void App::DrawSidebar() {
             y += 48;
         }
     }
+    gfx_.PopClip();
 }
 
 void App::DrawStatusBar() {
