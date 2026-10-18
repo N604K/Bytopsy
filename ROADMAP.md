@@ -174,3 +174,44 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [x] Privacy statement: no telemetry, no network access (except an optional update check).
       *Done: "Privacy" in the README, checked against the source (no networking APIs or libraries).
       There is no update check, so the statement has no exception.*
+
+## 5. Updates: the PC's and Bytopsy's own
+
+What CCleaner sells in its paid tier, done the safe way: nothing from third-party driver
+databases, and every install through Windows' or the app's own mechanism.
+
+- [ ] **Driver updates through Windows Update**: ask Windows Update (Windows Update Agent API,
+      `Type='Driver'`) which driver updates exist for this PC, show them next to the installed
+      version and date, and install the chosen ones through Windows Update itself (Microsoft-signed,
+      matched to the hardware), with a System Restore point first. For graphics, detect the
+      vendor's own tool (NVIDIA app, AMD Software: Adrenalin, Intel Driver & Support Assistant) and
+      open it rather than installing a graphics driver another way. Never a third-party driver
+      database.
+- [ ] **App updates through winget**: an *Updates* column and filter in Apps (`winget upgrade`),
+      update one app or all of them, each through its own installer. If winget (App Installer) is
+      missing, say so and link to it in the Microsoft Store.
+- [ ] **Low disk space alerts**: a notification when a drive's free space drops below a limit you
+      choose, from the same per-user scheduled task as the scheduled cleanup (no background
+      process), linking straight to the drive in Bytopsy.
+- [ ] **Bytopsy updates itself** (opt-in; asked on first start, default *Off*):
+      - `https://bytopsy.com/update.json` names the latest version, its download (the GitHub
+        release zip), SHA-256 and release notes. The release workflow writes and publishes it, and
+        signs it with a key kept in a GitHub secret (ECDSA P-256; the app holds the public key and
+        checks it with `bcrypt.dll`), so a hijacked website alone can't push a download.
+      - Fallback when bytopsy.com can't be reached: the GitHub releases API.
+      - Download, check the SHA-256 and, once releases are signed, that the new exe has the same
+        publisher as the running one; then rename the running exe to `.old`, unpack, restart, and
+        delete the `.old` file on the next start. Portable copies keep `Bytopsy-data`.
+      - Installed by winget, Scoop or Chocolatey: show the package manager's update command instead
+        of updating behind its back.
+      - The README's privacy statement gets its one exception: these two addresses, only when
+        update checks are on.
+
+Later, maybe:
+
+- [ ] Recover deleted files (NTFS file records, before they are overwritten): a project of its own.
+- [ ] Wipe free space on hard disks only (`cipher /w`); on SSDs overwriting doesn't reliably erase
+      and only adds wear, so they would never be offered it.
+
+Not planned: a "performance optimizer" that puts apps to sleep (little measurable gain, and it
+breaks notifications and sync), and a registry cleaner (see the README).
