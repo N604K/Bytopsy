@@ -10,5 +10,5 @@ $packageArgs = @{
     checksumType64 = 'sha256'
 }
 Install-ChocolateyZipPackage @packageArgs
-# Chocolatey creates the shims winncdu and winncdu-cli; winncdu.exe.gui (shipped next to this
-# script) makes the winncdu shim return at once instead of waiting for the window to close.
+# Chocolatey creates the shims bytopsy and bytopsy-cli; bytopsy.exe.gui (shipped next to this
+# script) makes the bytopsy shim return at once instead of waiting for the window to close.

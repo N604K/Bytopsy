@@ -236,7 +236,7 @@ void Compact(sqlite3* db) {
 }
 
 const char kKeepTemplate[] =
-    "# Sites WinNCDU keeps you signed in to when it deletes browser cookies (Cleanup \xE2\x86\x92 Browser cookies).\r\n"
+    "# Sites Bytopsy keeps you signed in to when it deletes browser cookies (Cleanup \xE2\x86\x92 Browser cookies).\r\n"
     "# One site per line. A site covers its subdomains: google.com keeps mail.google.com too.\r\n"
     "# Signing in often takes more than one site: YouTube needs youtube.com and google.com, a Microsoft\r\n"
     "# account live.com, microsoft.com and microsoftonline.com.\r\n"
@@ -247,7 +247,7 @@ const char kKeepTemplate[] =
 
 std::wstring KeepSignedInFile() {
     wchar_t over[MAX_PATH];
-    DWORD n = GetEnvironmentVariableW(L"WINNCDU_KEEP_SIGNED_IN", over, MAX_PATH);  // tests
+    DWORD n = GetEnvironmentVariableW(L"BYTOPSY_KEEP_SIGNED_IN", over, MAX_PATH);  // tests
     if (n && n < MAX_PATH) return over;
     std::wstring dir = util::DataDir();
     return dir.empty() ? L"" : dir + L"\\keep-signed-in.txt";
@@ -341,7 +341,7 @@ std::vector<BrowserDb> InspectProfile(const std::wstring& dir, BrowserData kind,
         DbKind k = KindOf(file);
         Db db;
         if (!OpenSnapshot(file, db) || !SchemaOk(db.h, k)) {
-            if (err) *err = TrF(L"{0}: not a browser database this version of WinNCDU knows ({1})", file, LastError(db.h));
+            if (err) *err = TrF(L"{0}: not a browser database this version of Bytopsy knows ({1})", file, LastError(db.h));
             continue;
         }
         BrowserDb b;
@@ -460,7 +460,7 @@ bool CleanBrowserDb(const std::wstring& file, BrowserData kind, const std::vecto
     }
     if (!SchemaOk(db.h, k)) {
         r.busy = Busy(sqlite3_errcode(db.h));
-        err = r.busy ? Tr(L"the browser has it open") : Tr(L"not the database WinNCDU expected; left alone");
+        err = r.busy ? Tr(L"the browser has it open") : Tr(L"not the database Bytopsy expected; left alone");
         return false;
     }
     rc = sqlite3_exec(db.h, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr);
@@ -471,10 +471,10 @@ bool CleanBrowserDb(const std::wstring& file, BrowserData kind, const std::vecto
     }
     bool ok = true;
     if (cookies) {
-        sqlite3_create_function(db.h, "winncdu_keep", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, const_cast<std::vector<std::wstring>*>(&keep),
+        sqlite3_create_function(db.h, "bytopsy_keep", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC, const_cast<std::vector<std::wstring>*>(&keep),
                                 KeepFn, nullptr, nullptr);
-        ok = Exec(db.h, k == DbKind::ChromiumCookies ? "DELETE FROM cookies WHERE NOT winncdu_keep(host_key)"
-                                                       : "DELETE FROM moz_cookies WHERE NOT winncdu_keep(host)",
+        ok = Exec(db.h, k == DbKind::ChromiumCookies ? "DELETE FROM cookies WHERE NOT bytopsy_keep(host_key)"
+                                                       : "DELETE FROM moz_cookies WHERE NOT bytopsy_keep(host)",
                   err);
         if (ok) r.rows = static_cast<uint64_t>(sqlite3_changes64(db.h));
     } else {

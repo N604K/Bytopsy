@@ -6,8 +6,8 @@ Fills the winget, Scoop and Chocolatey manifest templates in packaging\ for one 
 Replaces __VERSION__, __URL__ and __SHA256__ in the templates and writes the results to
 packaging\out (not committed):
 
-  out\winget\manifests\n\N604K\WinNCDU\<version>\   three files for a PR to microsoft/winget-pkgs
-  out\scoop\winncdu.json                            for a Scoop bucket
+  out\winget\manifests\n\N604K\Bytopsy\<version>\   three files for a PR to microsoft/winget-pkgs
+  out\scoop\bytopsy.json                            for a Scoop bucket
   out\chocolatey\                                   run "choco pack" there, then "choco push"
 
 The SHA-256 comes from -Sha256, from -ZipPath (a local copy of the release zip), or else from the
@@ -16,7 +16,7 @@ release's .sha256 file on GitHub (the only case that goes online). See docs\RELE
 .EXAMPLE
 packaging\update-manifests.ps1 -Version 1.0.0
 .EXAMPLE
-packaging\update-manifests.ps1 -Version 1.0.0 -ZipPath dist\winncdu-1.0.0-x64.zip
+packaging\update-manifests.ps1 -Version 1.0.0 -ZipPath dist\bytopsy-1.0.0-x64.zip
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Version,
@@ -28,10 +28,10 @@ $ErrorActionPreference = 'Stop'
 # Absolute, so .NET file calls don't depend on the process's current folder.
 $OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
 
-$repo = 'https://github.com/N604K/WinNCDU'
+$repo = 'https://github.com/N604K/Bytopsy'
 $Version = $Version.TrimStart('v')
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 1.2.3, not '$Version'" }
-$zipName = "winncdu-$Version-x64.zip"
+$zipName = "bytopsy-$Version-x64.zip"
 $url = "$repo/releases/download/v$Version/$zipName"
 
 if (-not $Sha256) {
@@ -66,11 +66,11 @@ function Fill([string]$from, [string]$to) {
 }
 
 if (Test-Path -LiteralPath $OutDir) { Remove-Item -Recurse -Force -LiteralPath $OutDir }
-$winget = Join-Path $OutDir "winget\manifests\n\N604K\WinNCDU\$Version"
+$winget = Join-Path $OutDir "winget\manifests\n\N604K\Bytopsy\$Version"
 foreach ($f in Get-ChildItem (Join-Path $PSScriptRoot 'winget') -Filter *.yaml) {
     Fill $f.FullName (Join-Path $winget $f.Name)
 }
-Fill (Join-Path $PSScriptRoot 'scoop\winncdu.json') (Join-Path $OutDir 'scoop\winncdu.json')
+Fill (Join-Path $PSScriptRoot 'scoop\bytopsy.json') (Join-Path $OutDir 'scoop\bytopsy.json')
 $choco = Join-Path $PSScriptRoot 'chocolatey'
 foreach ($f in Get-ChildItem $choco -Recurse -File) {
     Fill $f.FullName (Join-Path (Join-Path $OutDir 'chocolatey') $f.FullName.Substring($choco.Length + 1))

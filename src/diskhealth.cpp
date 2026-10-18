@@ -232,7 +232,7 @@ TrimStatus QueryTrim() {
 }
 
 std::wstring LocalDataDir() {
-    return util::DataDir();  // %LOCALAPPDATA%\WinNCDU, or WinNCDU-data next to a portable exe
+    return util::DataDir();  // %LOCALAPPDATA%\Bytopsy, or Bytopsy-data next to a portable exe
 }
 
 std::string ReadSmallFile(const std::wstring& path) {
@@ -598,7 +598,7 @@ std::wstring TrendText(const UsageTrend& t, const std::wstring& what, uint64_t t
 
 std::wstring FreeSpaceLogPath() {
     wchar_t over[MAX_PATH];
-    DWORD n = GetEnvironmentVariableW(L"WINNCDU_FREESPACE_LOG", over, MAX_PATH);  // tests
+    DWORD n = GetEnvironmentVariableW(L"BYTOPSY_FREESPACE_LOG", over, MAX_PATH);  // tests
     if (n && n < MAX_PATH) return over;
     std::wstring dir = LocalDataDir();
     return dir.empty() ? L"" : dir + L"\\freespace.log";

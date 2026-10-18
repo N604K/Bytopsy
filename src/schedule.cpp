@@ -280,7 +280,7 @@ std::wstring DescribeTaskResult(int64_t code) {
         case 0x00041306: return Tr(L"stopped before it finished");       // SCHED_S_TASK_TERMINATED
         case 0x800710E0: return Tr(L"didn't start (on battery, or not signed in)");
         case 0xC000013A: return Tr(L"stopped before it finished");
-        case 0x80070002: return Tr(L"failed: winncdu-cli.exe was not found");
+        case 0x80070002: return Tr(L"failed: bytopsy-cli.exe was not found");
     }
     wchar_t b[16];
     swprintf(b, 16, L"%08X", static_cast<uint32_t>(code));
@@ -406,7 +406,7 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
     {
         Com<IRegistrationInfo> ri;
         if (SUCCEEDED(def->get_RegistrationInfo(&ri))) {
-            ri->put_Author(Bstr(L"WinNCDU"));
+            ri->put_Author(Bstr(L"Bytopsy"));
             ri->put_Description(Bstr(description));
         }
     }
@@ -590,8 +590,8 @@ bool TaskRemove(const std::wstring& folderPath, const std::wstring& name, std::w
 
 std::wstring ScheduleFolder() {
     wchar_t over[MAX_PATH];
-    DWORD n = GetEnvironmentVariableW(L"WINNCDU_TASK_FOLDER", over, MAX_PATH);
-    if (n && n < MAX_PATH && _wcsnicmp(over, L"\\WinNCDU-test", 13) == 0) return over;
+    DWORD n = GetEnvironmentVariableW(L"BYTOPSY_TASK_FOLDER", over, MAX_PATH);
+    if (n && n < MAX_PATH && _wcsnicmp(over, L"\\Bytopsy-test", 13) == 0) return over;
     return kScheduleFolder;
 }
 

@@ -26,7 +26,7 @@ std::wstring FormatDuration(double seconds);
 std::wstring FormatPercent(double pct);  // fixed width 6: " 45.2%"
 
 // The decimal and digit-group separators used by FormatSize*, FormatCount, FormatDuration and
-// FormatDecimal: "." and "," unless set (winncdu.exe sets the Windows regional format; the
+// FormatDecimal: "." and "," unless set (bytopsy.exe sets the Windows regional format; the
 // terminal app and files keep the defaults). Not while an InvariantNumbers lives on the thread.
 void SetNumberFormat(const std::wstring& decimal, const std::wstring& group);
 std::wstring FormatDecimal(double v, int digits);  // "1.5" / "1,5"
@@ -64,14 +64,20 @@ int64_t FileTimeToUnix(int64_t filetime);
 // Starts a native thread with a large stack (deep recursion over trees is fine).
 HANDLE StartThread(std::function<void()> fn, size_t stackSize = 16u << 20);
 
-// The folder for everything WinNCDU writes (settings, history, journal, protect.txt,
-// cleaners.ini, winapp2.ini): %LOCALAPPDATA%\WinNCDU, or in portable mode, when a file named
-// "winncdu.portable" is next to the exe, the "WinNCDU-data" folder next to the exe. Decided once
+// The folder for everything Bytopsy writes (settings, history, journal, protect.txt,
+// cleaners.ini, winapp2.ini): %LOCALAPPDATA%\Bytopsy, or in portable mode, when a file named
+// "bytopsy.portable" is next to the exe, the "Bytopsy-data" folder next to the exe. Decided once
 // per run; not created here. Empty if it can't be determined.
 std::wstring DataDir();
 bool PortableMode();
 // The rule itself, for a given exe folder and %LOCALAPPDATA% (tests).
 std::wstring DataDirFor(const std::wstring& exeDir, const std::wstring& localAppData);
-extern const wchar_t* const kPortableMarker;  // "winncdu.portable"
+extern const wchar_t* const kPortableMarker;  // "bytopsy.portable" (the former "winncdu.portable" counts too)
+// The app was called WinNCDU before: the data folder it used then (%LOCALAPPDATA%\WinNCDU or
+// WinNCDU-data), or "" for a folder with another name.
+std::wstring LegacyDataDir(const std::wstring& dataDir);
+// Moves the former data folder to dataDir when only the former one exists. Returns the folder to
+// use: dataDir, or the former one if it couldn't be moved (in use) so that nothing goes missing.
+std::wstring MigrateDataDir(const std::wstring& dataDir);
 
 }  // namespace util

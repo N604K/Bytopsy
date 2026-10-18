@@ -507,10 +507,10 @@ void BuiltinRules(std::vector<Rule>& v) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// User rules: protect.txt in util::DataDir() (%LOCALAPPDATA%\WinNCDU, or next to the exe)
+// User rules: protect.txt in util::DataDir() (%LOCALAPPDATA%\Bytopsy, or next to the exe)
 
 const char kTemplate[] =
-    "# WinNCDU protected locations\r\n"
+    "# Bytopsy protected locations\r\n"
     "#\r\n"
     "# One rule per line:   <level>  <path or name>  [; reason]\r\n"
     "#   level:  block      never delete\r\n"

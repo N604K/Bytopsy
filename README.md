@@ -1,14 +1,17 @@
-# WinNCDU
+# Bytopsy
 
-A fast, modern disk usage analyzer for Windows, inspired by [ncdu](https://dev.yorhel.nl/ncdu).
-Native C++20 with Direct2D and no runtime dependencies: two self-contained `.exe` files.
+A byte autopsy for your Windows PC: a fast disk usage analyzer that finds out what really uses the
+space, cleans it up safely, and looks after the rest: apps, startup, games, AI models, WSL and Docker
+disks, and the drives' health. It started out inspired by [ncdu](https://dev.yorhel.nl/ncdu) (and
+was called WinNCDU until October 2026). Native C++20 with Direct2D and no runtime dependencies: two
+self-contained `.exe` files.
 
-- **`winncdu.exe`**: the windowed app, with a folder browser, treemap, cleanup, scan history and a dark/light theme.
-- **`winncdu-cli.exe`**: the ncdu-style terminal app, for consoles, SSH sessions and scripting.
+- **`bytopsy.exe`**: the windowed app, with a folder browser, treemap, cleanup, scan history and a dark/light theme.
+- **`bytopsy-cli.exe`**: the ncdu-style terminal app, for consoles, SSH sessions and scripting.
 
 Both share the same scanner, so results, exports and imports are interchangeable.
 
-## The windowed app (`winncdu.exe`)
+## The windowed app (`bytopsy.exe`)
 
 Start it, pick a drive (or drop a folder onto the window) and see what takes up the space.
 
@@ -34,7 +37,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   else in it is close to that photo. Rows show a small preview, resolution, size and date. Nothing
   is selected for you; "Select all but suggested" does that on request, and deleting goes through
   the usual protection check, Recycle Bin and journal. Images are only read; hashes are kept in
-  `%LOCALAPPDATA%\WinNCDU\photohash.cache` per path, size and modified time, so a second search
+  `%LOCALAPPDATA%\Bytopsy\photohash.cache` per path, size and modified time, so a second search
   only decodes new or changed files. Cloud placeholders are skipped (reading one would download
   it). Mirrored or cropped copies are not matched.
 - **Developer junk** (like npkill, for every ecosystem): build output and dependency folders your
@@ -90,7 +93,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   played (from Steam itself, or from when the game's program was last opened). Sort by size or by
   least recently played. Uninstalling goes through the game's own launcher or uninstaller
   (`steam://uninstall/<id>`, `uplay://uninstall/<id>`, the registered uninstaller, Settings for
-  Xbox games), so the launcher's library and shared runtimes stay right; WinNCDU deletes nothing
+  Xbox games), so the launcher's library and shared runtimes stay right; Bytopsy deletes nothing
   itself there. Steam runtimes (redistributables, Proton) are not listed. *Leftovers* are what
   launchers leave behind: game folders, workshop items and shader caches of games that are no
   longer installed; they go to the Recycle Bin.
@@ -102,7 +105,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   from the drive's own SMART / health log, which Windows hands out without them. TRIM comes from
   `fsutil behavior query DisableDeleteNotify`. *Used space over time* shows each drive's trend
   ("used space grew 12 GiB in the last 30 days", with a sparkline and when it would be full at
-  that rate) from free-space measurements WinNCDU notes in `%LOCALAPPDATA%\WinNCDU\freespace.log`
+  that rate) from free-space measurements Bytopsy notes in `%LOCALAPPDATA%\Bytopsy\freespace.log`
   when the view opens or a scan finishes, or else from earlier scans of the drive. The disks are
   only queried (handles opened without read or write access); nothing is ever sent to them.
 - **Startup** (works without a scan): what starts with Windows: the Run keys (this user, all users,
@@ -125,7 +128,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   32-bit, HKCU), as Settings lists them: system components, updates and patches are left out. Name,
   publisher, version, install date and size (the registered size, or the measured install folder);
   sort by any of them and filter by typing in the search box. *Uninstall* runs the app's own
-  registered uninstaller, which asks what to do; WinNCDU waits for it (and for the app's entry to
+  registered uninstaller, which asks what to do; Bytopsy waits for it (and for the app's entry to
   disappear, since many uninstallers hand over to a copy of themselves), then lists the folders the
   app left behind for review: its former install folder (the only one preselected, and only with
   nothing protected inside) and folders named after it, or after its publisher and it, in Program
@@ -159,7 +162,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   As administrator, system-level cleanups (Windows temp, update downloads) offer a System Restore
   point first; if it can't be made, nothing is cleaned.
   Categories are rules in [res/cleaners.ini](res/cleaners.ini) (built into the exe), so adding an
-  app needs no code. Your own rules go in `%LOCALAPPDATA%\WinNCDU\cleaners.ini` (menu → *Cleanup
+  app needs no code. Your own rules go in `%LOCALAPPDATA%\Bytopsy\cleaners.ini` (menu → *Cleanup
   rules…* creates it with examples): a section with a built-in's id replaces it, `enabled = false`
   turns it off, `kind = cookies` / `kind = history` cleans the browser profile folders it names,
   and `kind = command` with `command = ...` runs a tool's clean command instead of
@@ -167,19 +170,19 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   protection rules mark Important or Blocked is left out of every category, as is any folder with
   a repository, key, password database or virtual disk somewhere inside.
 - **Scheduled cleanup** (Cleanup → *Schedule…*): runs the checked categories daily, weekly, monthly
-  or at logon through a Task Scheduler task of your own (`\WinNCDU\Scheduled cleanup`, no
-  administrator rights needed). The task runs `winncdu-cli --clean <ids> --yes --quiet` as you, only
+  or at logon through a Task Scheduler task of your own (`\Bytopsy\Scheduled cleanup`, no
+  administrator rights needed). The task runs `bytopsy-cli --clean <ids> --yes --quiet` as you, only
   while you're signed in and never on battery; a missed run starts as soon as possible. Categories
   that need administrator rights and imported winapp2.ini rules are left out (the task never runs
   elevated). Each run deletes what its categories list at that moment, through the same code as the
   *Clean up* button: protected items are never touched, but items unchecked under *Review* are not
   remembered. Cleanup shows the schedule, its next run and how the last one went; *Remove schedule*
   deletes only that task. Runs are journaled and every run and schedule change adds a line to
-  `%LOCALAPPDATA%\WinNCDU\cleanup.log`.
+  `%LOCALAPPDATA%\Bytopsy\cleanup.log`.
 - **Browser cookies and history** (Cleanup, opt-in, never preselected): Chrome, Edge, Brave, Vivaldi,
   Chromium, Opera and Firefox, per profile. Cookies are deleted inside the browser's own cookie
   database (with SQLite), except those of the sites on your **keep me signed in to** list
-  (`%LOCALAPPDATA%\WinNCDU\keep-signed-in.txt`, opened from the card or menu → *Keep me signed in
+  (`%LOCALAPPDATA%\Bytopsy\keep-signed-in.txt`, opened from the card or menu → *Keep me signed in
   to…*; a site covers its subdomains). The list starts with your most visited sites, so nothing
   you use daily signs you out unless you remove it. History: Chromium's `History` file goes with the
   files made from it (Visited Links, Top Sites, Shortcuts, Network Action Predictor); Firefox's
@@ -196,21 +199,21 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   settings, backups or saved games are skipped, no registry is touched, rules that would sweep a
   whole profile, drive or Windows folder are dropped, and what the built-in categories already
   clean is left to them. Every item still goes through the protection rules, with a stricter
-  threshold (anything WinNCDU would warn about is left out), and folders holding browser-profile
+  threshold (anything Bytopsy would warn about is left out), and folders holding browser-profile
   files (cookies, logins, history) are never taken whole.
-- **Who is using this file?** When something can't be deleted because it is open, WinNCDU asks the
+- **Who is using this file?** When something can't be deleted because it is open, Bytopsy asks the
   Windows Restart Manager which app holds it and says so ("Close Google Chrome, then try again"),
   in the delete dialog, after Cleanup and in the journal.
-- **Protected locations**: WinNCDU knows which folders must not be deleted and which hold data you
+- **Protected locations**: Bytopsy knows which folders must not be deleted and which hold data you
   can't get back, and checks every delete (and every Cleanup item) against them. See below.
 - **Recently deleted**: every delete and cleanup is written to a journal
-  (`%LOCALAPPDATA%\WinNCDU\journal.log`: time, path, size, Recycle Bin or permanent). The
+  (`%LOCALAPPDATA%\Bytopsy\journal.log`: time, path, size, Recycle Bin or permanent). The
   *Recently deleted* view lists it, and anything still in the Recycle Bin comes back with *Restore*
   (it is never restored over something new at the same path).
 - **History & compare**: every completed scan stores its folder sizes in
-  `%LOCALAPPDATA%\WinNCDU\history`. Scan the same drive later and compare to see which folders grew
+  `%LOCALAPPDATA%\Bytopsy\history`. Scan the same drive later and compare to see which folders grew
   or shrank.
-- **Explorer integration** (menu `⋯` → *Add "Analyze with WinNCDU" to Explorer*): right-click any
+- **Explorer integration** (menu `⋯` → *Add "Analyze with Bytopsy" to Explorer*): right-click any
   folder, drive or folder background to analyze it. It is per-user and needs no admin rights; the
   same menu item removes it again.
 - **Run as administrator** to read protected folders; disk usage vs. apparent size; JSON/CSV export
@@ -233,7 +236,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   single image (the list shows the same items), and the keyboard moves through lists and dialogs
   only, not between a view's buttons (a screen reader's own navigation reaches those). The right-click
   and `⋯` menus are standard Windows menus.
-- **Languages**: every text of the windowed app comes from a translation table, so WinNCDU can be
+- **Languages**: every text of the windowed app comes from a translation table, so Bytopsy can be
   translated without touching the code ([how](#translations)). It starts in Windows' display
   language when a translation for it exists, otherwise in English; `⋯` > *Language* overrides that
   (remembered in `settings.ini`). Numbers and dates follow your Windows region settings in every
@@ -241,7 +244,7 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   lengthens and accents every text, for checking that layouts cope with longer languages. The
   terminal app, the journal, logs and command lines stay English.
 
-Command line: `winncdu.exe [folder]` scans a folder, `winncdu.exe -f scan.json` opens a saved scan.
+Command line: `bytopsy.exe [folder]` scans a folder, `bytopsy.exe -f scan.json` opens a saved scan.
 The window opens as it was started (e.g. minimized from a shortcut set to "Run: Minimized").
 
 | Key | Action |
@@ -260,14 +263,14 @@ The window opens as it was started (e.g. minimized from a shortcut set to "Run: 
 
 ## No registry cleaner
 
-WinNCDU will not clean the registry, and that is on purpose. The whole registry is a few hundred
+Bytopsy will not clean the registry, and that is on purpose. The whole registry is a few hundred
 megabytes at most, so removing "unused" keys frees nothing you could measure; Windows doesn't get
 faster from it either, because it only reads the keys it needs. What registry cleaners do achieve is
 breakage: a key that looks orphaned is often read by an installer, a repair, a file association or
 a COM component later, and when it's gone, that thing fails. Microsoft doesn't support registry
 cleaners for this reason.
 
-So the only registry changes WinNCDU makes are the ones you ask for, each undoable from the app: the
+So the only registry changes Bytopsy makes are the ones you ask for, each undoable from the app: the
 Explorer menu entry, and turning a startup entry off or on (the `StartupApproved` value Task Manager
 writes, or a service's start type through `sc`). Settings such as hibernation or the System Restore
 limit are changed by Windows' own tools (`powercfg`, `vssadmin`), never by editing keys. Uninstalling
@@ -303,7 +306,7 @@ Windsurf/Codeium, VS Code (Copilot Chat, Cline, Roo, Continue), GitHub Copilot a
 Gemini CLI, Continue, Kiro, Trae, Zed, Aider, Augment, Qwen Code, opencode, Amp, Crush, Goose, Jan,
 Msty, LM Studio, Perplexity and SpecStory.
 
-**Your own rules** live in `%LOCALAPPDATA%\WinNCDU\protect.txt` (created with examples on first use;
+**Your own rules** live in `%LOCALAPPDATA%\Bytopsy\protect.txt` (created with examples on first use;
 menu `⋯` → *Protected locations…* → *Edit protect.txt*):
 
 ```text
@@ -319,17 +322,17 @@ specific path wins, so `allow` can switch off a built-in rule for a subfolder.
 
 Permanent deletes work through file handles: everything inside the chosen folder is opened
 relative to its parent, and links (junctions, symlinks) are removed as links, never followed. As
-administrator, WinNCDU also refuses a path that no longer leads where it did (a folder above it was
+administrator, Bytopsy also refuses a path that no longer leads where it did (a folder above it was
 swapped for a link), so nobody can redirect an elevated delete into, say, `C:\Windows`.
 
-`winncdu-cli --protected` lists the protected locations found on this PC.
+`bytopsy-cli --protected` lists the protected locations found on this PC.
 Missing an app or a false alarm? Rules are plain data in `BuiltinRules()`; open an issue with the
 *False alarm* or *Missing protected folder* template, or see [CONTRIBUTING.md](CONTRIBUTING.md) to
 add a rule (or a cleaner) yourself.
 
 ## Privacy
 
-WinNCDU has no telemetry and makes no network connections. It contains no networking code (no
+Bytopsy has no telemetry and makes no network connections. It contains no networking code (no
 WinHTTP, WinINet, sockets or URL downloads), links no networking library, has no update check, and
 sends nothing anywhere. What it learns about your disk stays on your PC.
 
@@ -340,8 +343,8 @@ cookie and history databases of browsers for those two Cleanup categories (cooki
 site, never read out). From Windows it reads the Uninstall, Run and service registry keys, scheduled
 tasks, and disk health from WMI and the drives' own health logs.
 
-**What it writes.** Everything lives in `%LOCALAPPDATA%\WinNCDU` (in
-[portable mode](#portable-mode), in `WinNCDU-data` next to the exe):
+**What it writes.** Everything lives in `%LOCALAPPDATA%\Bytopsy` (in
+[portable mode](#portable-mode), in `Bytopsy-data` next to the exe):
 
 | File | Contents |
 | --- | --- |
@@ -352,31 +355,31 @@ tasks, and disk health from WMI and the drives' own health logs.
 | `cleaners.ini` | Your cleanup rules (created when you open *Cleanup rules…*) |
 | `winapp2.ini` | A copy of the winapp2.ini you imported |
 | `keep-signed-in.txt` | The sites whose cookies Cleanup keeps (created when cookies are first measured) |
-| `cleanup.log` | One line per `winncdu-cli --clean --yes` run and per schedule change |
+| `cleanup.log` | One line per `bytopsy-cli --clean --yes` run and per schedule change |
 | `freespace.log` | Each drive's free space, at most every 6 hours, for *Disk health* trends |
 | `photohash.cache` | Image hashes by path, size and time, so *Similar photos* is fast the second time |
 | `lang\` | Translations you add yourself (only read; see [Translations](#translations)) |
 
 Outside that folder: exports where you save them; the Explorer menu entry, if you add it (three keys
 under `HKCU\Software\Classes`, removed by the same menu item); the scheduled cleanup task
-(`\WinNCDU\Scheduled cleanup` in Task Scheduler), if you create one; when you turn a startup entry
+(`\Bytopsy\Scheduled cleanup` in Task Scheduler), if you create one; when you turn a startup entry
 off or on, the same `StartupApproved` value Task Manager writes, the task's enabled switch, or the
 service's start type; and short-lived files in `%TEMP%` (a
 `diskpart` script while compacting virtual disks, the output of tools run as administrator), deleted
-when the tool finishes. Deleting the `WinNCDU` folder removes everything else.
+when the tool finishes. Deleting the `Bytopsy` folder removes everything else.
 
 **Programs it starts**, only from the views and actions that need them: Windows' own tools (DISM,
 `pnputil`, `vssadmin`, `powercfg`, `compact`, `wevtutil`, `diskpart`, PowerShell for System Restore
 storage and the Delivery Optimization cache, Disk Cleanup, `fsutil` for TRIM, `reg`, `schtasks` and
 `sc` for startup entries that need administrator rights), `wsl.exe`, `docker`, the clean command of a
 `kind = command` cleanup rule (such as `conan remove`), an app's own uninstaller, and a game
-launcher's uninstall link (`steam://uninstall/...`). WinNCDU itself goes online for none of these,
+launcher's uninstall link (`steam://uninstall/...`). Bytopsy itself goes online for none of these,
 but the programs behave as they always do: Steam or Docker Desktop, for example, may connect on
 their own.
 
 ## Translations
 
-WinNCDU is in English only so far, and translations are welcome. Each language is one UTF-8 text
+Bytopsy is in English only so far, and translations are welcome. Each language is one UTF-8 text
 file, `res/lang/<code>.lang` (e.g. `de.lang`, `pt-BR.lang`), with one line per text:
 
 ```text
@@ -395,18 +398,18 @@ lines fall back to English. Start a file from
 python -I tools/extract_strings.py --new de --name Deutsch
 ```
 
-**Try it without building**: put the file in a `lang` folder next to `winncdu.exe` (or in
-`%LOCALAPPDATA%\WinNCDU\lang`, `WinNCDU-data\lang` in portable mode), restart WinNCDU and pick it
+**Try it without building**: put the file in a `lang` folder next to `bytopsy.exe` (or in
+`%LOCALAPPDATA%\Bytopsy\lang`, `Bytopsy-data\lang` in portable mode), restart Bytopsy and pick it
 under `⋯` > *Language*. Mistakes in the file (such as a `{1}` the English text doesn't have) are
-shown as a message. Setting `WINNCDU_LANG=de` (or `WINNCDU_LANG=pseudo`) starts in that language
-whatever the menu says. Files in `res/lang` are built into `winncdu.exe`; a file in a `lang` folder
+shown as a message. Setting `BYTOPSY_LANG=de` (or `BYTOPSY_LANG=pseudo`) starts in that language
+whatever the menu says. Files in `res/lang` are built into `bytopsy.exe`; a file in a `lang` folder
 replaces the built-in one of the same code. Paths, registry keys, command lines, cleanup rule ids,
-the journal and logs are never translated. See [CONTRIBUTING.md](CONTRIBUTING.md#translate-winncdu)
+the journal and logs are never translated. See [CONTRIBUTING.md](CONTRIBUTING.md#translate-bytopsy)
 for keeping a translation up to date.
 
 ## Install
 
-Download `winncdu-<version>-x64.zip` from the GitHub releases, check it against the `.sha256` file
+Download `bytopsy-<version>-x64.zip` from the GitHub releases, check it against the `.sha256` file
 next to it (see [docs/RELEASING.md](docs/RELEASING.md#checking-a-download)), and unpack it anywhere.
 There is no installer; both programs run from any folder.
 
@@ -415,18 +418,26 @@ published in those repositories.
 
 ### Portable mode
 
-Put an empty file named `winncdu.portable` next to `winncdu.exe` / `winncdu-cli.exe`:
+Put an empty file named `bytopsy.portable` next to `bytopsy.exe` / `bytopsy-cli.exe`:
 
 ```bat
-type nul > winncdu.portable
+type nul > bytopsy.portable
 ```
 
 Both programs then keep everything they write (settings, history, journal, `protect.txt`,
-`cleaners.ini`, the imported `winapp2.ini`) in a `WinNCDU-data` folder next to the exe instead of
-`%LOCALAPPDATA%\WinNCDU`, so the folder can live on a USB stick. The folder must be writable.
-Nothing is moved over: copy the files from `%LOCALAPPDATA%\WinNCDU` into `WinNCDU-data` to keep them.
+`cleaners.ini`, the imported `winapp2.ini`) in a `Bytopsy-data` folder next to the exe instead of
+`%LOCALAPPDATA%\Bytopsy`, so the folder can live on a USB stick. The folder must be writable.
+Nothing is moved over: copy the files from `%LOCALAPPDATA%\Bytopsy` into `Bytopsy-data` to keep them.
 The Explorer menu entry, if you add it, still goes to the registry (it points at that exe).
-The Scoop manifest installs in portable mode and keeps `WinNCDU-data` across updates.
+The Scoop manifest installs in portable mode and keeps `Bytopsy-data` across updates.
+
+### Coming from WinNCDU
+
+Bytopsy was called WinNCDU before. On its first start it renames the old data folder
+(`%LOCALAPPDATA%\WinNCDU`, or `WinNCDU-data` next to a portable exe, where `winncdu.portable` still
+counts as the marker), so settings, history, the journal and your rules carry over. An "Analyze with
+WinNCDU" Explorer entry is replaced by "Analyze with Bytopsy". A cleanup scheduled under the old name
+(`\WinNCDU\Scheduled cleanup`) is not moved: remove it in Task Scheduler and schedule again.
 
 ## Build
 
@@ -436,8 +447,8 @@ Requires Visual Studio 2022 (or Build Tools) with the *Desktop development with 
 build.cmd
 ```
 
-The script finds Visual Studio, configures CMake with Ninja, and produces `build\winncdu.exe` and
-`build\winncdu-cli.exe`. Both link the C runtime statically, so you can copy them anywhere.
+The script finds Visual Studio, configures CMake with Ninja, and produces `build\bytopsy.exe` and
+`build\bytopsy-cli.exe`. Both link the C runtime statically, so you can copy them anywhere.
 
 Manual build:
 
@@ -449,11 +460,11 @@ ctest --test-dir build    :: runs the protect, journal, cleanup, delete, devjunk
 
 GitHub Actions builds and runs the self-tests on every push and pull request
 ([.github/workflows/build.yml](.github/workflows/build.yml)). A tag `v*` publishes a release with
-`winncdu-<version>-x64.zip` (both programs and this README) and its SHA-256 in a `.sha256` file; see
+`bytopsy-<version>-x64.zip` (both programs and this README) and its SHA-256 in a `.sha256` file; see
 [docs/RELEASING.md](docs/RELEASING.md). Releases are not code-signed yet, so SmartScreen may warn
 before the first start; the workflow is prepared for SignPath signing (same document).
 
-## The terminal app (`winncdu-cli.exe`)
+## The terminal app (`bytopsy-cli.exe`)
 
 The keyboard-driven ncdu experience: the same browser, find, largest files, file types, duplicates,
 delete and export features in a true-color terminal UI.
@@ -461,7 +472,7 @@ delete and export features in a true-color terminal UI.
 ### Usage
 
 ```text
-winncdu-cli [options] [path]
+bytopsy-cli [options] [path]
 
   path                  Folder or drive to scan (no path: choose from a list)
   -o FILE               Scan, write an ncdu-compatible JSON export to FILE and exit
@@ -478,7 +489,7 @@ winncdu-cli [options] [path]
   --no-mouse            Disable mouse input
   --no-delete           Safe mode: deleting is disabled
   --protected           List the protected locations found on this PC and exit
-  --journal             List what WinNCDU deleted recently (and what is still in the
+  --journal             List what Bytopsy deleted recently (and what is still in the
                         Recycle Bin) and exit
   --ai-models           List local AI models (Hugging Face, Ollama, LM Studio) with
                         what each frees, and exit
@@ -509,10 +520,10 @@ winncdu-cli [options] [path]
 Examples:
 
 ```bat
-winncdu-cli                     :: pick a drive
-winncdu-cli C:\Users\me         :: scan a folder
-winncdu-cli D:\ --exclude node_modules --exclude "*.tmp"
-winncdu-cli -o scan.json C:\    :: scan now, browse later with: winncdu-cli -f scan.json
+bytopsy-cli                     :: pick a drive
+bytopsy-cli C:\Users\me         :: scan a folder
+bytopsy-cli D:\ --exclude node_modules --exclude "*.tmp"
+bytopsy-cli -o scan.json C:\    :: scan now, browse later with: bytopsy-cli -f scan.json
 ```
 
 Run it as Administrator to read folders that are otherwise "access denied" (marked `!`).
@@ -611,7 +622,7 @@ tests/apps_test.cpp     apps: which entries are listed, which folders count as l
 tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
 tests/uia_test.cpp      accessibility tree: element identity across frames, reading order, names from text, patterns (ctest)
 tests/i18n_test.cpp     translations: .lang parsing, placeholders, plural rules, pseudo-language, res/lang files (ctest)
-res/winncdu.ico       app icon
+res/bytopsy.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)
 res/lang/             translations (<code>.lang, built in) and template.lang, the generated list of texts
 tools/extract_strings.py  collects the texts into template.lang, checks and updates translations
@@ -627,7 +638,7 @@ packaging/update-manifests.ps1  fills them in for a release
 
 ## License
 
-MIT: see [LICENSE](LICENSE). You may use, change and share WinNCDU, also commercially, as long as
+MIT: see [LICENSE](LICENSE). You may use, change and share Bytopsy, also commercially, as long as
 the copyright notice and the license text come along.
 
 ## Third-party code

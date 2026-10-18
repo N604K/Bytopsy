@@ -1,4 +1,4 @@
-// Self-check of the startup manager: winncdu-startup-test.exe
+// Self-check of the startup manager: bytopsy-startup-test.exe
 // StartupApproved values, command line -> program, service image paths, impact estimates, boot log
 // events, journal notes and the admin commands a change would run. Nothing is ever turned off or
 // on: the only real-system part lists what is found, read-only.
@@ -41,9 +41,9 @@ int main() {
     SetConsoleOutputCP(CP_UTF8);
     // Never read (or write) the real journal.
     wchar_t tmp[MAX_PATH];
-    std::wstring journal = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"winncdu-startup-test-journal.log";
+    std::wstring journal = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"bytopsy-startup-test-journal.log";
     DeleteFileW(journal.c_str());
-    SetEnvironmentVariableW(L"WINNCDU_JOURNAL", journal.c_str());
+    SetEnvironmentVariableW(L"BYTOPSY_JOURNAL", journal.c_str());
 
     // ---- StartupApproved values
     {
@@ -108,7 +108,7 @@ int main() {
         std::wstring w(win, GetEnvironmentVariableW(L"SystemRoot", win, MAX_PATH));
         Check(!w.empty() && ExpandEnv(L"%SystemRoot%\\x.exe") == w + L"\\x.exe", L"%SystemRoot% is expanded");
         Check(ExpandEnv(L"C:\\no vars") == L"C:\\no vars", L"no variables: unchanged");
-        Check(ExpandEnv(L"%WINNCDU_NOT_A_VAR_42%\\a") == L"%WINNCDU_NOT_A_VAR_42%\\a", L"unknown variable: left as is");
+        Check(ExpandEnv(L"%BYTOPSY_NOT_A_VAR_42%\\a") == L"%BYTOPSY_NOT_A_VAR_42%\\a", L"unknown variable: left as is");
         Prog(ExpandEnv(L"\"%ProgramFiles%\\App\\a.exe\" -s"), ExpandEnv(L"%ProgramFiles%\\App\\a.exe"));
     }
 

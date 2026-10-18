@@ -1,11 +1,9 @@
 ﻿#include <winver.h>
 #include <winuser.h>
 
-1 24 "winncdu-gui.manifest"
-1 ICON "../../res/winncdu.ico"
-201 RCDATA "../../res/cleaners.ini"
-// Translations (res/lang/<code>.lang), listed by CMakeLists.txt in the build folder.
-#include "lang_resources.rc"
+1 24 "bytopsy.manifest"
+1 ICON "../res/bytopsy.ico"
+201 RCDATA "../res/cleaners.ini"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,0
@@ -20,11 +18,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "FileDescription", "WinNCDU - disk usage analyzer"
+            VALUE "FileDescription", "Bytopsy - disk usage analyzer"
             VALUE "FileVersion", "1.0.0"
-            VALUE "InternalName", "winncdu"
-            VALUE "OriginalFilename", "winncdu.exe"
-            VALUE "ProductName", "WinNCDU"
+            VALUE "InternalName", "bytopsy-cli"
+            VALUE "OriginalFilename", "bytopsy-cli.exe"
+            VALUE "ProductName", "Bytopsy"
             VALUE "ProductVersion", "1.0.0"
         END
     END

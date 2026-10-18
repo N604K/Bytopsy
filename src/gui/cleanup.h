@@ -108,7 +108,7 @@ struct Winapp2Stats {
     size_t regOnly = 0;   // skipped: registry only
 };
 std::vector<CleanCategory> ParseWinapp2(const std::wstring& text, Winapp2Stats& stats);
-// winapp2.ini in util::DataDir() (%LOCALAPPDATA%\WinNCDU), where an import is kept.
+// winapp2.ini in util::DataDir() (%LOCALAPPDATA%\Bytopsy), where an import is kept.
 std::wstring Winapp2File();
 // Checks and copies a winapp2.ini into place.
 bool ImportWinapp2(const std::wstring& source, Winapp2Stats& stats, std::wstring& err);
@@ -119,7 +119,7 @@ void MeasureCategory(CleanCategory& c, std::atomic<bool>& cancel);
 // were measured and no longer qualify (too new now) are left alone.
 CleanResult CleanCategoryNow(const CleanCategory& c, std::atomic<bool>& cancel,
                              const std::function<void(const std::wstring&)>& onItem);
-// CleanCategoryNow plus its journal entry: what both the windowed app and `winncdu-cli --clean`
+// CleanCategoryNow plus its journal entry: what both the windowed app and `bytopsy-cli --clean`
 // run for each category. `via` is added to the journal note (e.g. "command line").
 CleanResult CleanAndJournal(const CleanCategory& c, std::atomic<bool>& cancel, const std::function<void(const std::wstring&)>& onItem,
                             const std::wstring& via = L"");

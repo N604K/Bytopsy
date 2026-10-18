@@ -32,6 +32,8 @@ void SetMenuTheme(bool dark);
 std::wstring ExePath();
 bool IsShellIntegrated();
 bool SetShellIntegration(bool enable, std::wstring& err);
+// An Explorer entry added while the app was called WinNCDU is replaced by the Bytopsy one.
+void MigrateShellIntegration();
 bool RelaunchElevated(const std::wstring& args);
 
 std::wstring PickFolder(HWND owner, const std::wstring& title);

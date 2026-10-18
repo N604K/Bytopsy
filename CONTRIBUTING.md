@@ -1,6 +1,6 @@
-# Contributing to WinNCDU
+# Contributing to Bytopsy
 
-WinNCDU deletes files, so the bar is: every action is explained, reversible where possible, and
+Bytopsy deletes files, so the bar is: every action is explained, reversible where possible, and
 never touches data people can't get back without saying so. Most useful contributions need no deep
 knowledge of the code: a protected location that is missing, a false alarm, or a cleaner for an app.
 
@@ -17,36 +17,36 @@ build.cmd
 ctest --test-dir build --output-on-failure
 ```
 
-`build.cmd` configures CMake with Ninja (Release) and builds `build\winncdu.exe`,
-`build\winncdu-cli.exe` and the self-tests. `ctest` needs CMake on PATH (a *Developer Command
+`build.cmd` configures CMake with Ninja (Release) and builds `build\bytopsy.exe`,
+`build\bytopsy-cli.exe` and the self-tests. `ctest` needs CMake on PATH (a *Developer Command
 Prompt* has it); otherwise run the test programs directly, each prints `ok`/`FAIL` per check and
 exits non-zero on a failure:
 
 ```bat
-for %t in (build\winncdu-*-test.exe) do %t
+for %t in (build\bytopsy-*-test.exe) do %t
 ```
 
 | Test | Checks |
 | --- | --- |
-| `winncdu-protect-test` | protection levels of well-known paths, shield badges, `protect.txt` rules |
-| `winncdu-cleanup-test` | `res/cleaners.ini` parses, Cleanup deletes exactly the reviewed list, winapp2.ini import |
-| `winncdu-journal-test` | journal format, a real Recycle Bin move and restore, where the data folder is (portable mode) |
-| `winncdu-delete-test` | permanent delete: links, read-only and locked files, long paths |
-| `winncdu-devjunk-test` | developer junk: project markers, grouping, app folders left alone |
-| `winncdu-aimodels-test` | Hugging Face / Ollama / LM Studio: revisions, shared layers, nothing outside model folders |
-| `winncdu-vdisks-test` | WSL/Docker: ext4 usage read from a VHDX, tool output parsing |
-| `winncdu-wintools-test` | DISM report parsing, which driver packages count as old |
-| `winncdu-games-test` | Steam libraries and leftovers, Epic manifests, launcher uninstallers |
-| `winncdu-analysis-test` | search syntax, largest files, file types, duplicates on real files |
-| `winncdu-export-test` | ncdu JSON round trips with odd names and flags, Linux ncdu input, CSV |
-| `winncdu-importfuzz-test` | 5000 mutated exports (fixed seed) fed to the ncdu JSON importer |
-| `winncdu-diskhealth-test` | WMI / fsutil / NVMe health log parsing, verdicts, used-space trends |
-| `winncdu-schedule-test` | `--clean` ids and arguments, schedule triggers, `--clean --yes` on a fixture |
-| `winncdu-startup-test` | `StartupApproved` values, command lines, impact; changes nothing |
-| `winncdu-apps-test` | which Uninstall entries are listed, which folders count as leftovers |
-| `winncdu-phash-test` | similar photos: hashes of re-encoded and rotated images, grouping, cache |
-| `winncdu-uia-test` | accessibility tree: element identity across frames, reading order, names, patterns |
-| `winncdu-i18n-test` | translations: `.lang` parsing, placeholders, plural rules, pseudo-language, every `res/lang` file |
+| `bytopsy-protect-test` | protection levels of well-known paths, shield badges, `protect.txt` rules |
+| `bytopsy-cleanup-test` | `res/cleaners.ini` parses, Cleanup deletes exactly the reviewed list, winapp2.ini import |
+| `bytopsy-journal-test` | journal format, a real Recycle Bin move and restore, where the data folder is (portable mode) |
+| `bytopsy-delete-test` | permanent delete: links, read-only and locked files, long paths |
+| `bytopsy-devjunk-test` | developer junk: project markers, grouping, app folders left alone |
+| `bytopsy-aimodels-test` | Hugging Face / Ollama / LM Studio: revisions, shared layers, nothing outside model folders |
+| `bytopsy-vdisks-test` | WSL/Docker: ext4 usage read from a VHDX, tool output parsing |
+| `bytopsy-wintools-test` | DISM report parsing, which driver packages count as old |
+| `bytopsy-games-test` | Steam libraries and leftovers, Epic manifests, launcher uninstallers |
+| `bytopsy-analysis-test` | search syntax, largest files, file types, duplicates on real files |
+| `bytopsy-export-test` | ncdu JSON round trips with odd names and flags, Linux ncdu input, CSV |
+| `bytopsy-importfuzz-test` | 5000 mutated exports (fixed seed) fed to the ncdu JSON importer |
+| `bytopsy-diskhealth-test` | WMI / fsutil / NVMe health log parsing, verdicts, used-space trends |
+| `bytopsy-schedule-test` | `--clean` ids and arguments, schedule triggers, `--clean --yes` on a fixture |
+| `bytopsy-startup-test` | `StartupApproved` values, command lines, impact; changes nothing |
+| `bytopsy-apps-test` | which Uninstall entries are listed, which folders count as leftovers |
+| `bytopsy-phash-test` | similar photos: hashes of re-encoded and rotated images, grouping, cache |
+| `bytopsy-uia-test` | accessibility tree: element identity across frames, reading order, names, patterns |
+| `bytopsy-i18n-test` | translations: `.lang` parsing, placeholders, plural rules, pseudo-language, every `res/lang` file |
 
 The devjunk test builds its fixture next to the test program, so it finds nothing (and fails) when
 the build folder sits inside a dot folder such as `.claude\worktrees\...`.
@@ -101,14 +101,14 @@ Expect(roaming + L"\\NewApp", Protect::Important);
 Expect(roaming + L"\\NewApp\\Cache", Protect::None);
 ```
 
-Build, run `build\winncdu-protect-test.exe`, and `build\winncdu-cli.exe --protected` to see which
+Build, run `build\bytopsy-protect-test.exe`, and `build\bytopsy-cli.exe --protected` to see which
 protected locations exist on your PC. If you add an AI assistant, add it to the list in the README.
 
 To fix a **false alarm**, narrow the rule rather than remove it: an `Allow` for the cache folder, a
 `Self` instead of a `Tree`, or `fileOnly` for a name rule. Add an `Expect(..., Protect::None)` for the
 path that was wrongly flagged.
 
-You can try any rule without building: a line in `%LOCALAPPDATA%\WinNCDU\protect.txt` (format in the
+You can try any rule without building: a line in `%LOCALAPPDATA%\Bytopsy\protect.txt` (format in the
 README) works the same way.
 
 ## Add a cleaner
@@ -136,14 +136,14 @@ path = %LOCALAPPDATA%\NewApp\Logs | files=*.log | age=7d
   every category. If your cache sits inside a protected folder (a browser profile, an editor's
   settings folder), add a `b.Allow(...)` for it in `src/protect.cpp` as well.
 
-Try it first without building: put the section in `%LOCALAPPDATA%\WinNCDU\cleaners.ini` (menu →
+Try it first without building: put the section in `%LOCALAPPDATA%\Bytopsy\cleaners.ini` (menu →
 *Cleanup rules…*), click *Measure*, then *Review* to see exactly what it would delete.
 
 `tests/cleanup_test.cpp` checks that the shipped file parses without errors and lists every category
 id in order; add your id to that list (and update the count, and any index-based checks after it).
 Add the app to the Cleanup paragraph of the README.
 
-## Translate WinNCDU
+## Translate Bytopsy
 
 A translation is one UTF-8 file, `res/lang/<code>.lang`, named after the language code Windows uses
 (`de`, `fr`, `pt-BR`, `zh-Hans`, ...). The format is explained at the top of
@@ -156,12 +156,12 @@ with the source lines that use it.
    sizes, names and counts) and move them where your sentence needs them. Leave a line empty to
    show the English text. Keep it short where the English is short (buttons, column headers,
    chips): about a third longer still fits, much more gets cut off with "…".
-3. Try it without building: copy the file into a `lang` folder next to `winncdu.exe`, restart
-   WinNCDU and choose it under `⋯` > *Language* (or start it with `WINNCDU_LANG=de`). Mistakes in
+3. Try it without building: copy the file into a `lang` folder next to `bytopsy.exe`, restart
+   Bytopsy and choose it under `⋯` > *Language* (or start it with `BYTOPSY_LANG=de`). Mistakes in
    the file show up as a message at the bottom of the window.
 4. Check it: `python -I tools/extract_strings.py` reports placeholders that don't match the English,
-   and `build\winncdu-i18n-test.exe` loads every file in `res/lang`.
-5. Send a pull request with the file. It is built into `winncdu.exe` from then on, and appears in
+   and `build\bytopsy-i18n-test.exe` loads every file in `res/lang`.
+5. Send a pull request with the file. It is built into `bytopsy.exe` from then on, and appears in
    the *Language* menu; Windows' display language picks it automatically.
 
 When the code changes, `python -I tools/extract_strings.py --update res/lang/de.lang` brings your
@@ -199,9 +199,9 @@ Releases are built, tested and (once set up) signed by GitHub Actions; see
 
 ## Issues
 
-- **False alarm**: WinNCDU warns about, or blocks, something that is safe to delete.
+- **False alarm**: Bytopsy warns about, or blocks, something that is safe to delete.
 - **Missing protected folder**: something that holds data you can't get back is not protected.
 - **Bug report**: anything else that doesn't work.
 
-`winncdu-cli --protected` and the shield's tooltip show which rule matched; please include that.
+`bytopsy-cli --protected` and the shield's tooltip show which rule matched; please include that.
 Please don't paste file lists or paths that reveal more about you than the issue needs.

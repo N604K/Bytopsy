@@ -1,6 +1,6 @@
-// Self-check of the Windows tools: winncdu-wintools-test.exe
+// Self-check of the Windows tools: bytopsy-wintools-test.exe
 // Parses sample DISM output and decides which driver packages are old. Never changes anything:
-// set WINNCDU_DRIVERS=1 to also list this PC's driver packages (read-only).
+// set BYTOPSY_DRIVERS=1 to also list this PC's driver packages (read-only).
 #include <windows.h>
 
 #include <cstdio>
@@ -80,7 +80,7 @@ int main() {
     Check(!p[6].old, L"the same .inf name from another provider is another driver");
     Check(!p[7].old && p[8].old, L"same date: the higher version wins");
 
-    if (GetEnvironmentVariableW(L"WINNCDU_DRIVERS", nullptr, 0)) {
+    if (GetEnvironmentVariableW(L"BYTOPSY_DRIVERS", nullptr, 0)) {
         auto all = ListDriverPackages();
         uint64_t old = 0;
         size_t n = 0;

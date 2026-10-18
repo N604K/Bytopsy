@@ -1,6 +1,6 @@
-# WinNCDU roadmap
+# Bytopsy roadmap
 
-Where WinNCDU can go from "disk usage analyzer with cleanup" to a PC maintenance tool people trust.
+Where Bytopsy can go from "disk usage analyzer with cleanup" to a PC maintenance tool people trust.
 The guiding rule: **every action is explained, reversible where possible, and never touches data
 the user can't get back without saying so.** That is the gap CCleaner-style tools leave open.
 
@@ -10,9 +10,9 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       folders and Git repositories need an extra confirmation (`src/protect.cpp`).
 - [x] **Shield badges**: protected rows and treemap tiles are marked after a scan, so people see the
       warning before they select anything (`ProtectBadges` in `src/protect.cpp`).
-- [x] **Deletion journal**: every delete and cleanup goes to `%LOCALAPPDATA%\WinNCDU\journal.log`
+- [x] **Deletion journal**: every delete and cleanup goes to `%LOCALAPPDATA%\Bytopsy\journal.log`
       (time, path, size, Recycle Bin or permanent); "Recently deleted" view with *Restore* for items
-      still in the Recycle Bin, and `winncdu-cli --journal` (`src/journal.cpp`).
+      still in the Recycle Bin, and `bytopsy-cli --journal` (`src/journal.cpp`).
 - [x] **Dry run / preview**: Cleanup's *Review* lists exactly what each category deletes, with
       per-item opt-out; cleaning deletes only that list.
 - [x] **Who is locking this?** The Restart Manager (`RmGetList`) names the app holding files ("Close
@@ -46,23 +46,23 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
 - [x] **AI cleanup that is actually safe**: Hugging Face cache by unused revision
       (`huggingface-cli scan-cache` logic), Ollama models with sizes and last use, LM Studio model
       list; delete single models, never the history.
-      *Done: AI models view (no scan needed) and `winncdu-cli --ai-models`; deletes stay inside the
+      *Done: AI models view (no scan needed) and `bytopsy-cli --ai-models`; deletes stay inside the
       model folders, and the journal keeps the download command.*
 - [x] **WSL and Docker**: show `ext4.vhdx` / `docker_data.vhdx` sizes vs. used space and offer
       compaction (`wsl --shutdown` + `Optimize-VHD` / `diskpart compact vdisk`), `docker system prune`.
-      *Done: WSL & Docker view and `winncdu-cli --wsl`. Compaction uses diskpart (works on Home, no
+      *Done: WSL & Docker view and `bytopsy-cli --wsl`. Compaction uses diskpart (works on Home, no
       Hyper-V module needed). Instead of `docker system prune`, only the build cache and unused images
       are pruned: stopped containers and volumes can hold data, so they are shown, not offered.*
 - [x] Windows: component store cleanup (`DISM /StartComponentCleanup`), old drivers in DriverStore
       (`pnputil`), shadow storage limit (`vssadmin`), hibernation toggle, Compact OS, delivery
       optimization via its API, event logs, `$Windows.~BT`.
-      *Done: Windows view and `winncdu-cli --windows`; Delivery Optimization and `$Windows.~BT` /
+      *Done: Windows view and `bytopsy-cli --windows`; Delivery Optimization and `$Windows.~BT` /
       `~WS` are Cleanup categories. The Security event log is never cleared.*
 - [x] **Games**: every installed game across Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net
       and Xbox, with its size and when it was last played, uninstalled through its own launcher
       (so saves in the cloud and the launcher's library stay right); plus the launchers' shader
       and download caches.
-      *Done: Games view and `winncdu-cli --games`, with leftovers of uninstalled games; a "Game
+      *Done: Games view and `bytopsy-cli --games`, with leftovers of uninstalled games; a "Game
       launcher caches" Cleanup category. Only Steam could be checked on a real PC so far.*
 - [x] Chat apps: Teams, Discord, Slack caches; WhatsApp/Telegram media folders (show, don't preselect).
       *Done: "Chat app caches" (new and classic Teams, Discord, Slack incl. Store versions; web caches
@@ -84,17 +84,17 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       estimate from program size and type, else "unknown"; Microsoft's services never changed.*
 - [x] **Uninstaller with leftovers**: list apps from the Uninstall registry keys, run their uninstaller,
       then offer leftover folders (checked against the protection rules).
-      *Done: Apps view and `winncdu-cli --apps` (`src/apps.cpp`, shared with Games). The app's own
-      uninstaller runs; WinNCDU waits for its entry to go, then offers its former install folder and
+      *Done: Apps view and `bytopsy-cli --apps` (`src/apps.cpp`, shared with Games). The app's own
+      uninstaller runs; Bytopsy waits for its entry to go, then offers its former install folder and
       folders named after it, never ones another installed app may use, never protected data, never
       the registry. MSIX/Store apps are not listed. No real uninstall has been run in testing.*
 - [x] **Disk health**: SMART/wear via `MSFT_PhysicalDisk` and `MSFT_StorageReliabilityCounter`, TRIM
       status, free-space trend from scan history.
-      *Done: Disk health view and `winncdu-cli --disks` (`src/diskhealth.cpp`), read-only. NVMe
+      *Done: Disk health view and `bytopsy-cli --disks` (`src/diskhealth.cpp`), read-only. NVMe
       drives' own health log fills in wear and temperature without administrator rights; the trend
       uses free space noted on each view load and scan (`freespace.log`), else earlier scans of the
       drive. The administrator path of the reliability counters has not been run on a real PC yet.*
-- [x] **Scheduled cleanup**: `winncdu-cli --clean temp,browser,dev --yes` plus a Task Scheduler entry
+- [x] **Scheduled cleanup**: `bytopsy-cli --clean temp,browser,dev --yes` plus a Task Scheduler entry
       from the GUI. *Done: `--clean` (dry run unless `--yes`, `all-safe`, exit codes, cleanup.log)
       runs the GUI's own clean-and-journal path; Cleanup → Schedule… creates a per-user task
       (`src/schedule.cpp`, ITaskService): not elevated, not on battery, missed runs caught up.*
@@ -104,7 +104,7 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       photos), groups built around a suggested keeper, previews, hash cache; `--similar-photos`.*
 - [x] **No registry cleaner.** Say so in the README: it frees nothing measurable and breaks things.
       This stance is a selling point.
-      *Done: "No registry cleaner" section in the README, listing the only registry writes WinNCDU
+      *Done: "No registry cleaner" section in the README, listing the only registry writes Bytopsy
       makes (the Explorer menu entry, startup entries), both on request and undoable.*
 
 ## 4. Open-source project health
@@ -122,8 +122,8 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       `packaging/signpath/artifact-configuration.xml`). Left: applying to SignPath Foundation and
       the SignPath project setup. Releases are unsigned until then.*
 - [x] Distribution: winget, Scoop and Chocolatey manifests; portable mode (settings next to the exe).
-      *Done: portable mode (a `winncdu.portable` file next to the exe puts all data in
-      `WinNCDU-data` beside it; one place decides, `util::DataDir()`). Manifest templates in
+      *Done: portable mode (a `bytopsy.portable` file next to the exe puts all data in
+      `Bytopsy-data` beside it; one place decides, `util::DataDir()`). Manifest templates in
       `packaging/`, filled per release by `packaging/update-manifests.ps1` (docs/RELEASING.md).
       Left: choosing the license for the manifests and submitting them to winget-pkgs, a Scoop
       bucket and Chocolatey.*
@@ -157,7 +157,7 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       names; the journal, logs, paths, command lines and the terminal app stay English. Languages
       are UTF-8 `res/lang/<code>.lang` files built into the exe, or loaded from a `lang` folder next
       to it; Windows' display language picks one, `⋯` > *Language* overrides it. Numbers and dates
-      follow the Windows region settings. A pseudo-language (menu, or `WINNCDU_LANG=pseudo`)
+      follow the Windows region settings. A pseudo-language (menu, or `BYTOPSY_LANG=pseudo`)
       lengthens every text by about 40%; with it, Home, Folders, Largest files, File types,
       Duplicates, Similar photos, Old files, Developer junk, Cleanup, AI models, WSL, Windows, Games,
       Disk health, Startup, Apps, History, Recently deleted and the delete dialog were checked in

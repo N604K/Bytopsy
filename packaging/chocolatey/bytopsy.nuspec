@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Template: packaging/update-manifests.ps1 fills in the version, download URL and SHA-256 (see docs/RELEASING.md). -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>bytopsy</id>
+    <version>__VERSION__</version>
+    <title>Bytopsy</title>
+    <authors>N604K</authors>
+    <owners>N604K</owners>
+    <projectUrl>https://github.com/N604K/Bytopsy</projectUrl>
+    <projectSourceUrl>https://github.com/N604K/Bytopsy</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/N604K/Bytopsy/issues</bugTrackerUrl>
+    <docsUrl>https://github.com/N604K/Bytopsy#readme</docsUrl>
+    <releaseNotes>https://github.com/N604K/Bytopsy/releases/tag/v__VERSION__</releaseNotes>
+    <license type="expression">MIT</license>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <tags>disk-usage disk-space ncdu treemap cleanup duplicates portable</tags>
+    <summary>Fast disk usage analyzer and cleaner for Windows, inspired by ncdu.</summary>
+    <description>Bytopsy shows what takes up space on a drive: a folder tree sorted by size, a treemap, largest files, file types, duplicates, developer junk, AI models, WSL and Docker disks, and games. Cleanup removes caches and temporary files after a review of exactly what is deleted, checks every item against protected locations, and keeps a journal with Restore from the Recycle Bin.
+
+Two programs: `bytopsy` (windowed) and `bytopsy-cli` (ncdu-style terminal app). Settings and data stay in %LOCALAPPDATA%\Bytopsy.</description>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

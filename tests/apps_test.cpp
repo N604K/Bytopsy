@@ -1,4 +1,4 @@
-// Self-check of the apps list and leftover finder: winncdu-apps-test.exe
+// Self-check of the apps list and leftover finder: bytopsy-apps-test.exe
 // Uses synthetic Uninstall entries and fixture folders in %TEMP% to check which entries are listed
 // and which folders count as an uninstalled app's leftovers (and which never do). Never starts an
 // uninstaller, never deletes anything outside its own fixture, never writes the registry.
@@ -67,7 +67,7 @@ static const AppLeftover* Find(const std::vector<AppLeftover>& v, const std::wst
 int main() {
     SetConsoleOutputCP(CP_UTF8);
     wchar_t tmp[MAX_PATH];
-    std::wstring base = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"winncdu-apps-test";
+    std::wstring base = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"bytopsy-apps-test";
     while (!base.empty() && base.back() == L'\\') base.pop_back();
     RemoveTree(base);
 
@@ -148,7 +148,7 @@ int main() {
     Check(IsUriCommand(L"steam://uninstall/730") && IsUriCommand(L"ms-settings:appsfeatures") && !IsUriCommand(L"C:\\x\\u.exe") &&
               !IsUriCommand(L"\"C:\\x\\u.exe\""),
           L"command: URIs");
-    UninstallEntry ghost = App(L"WinNCDU test ghost", L"", L"", L"WinNCDU-test-{6B1D3C55-0000-4000-8000-000000000000}");
+    UninstallEntry ghost = App(L"Bytopsy test ghost", L"", L"", L"Bytopsy-test-{6B1D3C55-0000-4000-8000-000000000000}");
     Check(!UninstallEntryExists(ghost), L"an entry that isn't in the registry is not installed");
     Check(!UninstallKeyPath(ghost).empty(), L"key path");
 
@@ -251,7 +251,7 @@ int main() {
     printf("     this PC: %zu Uninstall entries, %zu listed apps\n", entries.size(), listed);
     LeftoverRoots pc = LeftoverRoots::ThisPC();
     Check(!pc.roots.empty() && pc.never.size() > pc.roots.size(), L"this PC: leftover roots and never-offered folders");
-    if (GetEnvironmentVariableW(L"WINNCDU_APPS", nullptr, 0))
+    if (GetEnvironmentVariableW(L"BYTOPSY_APPS", nullptr, 0))
         for (auto& a : FindInstalledApps()) {
             std::string line = util::WideToUtf8(L"     " + util::FormatSizeShort(a.bytes) + (a.measured ? L"*  " : L"   ") + a.e.displayName + L"  " +
                                                 a.folder + L"\n");
@@ -259,7 +259,7 @@ int main() {
         }
 
     // Read-only dry run on this PC: what each installed app would leave to review if it were gone.
-    if (GetEnvironmentVariableW(L"WINNCDU_APPS_LEFTOVERS", nullptr, 0)) {
+    if (GetEnvironmentVariableW(L"BYTOPSY_APPS_LEFTOVERS", nullptr, 0)) {
         RefreshProtection();
         for (auto& a : entries) {
             if (!IsListedApp(a)) continue;

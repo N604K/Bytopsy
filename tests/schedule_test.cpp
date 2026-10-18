@@ -1,8 +1,8 @@
-// Self-check of the scheduled cleanup: winncdu-schedule-test.exe
-// The pure helpers (ids, --clean arguments, triggers, results), then winncdu-cli --clean against a
-// fixture in %TEMP% (WINNCDU_CLEANERS replaces every rule, so nothing else can be cleaned).
-// Task Scheduler itself is only touched with WINNCDU_TEST_TASKSCHED=1, and then only a harmless
-// test task under \WinNCDU-test that is removed again.
+// Self-check of the scheduled cleanup: bytopsy-schedule-test.exe
+// The pure helpers (ids, --clean arguments, triggers, results), then bytopsy-cli --clean against a
+// fixture in %TEMP% (BYTOPSY_CLEANERS replaces every rule, so nothing else can be cleaned).
+// Task Scheduler itself is only touched with BYTOPSY_TEST_TASKSCHED=1, and then only a harmless
+// test task under \Bytopsy-test that is removed again.
 #include <windows.h>
 #include <objbase.h>
 
@@ -58,12 +58,12 @@ static void Age(const std::wstring& path, int hours) {
     CloseHandle(h);
 }
 
-// Runs winncdu-cli.exe (next to this exe) with `args`; returns the exit code, stdout in `out`.
+// Runs bytopsy-cli.exe (next to this exe) with `args`; returns the exit code, stdout in `out`.
 static int RunCli(const std::wstring& args, std::string& out) {
     wchar_t self[MAX_PATH];
     GetModuleFileNameW(nullptr, self, MAX_PATH);
     std::wstring exe(self);
-    exe = exe.substr(0, exe.rfind(L'\\')) + L"\\winncdu-cli.exe";
+    exe = exe.substr(0, exe.rfind(L'\\')) + L"\\bytopsy-cli.exe";
     SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
     HANDLE rd = nullptr, wr = nullptr;
     CreatePipe(&rd, &wr, &sa, 0);
@@ -173,12 +173,12 @@ int main() {
               L"ids with spaces are quoted and read back: " + q);
         Check(!ParseCleanArguments(L"/c rem", ids) && !ParseCleanArguments(L"", ids), L"other arguments aren't a scheduled cleanup");
         Check(ParseCleanArguments(L"/c rem --clean temp,dev --yes --quiet", ids) && JoinIds(ids) == L"temp,dev", L"a wrapper's arguments before --clean are skipped");
-        Check(ScheduleFolder() == L"\\WinNCDU", L"the task folder");
-        SetEnvironmentVariableW(L"WINNCDU_TASK_FOLDER", L"\\Microsoft\\Windows");
-        Check(ScheduleFolder() == L"\\WinNCDU", L"the test override can't point anywhere else");
-        SetEnvironmentVariableW(L"WINNCDU_TASK_FOLDER", L"\\WinNCDU-test");
-        Check(ScheduleFolder() == L"\\WinNCDU-test", L"... only at a \\WinNCDU-test folder");
-        SetEnvironmentVariableW(L"WINNCDU_TASK_FOLDER", nullptr);
+        Check(ScheduleFolder() == L"\\Bytopsy", L"the task folder");
+        SetEnvironmentVariableW(L"BYTOPSY_TASK_FOLDER", L"\\Microsoft\\Windows");
+        Check(ScheduleFolder() == L"\\Bytopsy", L"the test override can't point anywhere else");
+        SetEnvironmentVariableW(L"BYTOPSY_TASK_FOLDER", L"\\Bytopsy-test");
+        Check(ScheduleFolder() == L"\\Bytopsy-test", L"... only at a \\Bytopsy-test folder");
+        SetEnvironmentVariableW(L"BYTOPSY_TASK_FOLDER", nullptr);
     }
 
     // ---- Trigger text and first start
@@ -238,14 +238,14 @@ int main() {
               L"last results in words");
     }
 
-    // ---- winncdu-cli --clean against a fixture
+    // ---- bytopsy-cli --clean against a fixture
     wchar_t b[MAX_PATH];
     std::wstring tmp(b, GetTempPathW(MAX_PATH, b));
-    std::wstring dir = tmp + L"winncdu-schedule-test-" + std::to_wstring(GetCurrentProcessId());
+    std::wstring dir = tmp + L"bytopsy-schedule-test-" + std::to_wstring(GetCurrentProcessId());
     std::wstring data = dir + L"\\data";  // journal.log and cleanup.log
     CreateDirectoryW(dir.c_str(), nullptr);
     CreateDirectoryW(data.c_str(), nullptr);
-    SetEnvironmentVariableW(L"WINNCDU_JOURNAL", (data + L"\\journal.log").c_str());
+    SetEnvironmentVariableW(L"BYTOPSY_JOURNAL", (data + L"\\journal.log").c_str());
     std::wstring cache = dir + L"\\cache", admin = dir + L"\\admin", opt = dir + L"\\opt";
     for (auto& d : {cache, admin, opt, cache + L"\\old-folder", cache + L"\\repo", cache + L"\\repo\\.git"}) CreateDirectoryW(d.c_str(), nullptr);
     Put(cache + L"\\old.tmp", "old!");
@@ -260,7 +260,7 @@ int main() {
     PutW(dir + L"\\cleaners.ini", L"[fixture]\nname = Test fixture\nsafe = true\npath = " + cache + L" | age=24h\n"
                                   L"[fixadmin]\nname = Admin fixture\nadmin = true\nsafe = true\npath = " + admin + L"\n"
                                   L"[fixopt]\nname = Optional fixture\npath = " + opt + L"\n");
-    SetEnvironmentVariableW(L"WINNCDU_CLEANERS", (dir + L"\\cleaners.ini").c_str());
+    SetEnvironmentVariableW(L"BYTOPSY_CLEANERS", (dir + L"\\cleaners.ini").c_str());
     bool elevated = IsElevatedNow();
     {
         std::string out;
@@ -297,15 +297,15 @@ int main() {
         code = RunCli(L"--clean fixopt --yes", out);
         Check(code == 0 && !PathExists(opt + L"\\o.tmp") && out.find("Freed 8 B") != std::string::npos, L"opt-in category when named");
     }
-    SetEnvironmentVariableW(L"WINNCDU_CLEANERS", nullptr);
+    SetEnvironmentVariableW(L"BYTOPSY_CLEANERS", nullptr);
     RemoveTree(dir);
     Check(!PathExists(dir), L"fixture removed");
 
-    // ---- Task Scheduler (only when asked): a harmless task under \WinNCDU-test, removed again
+    // ---- Task Scheduler (only when asked): a harmless task under \Bytopsy-test, removed again
     wchar_t ts[8];
-    if (GetEnvironmentVariableW(L"WINNCDU_TEST_TASKSCHED", ts, 8) && ts[0] == L'1') {
+    if (GetEnvironmentVariableW(L"BYTOPSY_TEST_TASKSCHED", ts, 8) && ts[0] == L'1') {
         CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        const std::wstring folder = L"\\WinNCDU-test", name = L"Scheduled cleanup (test)";
+        const std::wstring folder = L"\\Bytopsy-test", name = L"Scheduled cleanup (test)";
         wchar_t sys[MAX_PATH];
         GetSystemDirectoryW(sys, MAX_PATH);
         std::wstring exe = std::wstring(sys) + L"\\cmd.exe";
@@ -315,28 +315,28 @@ int main() {
         w.hour = 4;
         w.minute = 30;
         std::wstring err;
-        Check(TaskSave(folder, name, w, exe, L"/c rem winncdu-test", L"WinNCDU self-test (harmless)", err), L"test task saved: " + err);
+        Check(TaskSave(folder, name, w, exe, L"/c rem bytopsy-test", L"Bytopsy self-test (harmless)", err), L"test task saved: " + err);
         TaskInfo info;
         Check(TaskQuery(folder, name, info, err) && info.exists && info.enabled && info.specKnown && info.spec.freq == ScheduleFreq::Weekly &&
                   info.spec.weekday == 3 && info.spec.hour == 4 && info.spec.minute == 30 && _wcsicmp(info.path.c_str(), exe.c_str()) == 0 &&
-                  info.arguments == L"/c rem winncdu-test" && info.nextRun > util::NowFileTime() && info.lastResult == 0x41303,
+                  info.arguments == L"/c rem bytopsy-test" && info.nextRun > util::NowFileTime() && info.lastResult == 0x41303,
               L"read back: weekly Wednesday 04:30, next " + util::FormatTime(info.nextRun) + L", " + DescribeTaskResult(info.lastResult) + L" " + err);
         ScheduleSpec m;
         m.freq = ScheduleFreq::Monthly;
         m.monthDay = 7;
         m.hour = 22;
-        Check(TaskSave(folder, name, m, exe, L"/c rem winncdu-test", L"WinNCDU self-test (harmless)", err) && TaskQuery(folder, name, info, err) &&
+        Check(TaskSave(folder, name, m, exe, L"/c rem bytopsy-test", L"Bytopsy self-test (harmless)", err) && TaskQuery(folder, name, info, err) &&
                   info.spec.freq == ScheduleFreq::Monthly && info.spec.monthDay == 7 && info.spec.hour == 22,
               L"updated in place to monthly");
         ScheduleSpec l;
         l.freq = ScheduleFreq::Logon;
-        Check(TaskSave(folder, name, l, exe, L"/c rem winncdu-test", L"WinNCDU self-test (harmless)", err) && TaskQuery(folder, name, info, err) &&
+        Check(TaskSave(folder, name, l, exe, L"/c rem bytopsy-test", L"Bytopsy self-test (harmless)", err) && TaskQuery(folder, name, info, err) &&
                   info.spec.freq == ScheduleFreq::Logon,
               L"at logon (this user's): " + err);
         ScheduleSpec d;
         d.freq = ScheduleFreq::Daily;
         d.hour = 5;
-        Check(TaskSave(folder, name, d, exe, L"/c rem winncdu-test", L"WinNCDU self-test (harmless)", err) && TaskQuery(folder, name, info, err) &&
+        Check(TaskSave(folder, name, d, exe, L"/c rem bytopsy-test", L"Bytopsy self-test (harmless)", err) && TaskQuery(folder, name, info, err) &&
                   info.spec.freq == ScheduleFreq::Daily && info.spec.hour == 5,
               L"daily: " + err);
         Check(TaskRemove(folder, name, err), L"test task removed: " + err);

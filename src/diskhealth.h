@@ -112,8 +112,8 @@ UsageTrend ComputeTrend(std::vector<UsagePoint> pts, int64_t now, uint64_t freeN
 // "Used space grew 12.4 GiB in the last 30 days" (`what`: "Used space", "Scanned size").
 std::wstring TrendText(const UsageTrend& t, const std::wstring& what, uint64_t total);
 
-// WinNCDU records each drive's free space when Disk health opens or a scan finishes:
-// %LOCALAPPDATA%\WinNCDU\freespace.log (WINNCDU_FREESPACE_LOG overrides it, for tests).
+// Bytopsy records each drive's free space when Disk health opens or a scan finishes:
+// %LOCALAPPDATA%\Bytopsy\freespace.log (BYTOPSY_FREESPACE_LOG overrides it, for tests).
 struct FreeSample {
     int64_t time = 0;  // FILETIME
     std::wstring drive;  // "C:"

@@ -14,16 +14,16 @@ body:
     attributes:
       label: Which app
       options:
-        - winncdu.exe (windowed)
-        - winncdu-cli.exe (terminal)
+        - bytopsy.exe (windowed)
+        - bytopsy-cli.exe (terminal)
         - both
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: WinNCDU version
-      description: Shown in About (F1) or by `winncdu-cli --version`.
+      label: Bytopsy version
+      description: Shown in About (F1) or by `bytopsy-cli --version`.
     validations:
       required: true
   - type: input
@@ -41,5 +41,5 @@ body:
     id: journal
     attributes:
       label: Journal lines
-      description: If a delete or cleanup went wrong, the matching lines of `%LOCALAPPDATA%\WinNCDU\journal.log` (or `winncdu-cli --journal`).
+      description: If a delete or cleanup went wrong, the matching lines of `%LOCALAPPDATA%\Bytopsy\journal.log` (or `bytopsy-cli --journal`).
       render: text

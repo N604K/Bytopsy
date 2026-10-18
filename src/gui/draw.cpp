@@ -347,7 +347,7 @@ void App::DrawTopBar() {
     gfx_.FillRound(RWH(lx + 17, ly + 17, 11, 11), 3.5f, Hex(CategoryRgb(CAT_IMAGE)));
     TextStyle logo = TS(17, DWRITE_FONT_WEIGHT_SEMI_BOLD);
     logo.font = FontKind::Display;
-    gfx_.Text(L"WinNCDU", R(lx + 40, 0, kSidebarW, kTopH), P_.text, logo);
+    gfx_.Text(L"Bytopsy", R(lx + 40, 0, kSidebarW, kTopH), P_.text, logo);
 
     // Search box (the native edit control lives inside it).
     float left = kSidebarW + 20;
@@ -2267,7 +2267,7 @@ void App::DrawDiskHealth(const RectF& area) {
     std::wstring overTime = Tr(L"USED SPACE OVER TIME");
     float otw = gfx_.Measure(overTime, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
     gfx_.Text(overTime, R(area.left + 26, y, area.right, y + 20), P_.textFaint, Small(10.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD));
-    gfx_.Text(Tr(L"WinNCDU notes each drive's free space when this view opens or a scan finishes"),
+    gfx_.Text(Tr(L"Bytopsy notes each drive's free space when this view opens or a scan finishes"),
               R(std::max(area.left + 200, area.left + 46 + otw), y, area.right - 26, y + 20), P_.textFaint,
               Small(11.5f, DWRITE_FONT_WEIGHT_NORMAL, Align::Right));
     y += 28;
@@ -2817,13 +2817,13 @@ void App::DrawDeleted(const RectF& area) {
         float w = ButtonWidth(t, IC_OPEN, 150);
         Button(RWH(area.right - 24 - w, top + 6, w, 34), IC_OPEN, t, CMD_OPEN_JOURNAL, 0);
         DrawViewHeader(R(area.left + 24, top, area.right - 50 - w, top + 46), Tr(L"Recently deleted"),
-                       Dots({Tr(L"Everything WinNCDU deleted or cleaned up, newest first"), Tr(L"restore what is still in the Recycle Bin")}), IC_UNDO);
+                       Dots({Tr(L"Everything Bytopsy deleted or cleaned up, newest first"), Tr(L"restore what is still in the Recycle Bin")}), IC_UNDO);
     }
     float y = top + 64;
     RectF body = R(area.left, y, area.right, area.bottom);
     if (deleted_.empty()) {
         DrawEmptyState(body, IC_UNDO, Tr(L"Nothing deleted yet"),
-                       Tr(L"Everything you delete or clean up with WinNCDU is listed here. Items still in the Recycle Bin can be restored with one click."));
+                       Tr(L"Everything you delete or clean up with Bytopsy is listed here. Items still in the Recycle Bin can be restored with one click."));
         return;
     }
     ListState& ls = lists_[static_cast<int>(View::Deleted)];

@@ -1,14 +1,14 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 # Template: packaging/update-manifests.ps1 fills in the version, download URL and SHA-256.
-PackageIdentifier: N604K.WinNCDU
+PackageIdentifier: N604K.Bytopsy
 PackageVersion: __VERSION__
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
-  - RelativeFilePath: winncdu.exe
-    PortableCommandAlias: winncdu
-  - RelativeFilePath: winncdu-cli.exe
-    PortableCommandAlias: winncdu-cli
+  - RelativeFilePath: bytopsy.exe
+    PortableCommandAlias: bytopsy
+  - RelativeFilePath: bytopsy-cli.exe
+    PortableCommandAlias: bytopsy-cli
 Installers:
   - Architecture: x64
     InstallerUrl: __URL__

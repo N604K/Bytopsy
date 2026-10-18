@@ -1,4 +1,4 @@
-// Small self-check for the protection rules: winncdu-protect-test.exe
+// Small self-check for the protection rules: bytopsy-protect-test.exe
 // Checks well-known paths against the rules. It creates nothing; your protect.txt is restored.
 #include <windows.h>
 

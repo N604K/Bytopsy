@@ -48,7 +48,7 @@ std::wstring ViewName(View v) {
         case View::Apps: return Tr(L"Apps");
         case View::CleanReview: return Tr(L"Review");
         case View::DiskHealth: return Tr(L"Disk health");
-        default: return L"WinNCDU";
+        default: return L"Bytopsy";
     }
 }
 

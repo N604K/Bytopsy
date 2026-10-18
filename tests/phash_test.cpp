@@ -1,4 +1,4 @@
-// Self-check of the similar-photo finder: winncdu-phash-test.exe
+// Self-check of the similar-photo finder: bytopsy-phash-test.exe
 // Hamming distance, the hash index (against brute force), resampling and EXIF orientation, then real
 // images written with WIC into %TEMP%: a picture, the same picture smaller and re-encoded as JPEG,
 // brightened, stored sideways with an EXIF orientation tag, mirrored, an unrelated picture and a
@@ -440,7 +440,7 @@ int wmain() {
     TestChain();
     wchar_t tmp[MAX_PATH];
     GetTempPathW(MAX_PATH, tmp);
-    std::wstring dir = std::wstring(tmp) + L"winncdu-phash-test-" + std::to_wstring(GetCurrentProcessId());
+    std::wstring dir = std::wstring(tmp) + L"bytopsy-phash-test-" + std::to_wstring(GetCurrentProcessId());
     DeleteTree(dir);
     CreateDirectoryW(dir.c_str(), nullptr);
     TestImages(dir);

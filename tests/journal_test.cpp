@@ -1,6 +1,6 @@
-// Self-check of the deletion journal and Recycle Bin restore: winncdu-journal-test.exe
+// Self-check of the deletion journal and Recycle Bin restore: bytopsy-journal-test.exe
 // Uses a journal file in %TEMP% (not yours) and a temporary folder that it recycles and restores.
-// Also checks where WinNCDU keeps its files (portable mode).
+// Also checks where Bytopsy keeps its files (portable mode).
 #include <windows.h>
 #include <objbase.h>
 
@@ -54,20 +54,42 @@ int main() {
     std::wstring tmp = TempDir();
     std::wstring pid = std::to_wstring(GetCurrentProcessId());
 
-    // ---- Where WinNCDU keeps its files: %LOCALAPPDATA%\WinNCDU, or next to the exe in portable mode
+    // ---- Where Bytopsy keeps its files: %LOCALAPPDATA%\Bytopsy, or next to the exe in portable mode
     {
-        std::wstring exeDir = tmp + L"\\winncdu-portable-test-" + pid;
+        std::wstring exeDir = tmp + L"\\bytopsy-portable-test-" + pid;
         CreateDirectoryW(exeDir.c_str(), nullptr);
-        Check(util::DataDirFor(exeDir, L"C:\\Users\\me\\AppData\\Local") == L"C:\\Users\\me\\AppData\\Local\\WinNCDU",
-              L"data folder: %LOCALAPPDATA%\\WinNCDU by default");
+        Check(util::DataDirFor(exeDir, L"C:\\Users\\me\\AppData\\Local") == L"C:\\Users\\me\\AppData\\Local\\Bytopsy",
+              L"data folder: %LOCALAPPDATA%\\Bytopsy by default");
         std::wstring marker = exeDir + L"\\" + util::kPortableMarker;
         CreateDirectoryW(marker.c_str(), nullptr);
-        Check(util::DataDirFor(exeDir, L"C:\\L") == L"C:\\L\\WinNCDU", L"data folder: a folder named winncdu.portable doesn't count");
+        Check(util::DataDirFor(exeDir, L"C:\\L") == L"C:\\L\\Bytopsy", L"data folder: a folder named bytopsy.portable doesn't count");
         RemoveDirectoryW(marker.c_str());
         PutText(marker, "");
-        Check(util::DataDirFor(exeDir, L"C:\\L") == exeDir + L"\\WinNCDU-data", L"data folder: WinNCDU-data next to the exe with winncdu.portable");
+        Check(util::DataDirFor(exeDir, L"C:\\L") == exeDir + L"\\Bytopsy-data", L"data folder: Bytopsy-data next to the exe with bytopsy.portable");
         DeleteFileW(marker.c_str());
         Check(util::DataDirFor(exeDir, L"").empty(), L"data folder: none without %LOCALAPPDATA% or a marker");
+        std::wstring oldMarker = exeDir + L"\\winncdu.portable";
+        PutText(oldMarker, "");
+        Check(util::DataDirFor(exeDir, L"C:\\L") == exeDir + L"\\Bytopsy-data", L"data folder: the former winncdu.portable marker still counts");
+        DeleteFileW(oldMarker.c_str());
+
+        // The app was called WinNCDU before: its data folder moves to the new name once.
+        Check(util::LegacyDataDir(L"C:\\L\\Bytopsy") == L"C:\\L\\WinNCDU" &&
+                  util::LegacyDataDir(exeDir + L"\\Bytopsy-data") == exeDir + L"\\WinNCDU-data" && util::LegacyDataDir(L"C:\\L\\Other").empty(),
+              L"former data folders: WinNCDU and WinNCDU-data");
+        std::wstring oldDir = exeDir + L"\\WinNCDU-data", newDir = exeDir + L"\\Bytopsy-data";
+        CreateDirectoryW(oldDir.c_str(), nullptr);
+        PutText(oldDir + L"\\settings.ini", "theme=dark\r\n");
+        std::wstring used = util::MigrateDataDir(newDir);
+        Check(used == newDir && GetFileAttributesW((newDir + L"\\settings.ini").c_str()) != INVALID_FILE_ATTRIBUTES &&
+                  GetFileAttributesW(oldDir.c_str()) == INVALID_FILE_ATTRIBUTES,
+              L"former data folder moved to the new name, with its files");
+        CreateDirectoryW(oldDir.c_str(), nullptr);
+        Check(util::MigrateDataDir(newDir) == newDir && GetFileAttributesW(oldDir.c_str()) != INVALID_FILE_ATTRIBUTES,
+              L"an existing new folder is never replaced by a former one");
+        RemoveDirectoryW(oldDir.c_str());
+        DeleteFileW((newDir + L"\\settings.ini").c_str());
+        RemoveDirectoryW(newDir.c_str());
         RemoveDirectoryW(exeDir.c_str());
 
         wchar_t exe[MAX_PATH], lad[MAX_PATH];
@@ -75,15 +97,16 @@ int main() {
         std::wstring here(exe, n);
         here = here.substr(0, here.rfind(L'\\'));
         DWORD ln = GetEnvironmentVariableW(L"LOCALAPPDATA", lad, MAX_PATH);
-        Check(util::DataDir() == util::DataDirFor(here, std::wstring(lad, ln < MAX_PATH ? ln : 0)) && !util::DataDir().empty(),
+        std::wstring expected = util::DataDirFor(here, std::wstring(lad, ln < MAX_PATH ? ln : 0));
+        Check((util::DataDir() == expected || util::DataDir() == util::LegacyDataDir(expected)) && !util::DataDir().empty(),
               L"data folder of this run: " + util::DataDir() + (util::PortableMode() ? L" (portable)" : L""));
-        SetEnvironmentVariableW(L"WINNCDU_JOURNAL", nullptr);
+        SetEnvironmentVariableW(L"BYTOPSY_JOURNAL", nullptr);
         Check(JournalFile() == util::DataDir() + L"\\journal.log" && ProtectRulesFile() == util::DataDir() + L"\\protect.txt",
               L"journal.log and protect.txt are in it");
     }
 
-    std::wstring journal = tmp + L"\\winncdu-journal-test-" + pid + L".log";
-    SetEnvironmentVariableW(L"WINNCDU_JOURNAL", journal.c_str());
+    std::wstring journal = tmp + L"\\bytopsy-journal-test-" + pid + L".log";
+    SetEnvironmentVariableW(L"BYTOPSY_JOURNAL", journal.c_str());
     DeleteFileW(journal.c_str());
     Check(JournalFile() == journal, L"journal file can be redirected for tests");
 
@@ -113,7 +136,7 @@ int main() {
 
     // ---- Who is locking this? (Restart Manager): this process holds a file open
     {
-        std::wstring lockDir = tmp + L"\\winncdu-lock-test-" + pid;
+        std::wstring lockDir = tmp + L"\\bytopsy-lock-test-" + pid;
         CreateDirectoryW(lockDir.c_str(), nullptr);
         std::wstring f = lockDir + L"\\locked.txt";
         HANDLE h = CreateFileW(f.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
@@ -134,7 +157,7 @@ int main() {
 
     // ---- Recycle and restore a real folder
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    std::wstring dir = tmp + L"\\winncdu-restore-test-" + pid;
+    std::wstring dir = tmp + L"\\bytopsy-restore-test-" + pid;
     CreateDirectoryW(dir.c_str(), nullptr);
     CreateDirectoryW((dir + L"\\sub").c_str(), nullptr);
     PutText(dir + L"\\sub\\file.txt", "hello");

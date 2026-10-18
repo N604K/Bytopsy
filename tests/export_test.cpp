@@ -1,4 +1,4 @@
-// Self-check of export and import: winncdu-export-test.exe
+// Self-check of export and import: bytopsy-export-test.exe
 // Exports in-memory trees with odd names and every flag to ncdu JSON in %TEMP%, imports them back
 // and compares; reads an export as Linux ncdu writes it; checks the CSV; rejects broken files.
 #include <windows.h>
@@ -145,7 +145,7 @@ static void RoundTripTests() {
     Check(Export(root.get(), file, &written), L"export written");
     Check(written == root->items + 1, L"export counts every item: " + std::to_wstring(written));
     std::string json = ReadAll(file);
-    Check(json.rfind("[1,2,{\"progname\":\"winncdu\"", 0) == 0 && json.back() == '\n', L"ncdu format header");
+    Check(json.rfind("[1,2,{\"progname\":\"bytopsy\"", 0) == 0 && json.back() == '\n', L"ncdu format header");
     Check(json.find("\"ctl\\u0001\\b") == std::string::npos && json.find("\"ctl\\u0001\\u0008\\u000c\\u001f\x7f\"") != std::string::npos,
           L"control characters escaped as \\u00XX, DEL kept as is");
     Check(json.find("\"quote\\\"d \\\"name\\\"\"") != std::string::npos && json.find("\"back\\\\slash\\\\\"") != std::string::npos,
@@ -376,7 +376,7 @@ static void DeepTests() {
 int main() {
     wchar_t tb[MAX_PATH];
     std::wstring tmp(tb, GetTempPathW(MAX_PATH, tb));
-    g_dir = tmp + L"winncdu-export-test-" + std::to_wstring(GetCurrentProcessId());
+    g_dir = tmp + L"bytopsy-export-test-" + std::to_wstring(GetCurrentProcessId());
     CreateDirectoryW(g_dir.c_str(), nullptr);
 
     // Like the app, run on a worker thread with a 16 MB stack (imports and exports are tasks).

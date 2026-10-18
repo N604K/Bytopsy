@@ -1,5 +1,5 @@
 name: False alarm
-description: WinNCDU warns about, or blocks, something that is safe to delete.
+description: Bytopsy warns about, or blocks, something that is safe to delete.
 title: "False alarm: "
 labels: ["protection", "false alarm"]
 body:
@@ -29,8 +29,8 @@ body:
   - type: textarea
     id: rule
     attributes:
-      label: What WinNCDU says
-      description: The reason in the delete dialog or the shield's tooltip, or the matching line of `winncdu-cli --protected`.
+      label: What Bytopsy says
+      description: The reason in the delete dialog or the shield's tooltip, or the matching line of `bytopsy-cli --protected`.
     validations:
       required: true
   - type: textarea
@@ -48,5 +48,5 @@ body:
   - type: input
     id: version
     attributes:
-      label: WinNCDU version
-      description: Shown in About (F1) or by `winncdu-cli --version`.
+      label: Bytopsy version
+      description: Shown in About (F1) or by `bytopsy-cli --version`.

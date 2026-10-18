@@ -97,7 +97,7 @@ public:
             // The window: the HWND's own provider gives name, type and the rest.
             if (id == UIA_FrameworkIdPropertyId) {
                 v->vt = VT_BSTR;
-                v->bstrVal = SysAllocString(L"WinNCDU");
+                v->bstrVal = SysAllocString(L"Bytopsy");
             }
             return S_OK;
         }
@@ -127,7 +127,7 @@ public:
             case UIA_AutomationIdPropertyId:
                 if (!n->id.empty()) str(n->id);
                 break;
-            case UIA_FrameworkIdPropertyId: str(L"WinNCDU"); break;
+            case UIA_FrameworkIdPropertyId: str(L"Bytopsy"); break;
             case UIA_IsEnabledPropertyId: boolean(!(n->flags & AF_DISABLED)); break;
             case UIA_IsKeyboardFocusablePropertyId: boolean((n->flags & AF_FOCUSABLE) != 0); break;
             case UIA_HasKeyboardFocusPropertyId: boolean((n->flags & AF_FOCUSED) != 0); break;
@@ -452,7 +452,7 @@ void AccBridge::Notify(const std::wstring& text) {
     static Fn fn = reinterpret_cast<Fn>(GetProcAddress(GetModuleHandleW(L"uiautomationcore.dll"), "UiaRaiseNotificationEvent"));
     if (!fn) return;
     if (IRawElementProviderSimple* p = Provider(0)) {
-        BSTR t = Bstr(text), id = SysAllocString(L"WinNCDU.Message");
+        BSTR t = Bstr(text), id = SysAllocString(L"Bytopsy.Message");
         fn(p, NotificationKind_Other, NotificationProcessing_ImportantMostRecent, t, id);
         SysFreeString(t);
         SysFreeString(id);

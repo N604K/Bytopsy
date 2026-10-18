@@ -144,7 +144,7 @@ bool ExportNcduJson(const Node* root, const std::wstring& file, std::atomic<uint
     if (!f) return false;
     {
         Out o(f);
-        o.Raw("[1,2,{\"progname\":\"winncdu\",\"progver\":\"" WINNCDU_VERSION_A "\",\"timestamp\":");
+        o.Raw("[1,2,{\"progname\":\"bytopsy\",\"progver\":\"" BYTOPSY_VERSION_A "\",\"timestamp\":");
         o.SNum(static_cast<int64_t>(time(nullptr)));
         o.Raw("},\n");
         WriteNode(o, root, count, true);

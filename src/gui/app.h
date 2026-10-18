@@ -271,7 +271,7 @@ private:
     void OnTimer();
     const Hit* HitAt(float x, float y);
     void ApplyTheme();
-    // Loads settings_.language (or WINNCDU_LANG) and redraws in it.
+    // Loads settings_.language (or BYTOPSY_LANG) and redraws in it.
     void ApplyLanguage(bool redraw);
     std::wstring SearchCue() const;
     void UpdateSearchBox();
@@ -545,7 +545,7 @@ private:
     std::wstring appFilter_;     // what the search box holds while the Apps view is shown
     bool searchForApps_ = false;  // the search box currently filters apps
     int appChosen_ = -1;         // index into apps_: the app the Uninstall button acts on
-    // An uninstaller WinNCDU started: a worker waits for it to exit, then for its entry to go.
+    // An uninstaller Bytopsy started: a worker waits for it to exit, then for its entry to go.
     struct AppWait {
         UninstallEntry e;
         std::atomic<int> phase{0};  // 0 running, 1 exited (entry still there), 2 entry gone, 3 still installed
@@ -562,7 +562,7 @@ private:
     std::vector<CleanCategory> cleanup_;
     bool cleanupMeasuring_ = false;
     int reviewCat_ = -1;  // category shown in View::CleanReview
-    TaskInfo schedule_;          // the scheduled cleanup task (\WinNCDU\Scheduled cleanup)
+    TaskInfo schedule_;          // the scheduled cleanup task (\Bytopsy\Scheduled cleanup)
     std::wstring scheduleErr_;   // Task Scheduler couldn't be read
     std::vector<SnapshotInfo> snapshots_;
     std::vector<DiffEntry> diff_;
@@ -636,6 +636,6 @@ private:
 
 constexpr UINT WM_APP_TASKDONE = WM_APP + 1;
 constexpr UINT WM_APP_CLEANUP = WM_APP + 2;
-constexpr UINT WM_APP_UNINSTALL = WM_APP + 3;  // an uninstaller WinNCDU waits for made progress
+constexpr UINT WM_APP_UNINSTALL = WM_APP + 3;  // an uninstaller Bytopsy waits for made progress
 constexpr UINT WM_APP_ACC = WM_APP + 4;        // raise UI Automation events for the last frame
 constexpr UINT WM_APP_ACCDO = WM_APP + 5;      // run a UI Automation action: wParam AccAct, lParam element key

@@ -15,7 +15,7 @@ enum class Protect : uint8_t {
     None = 0,
     Caution = 1,    // shown as a heads-up in the delete dialog
     Important = 2,  // extra confirmation step, Recycle Bin preselected
-    Blocked = 3,    // never deleted by WinNCDU
+    Blocked = 3,    // never deleted by Bytopsy
 };
 
 enum class ProtectRel : uint8_t {

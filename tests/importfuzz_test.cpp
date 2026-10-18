@@ -1,4 +1,4 @@
-// Fuzz test of the ncdu JSON importer: winncdu-importfuzz-test.exe
+// Fuzz test of the ncdu JSON importer: bytopsy-importfuzz-test.exe
 // Mutates valid exports with a fixed-seed generator (truncation, byte flips, lost or extra brackets,
 // huge numbers, deep nesting, invalid UTF-8, bad escapes) and checks the importer never crashes or
 // hangs, and either fails with a message or returns a sound tree that exports and imports again
@@ -329,8 +329,8 @@ int main() {
     wchar_t tb[MAX_PATH];
     std::wstring tmp(tb, GetTempPathW(MAX_PATH, tb));
     std::wstring pid = std::to_wstring(GetCurrentProcessId());
-    g_in = tmp + L"winncdu-fuzz-" + pid + L".json";
-    g_out = tmp + L"winncdu-fuzz-" + pid + L".out.json";
+    g_in = tmp + L"bytopsy-fuzz-" + pid + L".json";
+    g_out = tmp + L"bytopsy-fuzz-" + pid + L".out.json";
 
     // Imports run as tasks on a 16 MB stack in the app; a hang shows up as a timeout here.
     HANDLE h = util::StartThread(Run);

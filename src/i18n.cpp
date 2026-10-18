@@ -568,7 +568,7 @@ std::wstring WindowsLanguage(const std::vector<LanguageInfo>& available) {
 std::wstring LoadLanguage(const std::wstring& requested, std::vector<std::wstring>* problems) {
     std::wstring code = requested;
     wchar_t env[64];
-    DWORD n = GetEnvironmentVariableW(L"WINNCDU_LANG", env, 64);
+    DWORD n = GetEnvironmentVariableW(L"BYTOPSY_LANG", env, 64);
     if (n > 0 && n < 64) code = env;
     if (SameCode(code, L"pseudo") || SameCode(code, kPseudoCode)) {
         auto c = std::make_unique<Catalog>();

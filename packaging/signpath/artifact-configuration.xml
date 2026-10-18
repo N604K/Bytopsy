@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SignPath artifact configuration for WinNCDU (paste into the project's artifact configuration
+<!-- SignPath artifact configuration for Bytopsy (paste into the project's artifact configuration
      in SignPath). The workflow uploads a GitHub artifact (a zip) holding the two programs at its
      root; both are Authenticode-signed. See docs/RELEASING.md. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="winncdu.exe">
+    <pe-file path="bytopsy.exe">
       <authenticode-sign />
     </pe-file>
-    <pe-file path="winncdu-cli.exe">
+    <pe-file path="bytopsy-cli.exe">
       <authenticode-sign />
     </pe-file>
   </zip-file>

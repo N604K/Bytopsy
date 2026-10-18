@@ -305,7 +305,7 @@ private:
 int App::Run() {
     std::wstring err;
     if (!term_.Init(cfg_.mouse, err)) {
-        fwprintf(stderr, L"winncdu-cli: %s\n", err.c_str());
+        fwprintf(stderr, L"bytopsy-cli: %s\n", err.c_str());
         return 1;
     }
     if (!cfg_.importFile.empty())
@@ -982,7 +982,7 @@ void App::RequestDelete(bool permanent) {
     for (auto& b : blocked) d.notes.insert(d.notes.begin(), L"Skipped (protected): " + b);
     if (d.targets.empty()) {
         blocked.push_back(L"");
-        blocked.push_back(L"WinNCDU never deletes system folders. Rules: " + ProtectRulesFile());
+        blocked.push_back(L"Bytopsy never deletes system folders. Rules: " + ProtectRulesFile());
         return ShowMessage(targets.size() == 1 ? L"This location is protected" : L"These locations are protected",
                            blocked, true);
     }
@@ -1163,7 +1163,7 @@ void App::BeginExport() {
     menu_ = Menu{};
     menu_.active = true;
     menu_.title = L"Export";
-    menu_.items = {{L"ncdu JSON \u2014 whole scan", L"Reload later with  winncdu -f FILE  or in Linux ncdu"},
+    menu_.items = {{L"ncdu JSON \u2014 whole scan", L"Reload later with  bytopsy -f FILE  or in Linux ncdu"},
                    {L"CSV spreadsheet \u2014 whole scan", L"One row per file/folder, opens in Excel"},
                    {L"CSV spreadsheet \u2014 current folder", NodePath(scope)}};
     menu_.onPick = [this, scope](int i) {
@@ -1171,7 +1171,7 @@ void App::BeginExport() {
         GetLocalTime(&t);
         wchar_t stamp[64];
         swprintf(stamp, 64, L"%04u%02u%02u-%02u%02u%02u", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
-        std::wstring def = JoinPath(CurrentDirectory(), std::wstring(L"winncdu-") + stamp + (i == 0 ? L".json" : L".csv"));
+        std::wstring def = JoinPath(CurrentDirectory(), std::wstring(L"bytopsy-") + stamp + (i == 0 ? L".json" : L".csv"));
         int kind = i == 0 ? 0 : 1;
         Node* what = i == 2 ? scope : root_.get();
         OpenPrompt(L"Save export as", def, {L"Enter a file name. Existing files are overwritten."},
@@ -1189,7 +1189,7 @@ void App::BeginTypePath() {
 }
 
 void App::BeginLoad() {
-    OpenPrompt(L"Load ncdu JSON export", L"", {L"Path of a file created with  winncdu -o  or  ncdu -o"},
+    OpenPrompt(L"Load ncdu JSON export", L"", {L"Path of a file created with  bytopsy -o  or  ncdu -o"},
                [this](const std::wstring& p) {
                    std::wstring f = p;
                    f.erase(std::remove(f.begin(), f.end(), L'"'), f.end());
@@ -1215,7 +1215,7 @@ void App::RequestQuit() {
     }
     confirm_ = Confirm{};
     confirm_.active = true;
-    confirm_.title = L"Quit WinNCDU?";
+    confirm_.title = L"Quit Bytopsy?";
     confirm_.lines = {L"The current scan results will be discarded."};
     confirm_.onYes = [this] { running_ = false; };
 }
@@ -1733,8 +1733,8 @@ void App::DrawHeader(const std::wstring& subtitle, const std::wstring& right) {
     int W = term_.Width();
     term_.Fill(0, 0, W, St(T.fg, T.panel));
     int x = 1;
-    x += term_.Put(x, 0, L" \u25C6 WinNCDU ", St(T.bg, T.accent, A_BOLD));
-    x += term_.Put(x, 0, L" " WINNCDU_VERSION L" ", St(T.faint, T.panel));
+    x += term_.Put(x, 0, L" \u25C6 Bytopsy ", St(T.bg, T.accent, A_BOLD));
+    x += term_.Put(x, 0, L" " BYTOPSY_VERSION L" ", St(T.faint, T.panel));
     int rw = StrWidth(right);
     int avail = W - x - rw - 6;
     if (!subtitle.empty() && avail > 4) term_.Put(x + 1, 0, FitMiddle(subtitle, avail, cfg_.ascii), St(T.fg, T.panel, A_BOLD));
@@ -2433,7 +2433,7 @@ void App::DrawHelp() {
         }
     }
     DrawHints({{L"\u2191\u2193", L"scroll"}, {L"Esc", L"close"}});
-    std::wstring credit = L"WinNCDU " WINNCDU_VERSION L" \u00B7 inspired by ncdu";
+    std::wstring credit = L"Bytopsy " BYTOPSY_VERSION L" \u00B7 inspired by ncdu";
     if (toast_.empty()) term_.Put(W - StrWidth(credit) - 2, H - 1, credit, St(T.faint, T.panel));
 }
 

@@ -1,4 +1,4 @@
-// Self-check of the developer junk finder: winncdu-devjunk-test.exe
+// Self-check of the developer junk finder: bytopsy-devjunk-test.exe
 // Builds small fake projects next to the exe (a folder outside AppData), scans them and checks
 // what is found, how it is grouped, and what must never be listed. Only reads after setup.
 #include <windows.h>
@@ -130,7 +130,7 @@ int main() {
     // The same projects inside AppData belong to installed programs: nothing is listed.
     wchar_t tb[MAX_PATH];
     std::wstring tmp(tb, GetTempPathW(MAX_PATH, tb));
-    std::wstring appDir = tmp + L"winncdu-devjunk-test-" + pid;
+    std::wstring appDir = tmp + L"bytopsy-devjunk-test-" + pid;
     Fixture(appDir);
     auto appRoot = Scan(appDir);
     Check(FindDevJunk(appRoot.get()).empty(), L"nothing found when the scan is inside AppData");

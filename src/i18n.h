@@ -9,7 +9,7 @@
 //                                                     where it is shown (tables, journal notes)
 //
 // Language files are UTF-8 text, "English = translation" per line (see ParseCatalog, and the
-// header of res/lang/template.lang). Without a loaded language (winncdu-cli, the self-tests)
+// header of res/lang/template.lang). Without a loaded language (bytopsy-cli, the self-tests)
 // every function returns the English text.
 
 #include <cstdint>
@@ -117,7 +117,7 @@ private:
     util::InvariantNumbers numbers_;
 };
 
-// ---- Where languages come from (winncdu.exe): built into the exe (res/lang/<code>.lang, as
+// ---- Where languages come from (bytopsy.exe): built into the exe (res/lang/<code>.lang, as
 // resources of type LANG), then "lang\<code>.lang" next to the exe and in util::DataDir()\lang,
 // which replace a built-in one of the same code: a translation can be tried without rebuilding.
 struct LanguageInfo {
@@ -130,7 +130,7 @@ std::vector<LanguageInfo> AvailableLanguages();  // English first, then by name;
 std::wstring WindowsLanguage(const std::vector<LanguageInfo>& available);
 std::wstring WindowsLanguageFor(const std::vector<std::wstring>& preferred, const std::vector<LanguageInfo>& available);
 // Loads a language by code ("en", "qps-ploc" or "pseudo", or one of AvailableLanguages). An empty
-// code means the Windows language. The WINNCDU_LANG environment variable overrides `code`.
+// code means the Windows language. The BYTOPSY_LANG environment variable overrides `code`.
 // Returns the code in use; problems in the file go to `problems`.
 std::wstring LoadLanguage(const std::wstring& code, std::vector<std::wstring>* problems = nullptr);
 // Reads a language file (UTF-8) into text.

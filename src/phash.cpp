@@ -402,7 +402,7 @@ size_t PhotoHashCache::Size() {
     return map_.size();
 }
 
-static const char kCacheHeader[] = "WinNCDU photo hashes 1\n";
+static const char kCacheHeader[] = "Bytopsy photo hashes 1\n";
 
 void PhotoHashCache::Load() {
     std::lock_guard<std::mutex> g(lock_);

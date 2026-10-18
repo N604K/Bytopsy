@@ -1,4 +1,4 @@
-// Self-check of permanent deletion: winncdu-delete-test.exe
+// Self-check of permanent deletion: bytopsy-delete-test.exe
 // Works in %TEMP% only. Checks that links inside a deleted folder are removed as links (their
 // targets survive), read-only and hidden items go too, locked files are reported, and long paths work.
 #include <windows.h>
@@ -51,7 +51,7 @@ int main() {
     wchar_t b[MAX_PATH], lb[MAX_PATH];
     DWORD tn = GetTempPathW(MAX_PATH, b), ln = tn ? GetLongPathNameW(b, lb, MAX_PATH) : 0;
     std::wstring tmp = ln && ln < MAX_PATH ? std::wstring(lb, ln) : std::wstring(b, tn);
-    std::wstring base = tmp + L"winncdu-delete-test-" + std::to_wstring(GetCurrentProcessId());
+    std::wstring base = tmp + L"bytopsy-delete-test-" + std::to_wstring(GetCurrentProcessId());
     Dir(base);
     std::atomic<bool> cancel{false};
     std::atomic<uint64_t> removed{0};

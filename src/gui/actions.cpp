@@ -1080,7 +1080,7 @@ void App::StartGameUninstall() {
     Game g = games_[gameChosen_];
     Dialog d;
     d.title = TrF(L"Uninstall {0} ({1})?", g.name, util::FormatSizeShort(g.bytes));
-    d.message = TrF(L"{0}, just as from its own library. WinNCDU deletes nothing itself here; press Refresh when it is done.", Tr(g.uninstallHow));
+    d.message = TrF(L"{0}, just as from its own library. Bytopsy deletes nothing itself here; press Refresh when it is done.", Tr(g.uninstallHow));
     d.icon = 0xE7FC;
     d.tone = 1;
     d.buttons = {Tr(L"Cancel"), Tr(L"Uninstall")};
@@ -1465,7 +1465,7 @@ void App::RequestDelete(bool permanent) {
         d.icon = 0xEA18;
         d.tone = 1;
         d.title = targets.size() == 1 ? Tr(L"This location is protected") : Tr(L"These locations are protected");
-        d.message = firstBlockedReason + L"\n\n" + Tr(L"WinNCDU never deletes system folders. Edit protect.txt only if you are sure "
+        d.message = firstBlockedReason + L"\n\n" + Tr(L"Bytopsy never deletes system folders. Edit protect.txt only if you are sure "
                                                       L"(menu ⋯ → Protected locations).");
         d.lines = blockedLines;
         d.buttons = {Tr(L"OK")};
@@ -1682,7 +1682,7 @@ void App::StartExport(bool csv) {
     SYSTEMTIME st;
     GetLocalTime(&st);
     wchar_t name[96];
-    swprintf(name, 96, L"winncdu-%04u%02u%02u-%02u%02u%s", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute,
+    swprintf(name, 96, L"bytopsy-%04u%02u%02u-%02u%02u%s", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute,
              csv ? L".csv" : L".json");
     std::wstring file = PickSaveFile(hwnd_, name, csv);
     if (file.empty()) return;
@@ -1959,7 +1959,7 @@ void App::StartCleanup() {
                 }
                 CoInitializeEx(nullptr, COINIT_MULTITHREADED);
                 std::wstring err;
-                if (!CreateRestorePoint(L"WinNCDU cleanup", err)) st->restoreErr = err;
+                if (!CreateRestorePoint(L"Bytopsy cleanup", err)) st->restoreErr = err;
                 CoUninitialize();
                 if (!st->restoreErr.empty()) return;
             }
@@ -1993,7 +1993,7 @@ void App::LoadSchedule() {
     Invalidate();
 }
 
-// A per-user Task Scheduler task that runs `winncdu-cli --clean <checked ids> --yes --quiet`.
+// A per-user Task Scheduler task that runs `bytopsy-cli --clean <checked ids> --yes --quiet`.
 void App::ShowScheduleDialog() {
     LoadSchedule();
     if (!scheduleErr_.empty()) return Toast(scheduleErr_, 1);
@@ -2022,8 +2022,8 @@ void App::ShowScheduleDialog() {
     }
     if (ids.empty() && !exists) return Toast(Tr(L"Check the categories to clean on a schedule first"), 2);
     std::wstring exe = ExePath();
-    std::wstring cli = exe.substr(0, exe.find_last_of(L"\\/") + 1) + L"winncdu-cli.exe";
-    if (!PathExists(cli)) return Toast(Tr(L"winncdu-cli.exe was not found next to winncdu.exe"), 1);
+    std::wstring cli = exe.substr(0, exe.find_last_of(L"\\/") + 1) + L"bytopsy-cli.exe";
+    if (!PathExists(cli)) return Toast(Tr(L"bytopsy-cli.exe was not found next to bytopsy.exe"), 1);
 
     ScheduleSpec spec;
     spec.freq = ScheduleFreq::Weekly;
@@ -2033,7 +2033,7 @@ void App::ShowScheduleDialog() {
     Dialog d;
     d.title = exists ? Tr(L"Scheduled cleanup") : Tr(L"Schedule cleanup");
     d.icon = 0xE787;  // calendar
-    d.message = TrF(L"Windows runs “winncdu-cli {0}” as you, without administrator rights, only while you're signed in and never on battery; a missed run starts as "
+    d.message = TrF(L"Windows runs “bytopsy-cli {0}” as you, without administrator rights, only while you're signed in and never on battery; a missed run starts as "
                     L"soon as possible. Each run deletes what these categories list at that moment, permanently. Protected items are "
                     L"never touched, but items unchecked under Review are not remembered. Every run is journaled and logged in "
                     L"cleanup.log.",
@@ -2095,8 +2095,8 @@ void App::ShowScheduleDialog() {
         s.hour = dd.choices[3].value / 2;
         s.minute = dd.choices[3].value % 2 ? 30 : 0;
         s.ids = ids;
-        std::wstring desc = L"WinNCDU cleanup of " + JoinIds(ids) + L" (deleted permanently, protected items never). Change or remove it in "
-                            L"WinNCDU: Cleanup, Schedule.";
+        std::wstring desc = L"Bytopsy cleanup of " + JoinIds(ids) + L" (deleted permanently, protected items never). Change or remove it in "
+                            L"Bytopsy: Cleanup, Schedule.";
         if (TaskSave(ScheduleFolder(), kScheduleTask, s, cli, CleanArguments(ids), desc, err)) {
             std::wstring english;  // cleanup.log is kept in English
             {
@@ -2394,7 +2394,7 @@ void App::ShowProtectedLocations() {
     d.icon = 0xEA18;
     d.title = Tr(L"Protected locations");
     d.message = Tr(L"System folders are never deleted. For the data below (and Git repositories, password databases, keys "
-                   L"and wallets anywhere) WinNCDU asks twice and preselects the Recycle Bin. Add your own rules in protect.txt.");
+                   L"and wallets anywhere) Bytopsy asks twice and preselects the Recycle Bin. Add your own rules in protect.txt.");
     d.lines = lines.empty() ? std::vector<std::wstring>{L"\t" + Tr(L"No AI, key, wallet or synced folders found on this PC.")} : lines;
     d.buttons = {Tr(L"Edit protect.txt"), Tr(L"OK")};
     d.primary = 1;
@@ -2417,8 +2417,8 @@ void App::ShowDialog(Dialog d) {
 
 void App::ShowAbout() {
     Dialog d;
-    d.title = L"WinNCDU " WINNCDU_VERSION;
-    d.message = Tr(L"A fast disk usage analyzer for Windows, inspired by ncdu.") + L"\n\n" +
+    d.title = L"Bytopsy " BYTOPSY_VERSION;
+    d.message = Tr(L"Finds out what uses your disk space, cleans it up safely, and looks after the rest. Formerly WinNCDU, inspired by ncdu.") + L"\n\n" +
                 Tr(L"Shortcuts:  Enter open · Backspace up · Del delete · Shift+Del delete permanently · "
                    L"Ctrl+F search · Ctrl+E show in Explorer · Ctrl+C copy path · F5 rescan · Alt+←/→ back/forward.") +
                 L"\n\n" + Tr(L"Search syntax:") + L"  *.iso   >1G   <10M   older:1y   newer:7d   type:f   type:d   ext:mp4,mkv   empty";
@@ -2472,7 +2472,7 @@ void App::ShowMoreMenu() {
     add(theme, MF_STRING | (settings_.theme == 0 ? MF_CHECKED : 0), CMD_SET_THEME_SYS, Tr(L"Use Windows setting"));
     add(theme, MF_STRING | (settings_.theme == 1 ? MF_CHECKED : 0), CMD_SET_THEME_LIGHT, Tr(L"Light"));
     add(theme, MF_STRING | (settings_.theme == 2 ? MF_CHECKED : 0), CMD_SET_THEME_DARK, Tr(L"Dark"));
-    // Language: Windows' display language (when WinNCDU has it), every language found, and the
+    // Language: Windows' display language (when Bytopsy has it), every language found, and the
     // pseudo-language that shows untranslated and cut-off text.
     langMenu_ = i18n::AvailableLanguages();
     std::wstring winCode = i18n::WindowsLanguage(langMenu_), winName = L"English";
@@ -2496,7 +2496,7 @@ void App::ShowMoreMenu() {
     add(m, MF_STRING | (settings_.showHidden ? MF_CHECKED : 0), CMD_SET_HIDDEN, Tr(L"Show hidden && system files"));
     add(m, MF_STRING | (settings_.hardlinks ? MF_CHECKED : 0), CMD_SET_HARDLINKS, Tr(L"Count hard links once (slower scans)"));
     add(m, MF_STRING | (settings_.permanentDefault ? MF_CHECKED : 0), CMD_SET_PERMANENT, Tr(L"Delete permanently by default"));
-    add(m, MF_STRING | (IsShellIntegrated() ? MF_CHECKED : 0), CMD_SET_SHELL, Tr(L"Add “Analyze with WinNCDU” to Explorer"));
+    add(m, MF_STRING | (IsShellIntegrated() ? MF_CHECKED : 0), CMD_SET_SHELL, Tr(L"Add “Analyze with Bytopsy” to Explorer"));
     add(m, MF_STRING, CMD_PROTECTED, Tr(L"Protected locations…"));
     add(m, MF_STRING, CMD_CLEANERS, Tr(L"Cleanup rules…"));
     add(m, MF_STRING, CMD_KEEP_SIGNED_IN, Tr(L"Keep me signed in to…"));
@@ -2749,7 +2749,7 @@ void App::OnCommand(int cmd) {
             std::wstring err;
             bool on = !IsShellIntegrated();
             if (SetShellIntegration(on, err))
-                Toast(on ? Tr(L"Added “Analyze with WinNCDU” to the Explorer right-click menu") : Tr(L"Removed from the Explorer menu"), 0);
+                Toast(on ? Tr(L"Added “Analyze with Bytopsy” to the Explorer right-click menu") : Tr(L"Removed from the Explorer menu"), 0);
             else
                 Toast(err, 1);
             break;

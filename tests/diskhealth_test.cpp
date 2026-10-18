@@ -1,7 +1,7 @@
-// Self-check of Disk health: winncdu-diskhealth-test.exe
+// Self-check of Disk health: bytopsy-diskhealth-test.exe
 // Parses sample Get-PhysicalDisk / Get-StorageReliabilityCounter / fsutil output and NVMe health
 // logs, checks the verdicts, and computes used-space trends from synthetic history. Writes only a
-// temp free-space log (WINNCDU_FREESPACE_LOG). Set WINNCDU_DISKS=1 to also query this PC's disks
+// temp free-space log (BYTOPSY_FREESPACE_LOG). Set BYTOPSY_DISKS=1 to also query this PC's disks
 // (read-only).
 #include <windows.h>
 
@@ -289,9 +289,9 @@ int main() {
     {
         wchar_t tmp[MAX_PATH];
         GetTempPathW(MAX_PATH, tmp);
-        std::wstring path = std::wstring(tmp) + L"winncdu-freespace-test-" + std::to_wstring(GetCurrentProcessId()) + L".log";
-        SetEnvironmentVariableW(L"WINNCDU_FREESPACE_LOG", path.c_str());
-        Check(FreeSpaceLogPath() == path, L"WINNCDU_FREESPACE_LOG respected");
+        std::wstring path = std::wstring(tmp) + L"bytopsy-freespace-test-" + std::to_wstring(GetCurrentProcessId()) + L".log";
+        SetEnvironmentVariableW(L"BYTOPSY_FREESPACE_LOG", path.c_str());
+        Check(FreeSpaceLogPath() == path, L"BYTOPSY_FREESPACE_LOG respected");
         wchar_t win[MAX_PATH];
         GetWindowsDirectoryW(win, MAX_PATH);
         std::wstring sys = std::wstring(win).substr(0, 3);
@@ -305,12 +305,12 @@ int main() {
         RecordFreeSpace({sys}, 0);
         Check(LoadFreeSpaceLog().size() == 2, L"no gap: another sample");
         DeleteFileW(path.c_str());
-        SetEnvironmentVariableW(L"WINNCDU_FREESPACE_LOG", nullptr);
+        SetEnvironmentVariableW(L"BYTOPSY_FREESPACE_LOG", nullptr);
     }
 
     // ---- This PC (read-only), on request
     wchar_t flag[8];
-    if (GetEnvironmentVariableW(L"WINNCDU_DISKS", flag, 8)) {
+    if (GetEnvironmentVariableW(L"BYTOPSY_DISKS", flag, 8)) {
         DiskHealthReport r = QueryDiskHealth();
         Check(r.error.empty() && !r.disks.empty(), L"this PC: " + std::to_wstring(r.disks.size()) + L" disks" + (r.error.empty() ? L"" : L", " + r.error));
         for (auto& d : r.disks) {

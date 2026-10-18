@@ -1,4 +1,4 @@
-// Self-check of translations: winncdu-i18n-test.exe
+// Self-check of translations: bytopsy-i18n-test.exe
 // Language file parsing (escapes, comments, malformed lines, placeholder checks), {n} substitution
 // and reordering, plural rules, the fallback to English, the pseudo-language, regional number
 // formats, and that res/lang/template.lang and every shipped translation parse cleanly.
@@ -207,7 +207,7 @@ int main() {
     // ---- A language file on disk (UTF-8 with BOM)
     wchar_t tmp[MAX_PATH];
     GetTempPathW(MAX_PATH, tmp);
-    std::wstring path = std::wstring(tmp) + L"winncdu-i18n-test.lang";
+    std::wstring path = std::wstring(tmp) + L"bytopsy-i18n-test.lang";
     FILE* f = nullptr;
     if (_wfopen_s(&f, path.c_str(), L"wb") == 0 && f) {
         std::string utf8 = "\xEF\xBB\xBF@name = Fran\xC3\xA7" "ais\r\nClean up = Nettoyer\r\n";
@@ -221,8 +221,8 @@ int main() {
     DeleteFileW(path.c_str());
 
     // ---- The template and shipped translations
-#ifdef WINNCDU_SOURCE_DIR
-    std::wstring dir = std::wstring(WINNCDU_SOURCE_DIR) + L"\\res\\lang";
+#ifdef BYTOPSY_SOURCE_DIR
+    std::wstring dir = std::wstring(BYTOPSY_SOURCE_DIR) + L"\\res\\lang";
     std::wstring tt;
     Check(ReadLanguageFile(dir + L"\\template.lang", tt), L"template.lang: read");
     std::vector<std::wstring> tp;

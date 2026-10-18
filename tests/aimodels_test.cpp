@@ -1,4 +1,4 @@
-// Self-check of AI model listing and removal: winncdu-aimodels-test.exe
+// Self-check of AI model listing and removal: bytopsy-aimodels-test.exe
 // Builds fake Hugging Face, Ollama and LM Studio stores in %TEMP% and checks what is listed, what
 // each item frees, and that deleting touches exactly the model's files (never chats, keys, tokens).
 #include <windows.h>
@@ -51,9 +51,9 @@ int main() {
     wchar_t b[MAX_PATH], lb[MAX_PATH];
     DWORD tn = GetTempPathW(MAX_PATH, b), ln = tn ? GetLongPathNameW(b, lb, MAX_PATH) : 0;
     std::wstring tmp = ln && ln < MAX_PATH ? std::wstring(lb, ln) : std::wstring(b, tn);
-    std::wstring dir = tmp + L"winncdu-aimodels-test-" + std::to_wstring(GetCurrentProcessId());
+    std::wstring dir = tmp + L"bytopsy-aimodels-test-" + std::to_wstring(GetCurrentProcessId());
     std::wstring journal = dir + L"-journal.log";
-    SetEnvironmentVariableW(L"WINNCDU_JOURNAL", journal.c_str());
+    SetEnvironmentVariableW(L"BYTOPSY_JOURNAL", journal.c_str());
     std::atomic<bool> cancel{false};
 
     // ---- Hugging Face: one model with main, a PR and an unreferenced revision; a dataset

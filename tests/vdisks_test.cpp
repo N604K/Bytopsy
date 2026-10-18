@@ -1,7 +1,7 @@
-// Self-check of the WSL and Docker virtual disk code: winncdu-vdisks-test.exe
+// Self-check of the WSL and Docker virtual disk code: bytopsy-vdisks-test.exe
 // Reads ext4 usage from small hand-built VHDX files in %TEMP% and parses sample output of df,
 // docker and wsl.exe. Never runs WSL, Docker or diskpart.
-// Set WINNCDU_VHDX to a real .vhdx to print what is read from it (read-only).
+// Set BYTOPSY_VHDX to a real .vhdx to print what is read from it (read-only).
 #include <windows.h>
 
 #include <cstdio>
@@ -88,25 +88,25 @@ int main() {
     // ---- VHDX + ext4 superblock
     uint64_t used = 0, total = 0;
     std::wstring err;
-    std::wstring a = MakeVhdx(L"winncdu-test-a.vhdx", present, 262144, 200000, 2);
+    std::wstring a = MakeVhdx(L"bytopsy-test-a.vhdx", present, 262144, 200000, 2);
     bool ok = ReadVhdxExt4(a, used, total, err);
     Check(ok && used == (262144ull - 200000) * 4096 && total == 262144ull * 4096,
           L"ext4 usage read from the first block of a VHDX: " + util::FormatSize(used) + L" of " + util::FormatSize(total) + L" " + err);
-    std::wstring b = MakeVhdx(L"winncdu-test-b.vhdx", present, 5, 1, 2, true, 1, 0);
+    std::wstring b = MakeVhdx(L"bytopsy-test-b.vhdx", present, 5, 1, 2, true, 1, 0);
     err.clear();
     ok = ReadVhdxExt4(b, used, total, err);
     Check(ok && total == ((1ull << 32) + 5) * 4096 && used == ((1ull << 32) + 4) * 4096,
           L"64-bit ext4 block counts " + err);
-    std::wstring c = MakeVhdx(L"winncdu-test-c.vhdx", 0, 262144, 200000, 2);
+    std::wstring c = MakeVhdx(L"bytopsy-test-c.vhdx", 0, 262144, 200000, 2);
     err.clear();
     ok = ReadVhdxExt4(c, used, total, err);
     Check(!ok && !err.empty(), L"a never-written first block is no file system: " + err);
-    std::wstring d = MakeVhdx(L"winncdu-test-d.vhdx", present, 10, 20, 2);
+    std::wstring d = MakeVhdx(L"bytopsy-test-d.vhdx", present, 10, 20, 2);
     err.clear();
     ok = ReadVhdxExt4(d, used, total, err);
     Check(!ok, L"more free blocks than blocks is refused: " + err);
     wchar_t tmp[MAX_PATH];
-    std::wstring notVhdx = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"winncdu-test-e.vhdx";
+    std::wstring notVhdx = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"bytopsy-test-e.vhdx";
     FILE* out = nullptr;
     if (_wfopen_s(&out, notVhdx.c_str(), L"wb") == 0 && out) {
         fputs("not a disk", out);
@@ -164,7 +164,7 @@ int main() {
 
     // ---- optional: a real disk (read-only)
     wchar_t real[MAX_PATH * 2];
-    if (DWORD n = GetEnvironmentVariableW(L"WINNCDU_VHDX", real, MAX_PATH * 2); n && n < MAX_PATH * 2) {
+    if (DWORD n = GetEnvironmentVariableW(L"BYTOPSY_VHDX", real, MAX_PATH * 2); n && n < MAX_PATH * 2) {
         err.clear();
         ok = ReadVhdxExt4(real, used, total, err);
         std::string line = util::WideToUtf8(std::wstring(L"     ") + real + L": " +

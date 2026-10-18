@@ -321,14 +321,36 @@ HANDLE StartThread(std::function<void()> fn, size_t stackSize) {
     return h;
 }
 
-const wchar_t* const kPortableMarker = L"winncdu.portable";
+const wchar_t* const kPortableMarker = L"bytopsy.portable";
 
 std::wstring DataDirFor(const std::wstring& exeDir, const std::wstring& localAppData) {
     if (!exeDir.empty()) {
-        DWORD a = GetFileAttributesW((exeDir + L"\\" + kPortableMarker).c_str());
-        if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) return exeDir + L"\\WinNCDU-data";
+        // The marker of the app's former name (WinNCDU) still counts.
+        for (const wchar_t* marker : {kPortableMarker, L"winncdu.portable"}) {
+            DWORD a = GetFileAttributesW((exeDir + L"\\" + marker).c_str());
+            if (a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY)) return exeDir + L"\\Bytopsy-data";
+        }
     }
-    return localAppData.empty() ? L"" : localAppData + L"\\WinNCDU";
+    return localAppData.empty() ? L"" : localAppData + L"\\Bytopsy";
+}
+
+std::wstring LegacyDataDir(const std::wstring& dataDir) {
+    size_t slash = dataDir.rfind(L'\\');
+    if (slash == std::wstring::npos) return L"";
+    std::wstring leaf = dataDir.substr(slash + 1);
+    if (leaf == L"Bytopsy") return dataDir.substr(0, slash) + L"\\WinNCDU";
+    if (leaf == L"Bytopsy-data") return dataDir.substr(0, slash) + L"\\WinNCDU-data";
+    return L"";
+}
+
+std::wstring MigrateDataDir(const std::wstring& dataDir) {
+    std::wstring legacy = LegacyDataDir(dataDir);
+    if (legacy.empty() || GetFileAttributesW(dataDir.c_str()) != INVALID_FILE_ATTRIBUTES) return dataDir;
+    DWORD a = GetFileAttributesW(legacy.c_str());
+    if (a == INVALID_FILE_ATTRIBUTES || !(a & FILE_ATTRIBUTE_DIRECTORY) || (a & FILE_ATTRIBUTE_REPARSE_POINT)) return dataDir;
+    if (MoveFileExW(legacy.c_str(), dataDir.c_str(), 0)) return dataDir;
+    // Still in use (an old copy running?): keep using it this time, nothing is lost; next start moves it.
+    return legacy;
 }
 
 namespace {
@@ -353,14 +375,14 @@ std::wstring LocalAppData() {
 }  // namespace
 
 std::wstring DataDir() {
-    static const std::wstring dir = DataDirFor(ExeDir(), LocalAppData());
+    static const std::wstring dir = MigrateDataDir(DataDirFor(ExeDir(), LocalAppData()));
     return dir;
 }
 
 bool PortableMode() {
     static const bool portable = [] {
         std::wstring exe = ExeDir();
-        return !exe.empty() && DataDir() == exe + L"\\WinNCDU-data";
+        return !exe.empty() && (DataDir() == exe + L"\\Bytopsy-data" || DataDir() == exe + L"\\WinNCDU-data");
     }();
     return portable;
 }

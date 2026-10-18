@@ -46,7 +46,7 @@ struct StartupEntry {
     std::wstring trigger;     // tasks: "at log on", "at startup"
     uint32_t startType = 0;   // services: SERVICE_AUTO_START (2) or SERVICE_DEMAND_START (3)
     bool delayed = false;     // services: "Automatic (Delayed Start)"
-    std::wstring restoreStart;  // services WinNCDU set to Manual: "auto" or "delayed-auto" (from the journal)
+    std::wstring restoreStart;  // services Bytopsy set to Manual: "auto" or "delayed-auto" (from the journal)
     StartupImpact impact = StartupImpact::Unknown;
     bool measured = false;    // from Windows' boot performance log, not an estimate
     uint32_t measuredMs = 0;
@@ -112,7 +112,7 @@ bool ParseBootEvent(const std::wstring& xml, BootDelay& out);
 // "[startup service=NAME now=auto]" when turned back on.
 std::wstring ServiceJournalNote(const std::wstring& service, bool turnedOff, const std::wstring& startWord);
 bool ParseServiceJournalNote(const std::wstring& note, std::wstring& service, bool& turnedOff, std::wstring& startWord);
-// Services whose newest journal record says WinNCDU set them to Manual: name (lowercase) -> the
+// Services whose newest journal record says Bytopsy set them to Manual: name (lowercase) -> the
 // start type to restore ("auto" / "delayed-auto"). `journal` is newest first (JournalRead).
 std::map<std::wstring, std::wstring> ServicesTurnedOff(const std::vector<JournalEntry>& journal);
 

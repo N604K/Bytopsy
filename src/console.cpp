@@ -160,7 +160,7 @@ bool Terminal::Init(bool mouse, std::wstring& err) {
 
     wchar_t title[1024] = {};
     if (GetConsoleTitleW(title, 1024)) origTitle_ = title;
-    SetConsoleTitleW(L"WinNCDU");
+    SetConsoleTitleW(L"Bytopsy");
 
     active_ = true;
     g_term = this;

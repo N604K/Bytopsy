@@ -1,4 +1,4 @@
-// Self-check of the games list: winncdu-games-test.exe
+// Self-check of the games list: bytopsy-games-test.exe
 // Builds a fake Steam library and Epic manifests in %TEMP% and checks what is listed as a game,
 // what as a leftover, and how uninstalls are routed. Never starts an uninstall.
 #include <windows.h>
@@ -52,7 +52,7 @@ static const Game* Find(const std::vector<Game>& v, const std::wstring& name) {
 int main() {
     SetConsoleOutputCP(CP_UTF8);
     wchar_t tmp[MAX_PATH];
-    std::wstring base = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"winncdu-games-test";
+    std::wstring base = std::wstring(tmp, GetTempPathW(MAX_PATH, tmp)) + L"bytopsy-games-test";
     RemoveTree(base);
 
     // ---- KeyValues
@@ -146,7 +146,7 @@ int main() {
     left.name = L"Old Game";
     Check(!StartUninstall(left, err) && !err.empty(), L"leftovers have no uninstaller to start");
 
-    if (GetEnvironmentVariableW(L"WINNCDU_GAMES", nullptr, 0))
+    if (GetEnvironmentVariableW(L"BYTOPSY_GAMES", nullptr, 0))
         for (auto& g : FindGames()) {
             std::string line = util::WideToUtf8(L"     " + g.launcher + L"  " + g.name + L"  " + util::FormatSizeShort(g.bytes) +
                                                 (g.leftover ? L"  (leftover)" : L"") + L"  " + g.folder + L"\n");

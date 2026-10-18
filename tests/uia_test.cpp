@@ -1,4 +1,4 @@
-// Self-check of the accessibility tree behind the UI Automation provider: winncdu-uia-test.exe
+// Self-check of the accessibility tree behind the UI Automation provider: bytopsy-uia-test.exe
 // Element identity across frames, reading order, which drawn text names which element, nesting,
 // navigation and hit testing, and which UIA patterns and control types an element gets. Pure: no
 // window, no COM.

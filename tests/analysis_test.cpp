@@ -1,4 +1,4 @@
-// Self-check of the analysis views: winncdu-analysis-test.exe
+// Self-check of the analysis views: bytopsy-analysis-test.exe
 // Search syntax and matching, largest files and file types run on an in-memory tree; duplicates
 // run on real files in %TEMP% (identical, same size but different, hard links, files that vanished).
 #include <windows.h>
@@ -322,7 +322,7 @@ int main() {
 
     wchar_t tb[MAX_PATH];
     std::wstring tmp(tb, GetTempPathW(MAX_PATH, tb));
-    std::wstring dir = tmp + L"winncdu-analysis-test-" + std::to_wstring(GetCurrentProcessId());
+    std::wstring dir = tmp + L"bytopsy-analysis-test-" + std::to_wstring(GetCurrentProcessId());
     DuplicateTests(dir);
 
     std::atomic<bool> cancel{false};

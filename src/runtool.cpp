@@ -148,7 +148,7 @@ AdminRun RunAsAdmin(const std::wstring& commandLine) {
         if (r.code == -1) r.error = L"Couldn't start " + cmd;
         return r;
     }
-    std::wstring log = TempDir() + L"winncdu-admin-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
+    std::wstring log = TempDir() + L"bytopsy-admin-" + std::to_wstring(GetCurrentProcessId()) + L"-" +
                        std::to_wstring(GetTickCount64()) + L".log";
     // In parentheses so the log collects a whole `a & b` chain or `for` loop, not just its last part.
     std::wstring params = L"/d /s /c \"(" + commandLine + L") > \"" + log + L"\" 2>&1\"";

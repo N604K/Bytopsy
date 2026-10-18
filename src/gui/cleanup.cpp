@@ -371,8 +371,8 @@ std::wstring BuiltinCleaners() {
 }
 
 const char kUserTemplate[] =
-    "# Your own WinNCDU cleanup categories. Same format as the built-in list (res/cleaners.ini in the\r\n"
-    "# WinNCDU source). Click \"Measure\" in Cleanup after saving.\r\n"
+    "# Your own Bytopsy cleanup categories. Same format as the built-in list (res/cleaners.ini in the\r\n"
+    "# Bytopsy source). Click \"Measure\" in Cleanup after saving.\r\n"
     "#\r\n"
     "# Add a category:\r\n"
     "# [myapp]\r\n"
@@ -506,10 +506,10 @@ std::wstring UserCleanersFile(bool create) {
 
 std::vector<CleanCategory> BuildCleanupCategories(std::vector<std::wstring>* errors) {
     std::vector<std::wstring> errs;
-    // Tests: WINNCDU_CLEANERS names a cleaners.ini that replaces all rules (built-in, yours and
+    // Tests: BYTOPSY_CLEANERS names a cleaners.ini that replaces all rules (built-in, yours and
     // winapp2.ini), so a test can clean its own fixture folder and nothing else.
     wchar_t over[MAX_PATH];
-    DWORD on = GetEnvironmentVariableW(L"WINNCDU_CLEANERS", over, MAX_PATH);
+    DWORD on = GetEnvironmentVariableW(L"BYTOPSY_CLEANERS", over, MAX_PATH);
     if (on && on < MAX_PATH) {
         bool found = false;
         std::wstring text = Utf8File(over, found);

@@ -504,7 +504,7 @@ CompactResult CompactVDisks(const std::vector<VDisk>& disks, std::atomic<bool>& 
     // 4. diskpart, as administrator.
     if (!paths.empty() && !cancel) {
         status(TrN(paths.size(), L"Compacting {0} virtual disk (this can take a while)", L"Compacting {0} virtual disks (this can take a while)"));
-        std::wstring script = TempDir() + L"winncdu-compact-" + std::to_wstring(GetCurrentProcessId()) + L".txt";
+        std::wstring script = TempDir() + L"bytopsy-compact-" + std::to_wstring(GetCurrentProcessId()) + L".txt";
         std::string text = DiskpartScript(paths);
         HANDLE f = CreateFileW(script.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
         DWORD n = 0;

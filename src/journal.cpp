@@ -137,7 +137,7 @@ bool CreateDirs(const std::wstring& dir) {
 
 std::wstring JournalFile() {
     wchar_t over[MAX_PATH];
-    DWORD n = GetEnvironmentVariableW(L"WINNCDU_JOURNAL", over, MAX_PATH);  // tests
+    DWORD n = GetEnvironmentVariableW(L"BYTOPSY_JOURNAL", over, MAX_PATH);  // tests
     if (n && n < MAX_PATH) return over;
     std::wstring dir = util::DataDir();
     return dir.empty() ? L"" : dir + L"\\journal.log";
@@ -167,7 +167,7 @@ void JournalAppend(const JournalEntry& e) {
     FILE* f = nullptr;
     if (_wfopen_s(&f, file.c_str(), L"ab") != 0 || !f) return;
     std::wstring line;
-    if (!exists) line = L"# WinNCDU deletion journal. Columns: time (UTC), action, bytes, items, path, note\r\n";
+    if (!exists) line = L"# Bytopsy deletion journal. Columns: time (UTC), action, bytes, items, path, note\r\n";
     line += FormatUtc(e.time ? e.time : util::NowFileTime()) + L"\t" + JournalActionName(e.action) + L"\t" +
             std::to_wstring(e.bytes) + L"\t" + std::to_wstring(e.items) + L"\t" + Field(e.path) + L"\t" + Field(e.note) + L"\r\n";
     std::string u = util::WideToUtf8(line);

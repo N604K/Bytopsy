@@ -29,11 +29,11 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $line = Select-String -Path src/version.h -Pattern '#define WINNCDU_VERSION_A\s+"([^"]+)"'
+          $line = Select-String -Path src/version.h -Pattern '#define BYTOPSY_VERSION_A\s+"([^"]+)"'
           $version = $line.Matches[0].Groups[1].Value
           if ($env:GITHUB_REF -like 'refs/tags/v*') {
             $tag = $env:GITHUB_REF_NAME.Substring(1)
-            if ($tag -ne $version) { throw "Tag v$tag does not match WINNCDU_VERSION_A ($version) in src/version.h" }
+            if ($tag -ne $version) { throw "Tag v$tag does not match BYTOPSY_VERSION_A ($version) in src/version.h" }
           } else {
             $version = "$version-$($env:GITHUB_SHA.Substring(0, 7))"
           }
@@ -64,8 +64,8 @@ jobs:
         with:
           name: unsigned
           path: |
-            build/winncdu.exe
-            build/winncdu-cli.exe
+            build/bytopsy.exe
+            build/bytopsy-cli.exe
           if-no-files-found: error
 
       - name: Sign (SignPath)
@@ -75,7 +75,7 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'WinNCDU' }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'Bytopsy' }}
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
           artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'initial' }}
           github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
@@ -86,7 +86,7 @@ jobs:
         if: steps.sign.outcome == 'success'
         shell: pwsh
         run: |
-          foreach ($f in 'signed/winncdu.exe', 'signed/winncdu-cli.exe') {
+          foreach ($f in 'signed/bytopsy.exe', 'signed/bytopsy-cli.exe') {
             $s = Get-AuthenticodeSignature $f
             "$f : $($s.Status) $($s.SignerCertificate.Subject)"
             if ($s.Status -ne 'Valid') { throw "$f is not validly signed" }
@@ -97,9 +97,9 @@ jobs:
         env:
           BIN: ${{ steps.sign.outcome == 'success' && 'signed' || 'build' }}
         run: |
-          $name = "winncdu-${{ steps.version.outputs.version }}-x64"
+          $name = "bytopsy-${{ steps.version.outputs.version }}-x64"
           New-Item -ItemType Directory -Force dist, "stage/$name" | Out-Null
-          Copy-Item "$env:BIN/winncdu.exe", "$env:BIN/winncdu-cli.exe", README.md "stage/$name"
+          Copy-Item "$env:BIN/bytopsy.exe", "$env:BIN/bytopsy-cli.exe", README.md "stage/$name"
           if (Test-Path LICENSE) { Copy-Item LICENSE "stage/$name" }
           Compress-Archive -Path "stage/$name/*" -DestinationPath "dist/$name.zip"
           $hash = (Get-FileHash -Algorithm SHA256 "dist/$name.zip").Hash.ToLowerInvariant()
@@ -109,7 +109,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: winncdu-${{ steps.version.outputs.version }}
+          name: bytopsy-${{ steps.version.outputs.version }}
           path: dist/*
           if-no-files-found: error
 
@@ -120,7 +120,7 @@ jobs:
         shell: pwsh
         run: >-
           packaging/update-manifests.ps1 -Version "${{ steps.version.outputs.version }}"
-          -ZipPath "dist/winncdu-${{ steps.version.outputs.version }}-x64.zip" -OutDir manifests
+          -ZipPath "dist/bytopsy-${{ steps.version.outputs.version }}-x64.zip" -OutDir manifests
 
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
@@ -138,7 +138,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: winncdu-${{ needs.build.outputs.version }}
+          name: bytopsy-${{ needs.build.outputs.version }}
           path: dist
 
       - name: Verify checksum
@@ -147,6 +147,6 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          name: WinNCDU ${{ needs.build.outputs.version }}
+          name: Bytopsy ${{ needs.build.outputs.version }}
           files: dist/*
           generate_release_notes: true

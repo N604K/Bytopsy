@@ -1,29 +1,29 @@
 {
     "version": "__VERSION__",
     "description": "Fast disk usage analyzer and cleaner for Windows, inspired by ncdu.",
-    "homepage": "https://github.com/N604K/WinNCDU",
+    "homepage": "https://github.com/N604K/Bytopsy",
     "license": "MIT",
-    "notes": "Runs in portable mode: settings, history, journal and rules are kept in $persist_dir\\WinNCDU-data.",
+    "notes": "Runs in portable mode: settings, history, journal and rules are kept in $persist_dir\\Bytopsy-data.",
     "architecture": {
         "64bit": {
             "url": "__URL__",
             "hash": "__SHA256__"
         }
     },
-    "pre_install": "New-Item -ItemType File -Force \"$dir\\winncdu.portable\" | Out-Null",
-    "bin": "winncdu-cli.exe",
+    "pre_install": "New-Item -ItemType File -Force \"$dir\\bytopsy.portable\" | Out-Null",
+    "bin": "bytopsy-cli.exe",
     "shortcuts": [
         [
-            "winncdu.exe",
-            "WinNCDU"
+            "bytopsy.exe",
+            "Bytopsy"
         ]
     ],
-    "persist": "WinNCDU-data",
+    "persist": "Bytopsy-data",
     "checkver": "github",
     "autoupdate": {
         "architecture": {
             "64bit": {
-                "url": "https://github.com/N604K/WinNCDU/releases/download/v$version/winncdu-$version-x64.zip",
+                "url": "https://github.com/N604K/Bytopsy/releases/download/v$version/bytopsy-$version-x64.zip",
                 "hash": {
                     "url": "$url.sha256"
                 }

@@ -77,7 +77,7 @@ void App::OnAppRow(int row) {
         appChosen_ = appChosen_ == r.idx ? -1 : r.idx;
     } else if (r.kind == RK_APPLEFT && r.idx < static_cast<int>(appLeft_.size())) {
         const AppLeftover& l = appLeft_[r.idx];
-        if (!l.Deletable()) return Toast(TrF(L"Protected, so WinNCDU leaves it alone: {0}", l.protectNote), 2);
+        if (!l.Deletable()) return Toast(TrF(L"Protected, so Bytopsy leaves it alone: {0}", l.protectNote), 2);
         size_t i = static_cast<size_t>(r.idx);
         if (!appLeftSel_.erase(i)) appLeftSel_.insert(i);
     }
@@ -118,8 +118,8 @@ void App::StartAppUninstall() {
     Dialog d;
     d.title = a.bytes ? TrF(L"Uninstall {0} ({1})?", Shorten(a.e.displayName, 60), util::FormatSizeShort(a.bytes))
                       : TrF(L"Uninstall {0}?", Shorten(a.e.displayName, 60));
-    d.message = Tr(L"Its own uninstaller opens and asks you what to remove; WinNCDU deletes nothing itself here. When it is done, "
-                   L"WinNCDU looks for folders it left behind and lets you review them. Registry entries are never touched.");
+    d.message = Tr(L"Its own uninstaller opens and asks you what to remove; Bytopsy deletes nothing itself here. When it is done, "
+                   L"Bytopsy looks for folders it left behind and lets you review them. Registry entries are never touched.");
     if (!a.e.publisher.empty()) d.lines.push_back(Tr(L"Publisher") + L"\t" + a.e.publisher);
     if (!a.e.displayVersion.empty()) d.lines.push_back(Tr(L"Version") + L"\t" + a.e.displayVersion);
     if (!a.folder.empty()) d.lines.push_back(Tr(L"Folder") + L"\t" + a.folder);
@@ -173,7 +173,7 @@ void App::StartAppUninstall() {
             }
         }, 1 << 20);
         if (th) CloseHandle(th);
-        Toast(TrF(L"Finish in {0}'s uninstaller; WinNCDU then looks for leftovers", Shorten(a.e.displayName, 40)), 2);
+        Toast(TrF(L"Finish in {0}'s uninstaller; Bytopsy then looks for leftovers", Shorten(a.e.displayName, 40)), 2);
     };
     ShowDialog(std::move(d));
 }
@@ -194,7 +194,7 @@ void App::LookForAppLeftovers(bool askIfInstalled) {
         Dialog d;
         d.title = TrF(L"{0} is still installed", Shorten(e.displayName, 60));
         d.message = Tr(L"Its entry in Installed apps is still there, so its folders still belong to it. Finish (or restart) its "
-                       L"uninstaller first: WinNCDU only offers the folders of apps that are gone.");
+                       L"uninstaller first: Bytopsy only offers the folders of apps that are gone.");
         d.icon = 0xE946;
         d.buttons = {Tr(L"OK")};
         d.primary = 0;
@@ -226,7 +226,7 @@ void App::LookForAppLeftovers(bool askIfInstalled) {
         lists_[static_cast<int>(View::Apps)] = ListState{};
         rowsDirty_ = true;
         if (view_ != View::Apps) ShowView(View::Apps);
-        Toast(appLeft_.empty() ? TrF(L"{0} is uninstalled and left no folders behind that WinNCDU can tell", e.displayName)
+        Toast(appLeft_.empty() ? TrF(L"{0} is uninstalled and left no folders behind that Bytopsy can tell", e.displayName)
                                : TrF(L"{0} is uninstalled: review the folders it left behind", e.displayName),
               0);
     };
@@ -365,7 +365,7 @@ void App::DrawApps(const RectF& area) {
     DrawViewHeader(R(area.left + 24, top, bx, top + 46), Tr(L"Apps"), sub, IC_APPS);
     float y = top + 58;
 
-    // An uninstaller WinNCDU is waiting for.
+    // An uninstaller Bytopsy is waiting for.
     if (appWait_) {
         RectF b = R(area.left + 24, y, area.right - 24, y + 52);
         gfx_.FillRound(b, 10, WithAlpha(P_.accent, 0.12f));

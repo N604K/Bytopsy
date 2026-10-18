@@ -11,7 +11,7 @@
 
 enum class BrowserData { None, Cookies, History };
 
-// %LOCALAPPDATA%\WinNCDU\keep-signed-in.txt (WINNCDU_KEEP_SIGNED_IN overrides it, for tests).
+// %LOCALAPPDATA%\Bytopsy\keep-signed-in.txt (BYTOPSY_KEEP_SIGNED_IN overrides it, for tests).
 std::wstring KeepSignedInFile();
 // The sites in the list, normalized ("https://www.GitHub.com/login" -> "github.com"). Missing file: empty.
 std::vector<std::wstring> LoadKeepList(const std::wstring& file);

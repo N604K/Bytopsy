@@ -93,7 +93,7 @@ const wchar_t* PhotoMatchName(PhotoMatch m);
 class PhotoHashCache {
 public:
     explicit PhotoHashCache(std::wstring file = L"") : file_(std::move(file)) {}
-    // %LOCALAPPDATA%\WinNCDU\photohash.cache
+    // %LOCALAPPDATA%\Bytopsy\photohash.cache
     static std::wstring DefaultFile();
     bool Lookup(const std::wstring& path, uint64_t size, int64_t mtime, ImageHash& out);
     void Store(const std::wstring& path, uint64_t size, int64_t mtime, const ImageHash& h);

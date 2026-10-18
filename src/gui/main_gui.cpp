@@ -10,8 +10,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE))) return 1;
 
-    // Usage: winncdu.exe [folder]          scan a folder or drive
-    //        winncdu.exe -f export.json    open a saved scan (WinNCDU or ncdu JSON)
+    // Usage: bytopsy.exe [folder]          scan a folder or drive
+    //        bytopsy.exe -f export.json    open a saved scan (Bytopsy or ncdu JSON)
     std::wstring path, importFile;
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);

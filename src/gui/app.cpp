@@ -11,7 +11,7 @@
 #pragma comment(lib, "comctl32.lib")
 
 namespace {
-const wchar_t* kClass = L"WinNCDU.MainWindow";
+const wchar_t* kClass = L"Bytopsy.MainWindow";
 constexpr UINT_PTR kTimerId = 1;
 constexpr float kSidebarW = 240.0f;
 constexpr float kTopH = 56.0f;
@@ -26,6 +26,7 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
     settings_ = LoadSettings();
     util::g_si = settings_.si;
     elevated_ = IsElevated();
+    MigrateShellIntegration();
     // Numbers and dates in the Windows regional format; the language from the settings.
     wchar_t dec[8] = L".", grp[8] = L",";
     if (!GetLocaleInfoEx(LOCALE_NAME_USER_DEFAULT, LOCALE_SDECIMAL, dec, 8)) wcscpy_s(dec, L".");
@@ -46,7 +47,7 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
 
     UINT sysDpi = GetDpiForSystem();
     int w = MulDiv(1320, sysDpi, 96), h = MulDiv(840, sysDpi, 96);
-    std::wstring title = elevated_ ? Tr(L"WinNCDU (Administrator)") : L"WinNCDU";
+    std::wstring title = elevated_ ? Tr(L"Bytopsy (Administrator)") : L"Bytopsy";
     hwnd_ = CreateWindowExW(0, kClass, title.c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, w, h, nullptr, nullptr,
                             inst, this);
     if (!hwnd_) return false;
@@ -62,7 +63,7 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
     }
     gfx_.SetDpi(static_cast<float>(GetDpiForWindow(hwnd_)));
     if (!gfx_.Init(hwnd_)) {
-        MessageBoxW(hwnd_, Tr(L"Direct2D could not be initialized.").c_str(), L"WinNCDU", MB_ICONERROR);
+        MessageBoxW(hwnd_, Tr(L"Direct2D could not be initialized.").c_str(), L"Bytopsy", MB_ICONERROR);
         return false;
     }
     gfx_.SetLocale(i18n::CurrentCode() == i18n::kPseudoCode ? L"en-US" : i18n::CurrentCode());
@@ -126,7 +127,7 @@ void App::ApplyLanguage(bool redraw) {
     gfx_.SetLocale(code == i18n::kPseudoCode ? L"en-US" : code);
     typeNames_.clear();
     fitCache_.clear();
-    SetWindowTextW(hwnd_, elevated_ ? Tr(L"WinNCDU (Administrator)").c_str() : L"WinNCDU");
+    SetWindowTextW(hwnd_, elevated_ ? Tr(L"Bytopsy (Administrator)").c_str() : L"Bytopsy");
     if (search_) SendMessageW(search_, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(SearchCue().c_str()));
     if (!problems.empty())
         Toast(TrN(problems.size(), L"The language file has {0} problem: {1}", L"The language file has {0} problems, the first: {1}", problems[0]),

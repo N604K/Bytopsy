@@ -1,7 +1,7 @@
 #pragma once
 
-// Scheduled cleanup: `winncdu-cli --clean <ids> --yes` run by a per-user Task Scheduler task
-// (\WinNCDU\Scheduled cleanup). The pure helpers (id lists, command lines, trigger text, exit codes)
+// Scheduled cleanup: `bytopsy-cli --clean <ids> --yes` run by a per-user Task Scheduler task
+// (\Bytopsy\Scheduled cleanup). The pure helpers (id lists, command lines, trigger text, exit codes)
 // are testable without touching Task Scheduler; the Task* functions use Task Scheduler 2.0
 // (ITaskService) and need COM initialized on the calling thread.
 
@@ -85,9 +85,9 @@ std::wstring DescribeTaskResult(int64_t code);
 
 // ---- Task Scheduler (per user, no administrator rights)
 
-constexpr const wchar_t* kScheduleFolder = L"\\WinNCDU";
+constexpr const wchar_t* kScheduleFolder = L"\\Bytopsy";
 constexpr const wchar_t* kScheduleTask = L"Scheduled cleanup";
-// kScheduleFolder, or for tests WINNCDU_TASK_FOLDER when it names a \WinNCDU-test... folder.
+// kScheduleFolder, or for tests BYTOPSY_TASK_FOLDER when it names a \Bytopsy-test... folder.
 std::wstring ScheduleFolder();
 
 struct TaskInfo {
@@ -95,7 +95,7 @@ struct TaskInfo {
     bool enabled = false;
     std::wstring path, arguments;  // the first action
     ScheduleSpec spec;             // from the trigger and the arguments
-    bool specKnown = false;        // the trigger is one WinNCDU writes
+    bool specKnown = false;        // the trigger is one Bytopsy writes
     int64_t nextRun = 0, lastRun = 0;  // FILETIME ticks (UTC), 0 = none
     int64_t lastResult = 0;
 };
@@ -110,7 +110,7 @@ bool TaskQuery(const std::wstring& folder, const std::wstring& name, TaskInfo& i
 // Deletes that one task, then the folder if nothing else is in it. A missing task is fine.
 bool TaskRemove(const std::wstring& folder, const std::wstring& name, std::wstring& err);
 
-// %LOCALAPPDATA%\WinNCDU\cleanup.log (next to the journal), where command-line cleanups and
+// %LOCALAPPDATA%\Bytopsy\cleanup.log (next to the journal), where command-line cleanups and
 // schedule changes leave a line each.
 std::wstring CleanLogFile();
 void CleanLogAppend(const std::wstring& line);  // prefixed with the local time

@@ -30,9 +30,9 @@ namespace {
 
 void PrintUsage() {
     printf(
-        "WinNCDU " WINNCDU_VERSION_A " - NCurses Disk Usage style analyzer for Windows\n"
+        "Bytopsy " BYTOPSY_VERSION_A " - NCurses Disk Usage style analyzer for Windows\n"
         "\n"
-        "Usage: winncdu-cli [options] [path]\n"
+        "Usage: bytopsy-cli [options] [path]\n"
         "\n"
         "  path                  Folder or drive to scan (no path: choose from a list)\n"
         "\n"
@@ -51,7 +51,7 @@ void PrintUsage() {
         "  --no-mouse            Disable mouse support\n"
         "  --no-delete           Disable deleting files (safe browsing mode)\n"
         "  --protected           List the protected locations found on this PC and exit\n"
-        "  --journal             List what WinNCDU deleted recently (and what is still in the\n"
+        "  --journal             List what Bytopsy deleted recently (and what is still in the\n"
         "                        Recycle Bin) and exit\n"
         "  --ai-models           List local AI models (Hugging Face, Ollama, LM Studio) with\n"
         "                        what each frees, and exit\n"
@@ -98,7 +98,7 @@ int ListProtected() {
     auto all = ProtectedLocationsOnThisPC();
     std::wstring group;
     std::wstring out = L"Protected locations on this PC (system folders, AI assistant data, keys, wallets, synced folders).\n"
-                       L"WinNCDU never deletes Blocked items and asks twice for Important ones.\n";
+                       L"Bytopsy never deletes Blocked items and asks twice for Important ones.\n";
     for (auto& h : all) {
         if (h.group != group) {
             group = h.group;
@@ -122,7 +122,7 @@ int ListJournal() {
     SetConsoleOutputCP(CP_UTF8);
     auto entries = JournalRead(50);
     auto bin = ListRecycleBin();
-    std::wstring out = L"Recently deleted by WinNCDU (newest first). Journal: " + JournalFile() + L"\n\n";
+    std::wstring out = L"Recently deleted by Bytopsy (newest first). Journal: " + JournalFile() + L"\n\n";
     if (entries.empty()) out += L"  Nothing yet.\n";
     for (auto& e : entries) {
         const wchar_t* state = L"";
@@ -375,7 +375,7 @@ int ListStartup() {
             out += head + e.display + (e.publisher.empty() ? L"" : L"  (" + e.publisher + L")") + L"\n";
             out += L"                " + (e.command.empty() ? e.where : e.command) + L"\n";
             if (!e.restoreStart.empty())
-                out += L"                set to Manual by WinNCDU; turning it on restores start type " + e.restoreStart + L"\n";
+                out += L"                set to Manual by Bytopsy; turning it on restores start type " + e.restoreStart + L"\n";
         }
     }
     if (list.entries.empty()) out += L"\n  Nothing found.\n";
@@ -419,7 +419,7 @@ int ListApps() {
 }
 
 int Fail(const std::wstring& msg) {
-    fwprintf(stderr, L"winncdu-cli: %s\n", msg.c_str());
+    fwprintf(stderr, L"bytopsy-cli: %s\n", msg.c_str());
     return 2;
 }
 
@@ -666,7 +666,7 @@ int wmain(int argc, wchar_t** argv) {
             PrintUsage();
             return 0;
         } else if (a == L"-V" || a == L"--version") {
-            printf("WinNCDU " WINNCDU_VERSION_A "\n");
+            printf("Bytopsy " BYTOPSY_VERSION_A "\n");
             return 0;
         } else if (a == L"-o") {
             if (!next(outJson)) return Fail(L"-o needs a file name");
@@ -739,7 +739,7 @@ int wmain(int argc, wchar_t** argv) {
             else if (m == L"loose") match = PhotoMatch::Loose;
             else if (m != L"normal") return Fail(L"--similar-photos takes strict, normal or loose");
         } else if (a == L"-x") {
-            // ncdu compatibility: WinNCDU never crosses into other volumes (mount points are links).
+            // ncdu compatibility: Bytopsy never crosses into other volumes (mount points are links).
         } else if (a.size() > 1 && a[0] == L'-') {
             return Fail(L"unknown option " + a + L" (see --help)");
         } else {

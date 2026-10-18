@@ -33,8 +33,18 @@ bool RegSetString(HKEY root, const std::wstring& key, const wchar_t* name, const
     return r == ERROR_SUCCESS;
 }
 
-const wchar_t* kShellKeys[] = {L"Software\\Classes\\Directory\\shell\\WinNCDU", L"Software\\Classes\\Drive\\shell\\WinNCDU",
-                               L"Software\\Classes\\Directory\\Background\\shell\\WinNCDU"};
+const wchar_t* kShellKeys[] = {L"Software\\Classes\\Directory\\shell\\Bytopsy", L"Software\\Classes\\Drive\\shell\\Bytopsy",
+                               L"Software\\Classes\\Directory\\Background\\shell\\Bytopsy"};
+// The same entry under the app's former name (WinNCDU): replaced by the new one, removed with it.
+const wchar_t* kLegacyShellKeys[] = {L"Software\\Classes\\Directory\\shell\\WinNCDU", L"Software\\Classes\\Drive\\shell\\WinNCDU",
+                                     L"Software\\Classes\\Directory\\Background\\shell\\WinNCDU"};
+
+bool KeyExists(const wchar_t* key) {
+    HKEY h;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &h) != ERROR_SUCCESS) return false;
+    RegCloseKey(h);
+    return true;
+}
 
 }  // namespace
 
@@ -144,13 +154,17 @@ std::wstring ExePath() {
 }
 
 bool IsShellIntegrated() {
-    HKEY h;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, kShellKeys[0], 0, KEY_READ, &h) != ERROR_SUCCESS) return false;
-    RegCloseKey(h);
-    return true;
+    return KeyExists(kShellKeys[0]) || KeyExists(kLegacyShellKeys[0]);
+}
+
+void MigrateShellIntegration() {
+    if (!KeyExists(kLegacyShellKeys[0])) return;
+    std::wstring err;
+    SetShellIntegration(true, err);  // writes the entry under the new name and removes the former one
 }
 
 bool SetShellIntegration(bool enable, std::wstring& err) {
+    for (auto k : kLegacyShellKeys) RegDeleteTreeW(HKEY_CURRENT_USER, k);
     if (!enable) {
         for (auto k : kShellKeys) RegDeleteTreeW(HKEY_CURRENT_USER, k);
         SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
@@ -160,7 +174,7 @@ bool SetShellIntegration(bool enable, std::wstring& err) {
     std::wstring cmd = L"\"" + exe + L"\" \"%V\"";
     for (auto k : kShellKeys) {
         std::wstring key = k;
-        if (!RegSetString(HKEY_CURRENT_USER, key, nullptr, Tr(L"Analyze with WinNCDU")) ||
+        if (!RegSetString(HKEY_CURRENT_USER, key, nullptr, Tr(L"Analyze with Bytopsy")) ||
             !RegSetString(HKEY_CURRENT_USER, key, L"Icon", L"\"" + exe + L"\",0") ||
             !RegSetString(HKEY_CURRENT_USER, key + L"\\command", nullptr, cmd)) {
             err = Tr(L"Could not write to the registry");

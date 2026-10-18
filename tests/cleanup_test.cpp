@@ -1,4 +1,4 @@
-// Self-check of Cleanup's preview semantics: winncdu-cleanup-test.exe
+// Self-check of Cleanup's preview semantics: bytopsy-cleanup-test.exe
 // Exactly the measured entries are deleted, minus the kept ones; entries that changed since they
 // were measured are left alone. Works in %TEMP% only; Recycle Bin items it creates are its own.
 #include <windows.h>
@@ -114,9 +114,9 @@ int main() {
     DWORD tn = GetTempPathW(MAX_PATH, b), ln = tn ? GetLongPathNameW(b, lb, MAX_PATH) : 0;
     std::wstring tmp = ln && ln < MAX_PATH ? std::wstring(lb, ln) : std::wstring(b, tn);
     std::wstring pid = std::to_wstring(GetCurrentProcessId());
-    std::wstring dir = tmp + L"winncdu-cleanup-test-" + pid;
+    std::wstring dir = tmp + L"bytopsy-cleanup-test-" + pid;
     std::wstring journal = dir + L"-journal.log";  // restores are journaled; keep yours untouched
-    SetEnvironmentVariableW(L"WINNCDU_JOURNAL", journal.c_str());
+    SetEnvironmentVariableW(L"BYTOPSY_JOURNAL", journal.c_str());
     CreateDirectoryW(dir.c_str(), nullptr);
     CreateDirectoryW((dir + L"\\old-folder").c_str(), nullptr);
     Put(dir + L"\\old-folder\\a.tmp", "aaaa");
@@ -149,7 +149,7 @@ int main() {
     {
         FILE* f = nullptr;
         std::string data;
-        if (_wfopen_s(&f, WINNCDU_SOURCE_DIR L"/res/cleaners.ini", L"rb") == 0 && f) {
+        if (_wfopen_s(&f, BYTOPSY_SOURCE_DIR L"/res/cleaners.ini", L"rb") == 0 && f) {
             char buf[4096];
             size_t n;
             while ((n = fread(buf, 1, sizeof(buf), f)) > 0) data.append(buf, n);
@@ -253,12 +253,12 @@ int main() {
             Check(false, L"command category parsed");
         }
         CleanCategory missing;
-        missing.command = L"winncdu-no-such-tool --clean";
+        missing.command = L"bytopsy-no-such-tool --clean";
         missing.targets = {{cache, L"", 0}};
         MeasureCategory(missing, cancel);
         CleanResult mr = CleanCategoryNow(missing, cancel, [](const std::wstring&) {});
         Check(missing.toolMissing && mr.error.find(L"was not found") != std::wstring::npos, L"a missing tool is reported: " + mr.error);
-        Check(!FindTool(L"cmd /c exit").empty() && FindTool(L"winncdu-no-such-tool").empty(), L"tools are found on PATH");
+        Check(!FindTool(L"cmd /c exit").empty() && FindTool(L"bytopsy-no-such-tool").empty(), L"tools are found on PATH");
     }
 
     // ---- Protected items are never listed, whatever a rule says
@@ -293,9 +293,9 @@ int main() {
                            L"FileKey3=" + a + L"|*.tmp\r\n"
                            L"ExcludeKey1=FILE|" + a + L"\\Logs\\|keep.log\r\n"
                            L"[Test App Cookies *]\r\nFileKey1=" + a + L"|*\r\n"
-                           L"[Test App Registry *]\r\nRegKey1=HKCU\\Software\\WinNCDU-Test\r\n"
+                           L"[Test App Registry *]\r\nRegKey1=HKCU\\Software\\Bytopsy-Test\r\n"
                            L"[Whole Profile *]\r\nFileKey1=%UserProfile%|*|RECURSE\r\n"
-                           L"[Not Installed *]\r\nDetect=HKCU\\Software\\WinNCDU-Test-Not-There\r\nFileKey1=" + a + L"\\Cache|*\r\n";
+                           L"[Not Installed *]\r\nDetect=HKCU\\Software\\Bytopsy-Test-Not-There\r\nFileKey1=" + a + L"\\Cache|*\r\n";
         Winapp2Stats st;
         auto w = ParseWinapp2(ini, st);
         Check(st.entries == 5 && st.usable == 2 && st.personal == 1 && st.broad == 1 && st.regOnly == 1,
@@ -342,9 +342,9 @@ int main() {
         }
     }
 
-    // A real winapp2.ini (set WINNCDU_WINAPP2 to its path): parse it and measure what applies to
+    // A real winapp2.ini (set BYTOPSY_WINAPP2 to its path): parse it and measure what applies to
     // this PC. Only reads.
-    if (const wchar_t* real = _wgetenv(L"WINNCDU_WINAPP2")) {
+    if (const wchar_t* real = _wgetenv(L"BYTOPSY_WINAPP2")) {
         FILE* f = nullptr;
         std::string data;
         if (_wfopen_s(&f, real, L"rb") == 0 && f) {
@@ -362,7 +362,7 @@ int main() {
         {
             FILE* sf = nullptr;
             std::string shipped;
-            if (_wfopen_s(&sf, WINNCDU_SOURCE_DIR L"/res/cleaners.ini", L"rb") == 0 && sf) {
+            if (_wfopen_s(&sf, BYTOPSY_SOURCE_DIR L"/res/cleaners.ini", L"rb") == 0 && sf) {
                 char buf[4096];
                 size_t n;
                 while ((n = fread(buf, 1, sizeof(buf), sf)) > 0) shipped.append(buf, n);
@@ -395,8 +395,8 @@ int main() {
         for (size_t i = 0; i < cats.size() && i < 25 && cats[i].bytes; ++i)
             s += L"  " + util::FormatSizeShort(cats[i].bytes) + L"\t" + cats[i].name + L"  (" + std::to_wstring(cats[i].entries.size()) +
                  L" entries, " + std::to_wstring(cats[i].guarded) + L" left out)  " + cats[i].desc + L"\n";
-        // WINNCDU_WINAPP2_SHOW="Name|Other name": the largest entries of those categories.
-        if (const wchar_t* show = _wgetenv(L"WINNCDU_WINAPP2_SHOW"))
+        // BYTOPSY_WINAPP2_SHOW="Name|Other name": the largest entries of those categories.
+        if (const wchar_t* show = _wgetenv(L"BYTOPSY_WINAPP2_SHOW"))
             for (auto& k : cats)
                 if (std::wstring(L"|") + show + L"|" != L"" && (L"|" + std::wstring(show) + L"|").find(L"|" + k.name + L"|") != std::wstring::npos) {
                     s += L"\n[" + k.name + L"] " + std::to_wstring(k.entries.size()) + L" entries, " + std::to_wstring(k.guarded) + L" left out\n";
@@ -419,7 +419,7 @@ int main() {
         MkDirs(chrome + L"\\Network");
         MkDirs(other);
         MkDirs(ff);
-        SetEnvironmentVariableW(L"WINNCDU_KEEP_SIGNED_IN", keepFile.c_str());
+        SetEnvironmentVariableW(L"BYTOPSY_KEEP_SIGNED_IN", keepFile.c_str());
         bool made =
             Sql(chrome + L"\\Network\\Cookies",
                 "CREATE TABLE meta(key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR);"
@@ -560,7 +560,7 @@ int main() {
             MeasureCategory(hi, cancel);
             Check(hi.entries.empty(), L"nothing left to clean");
         }
-        SetEnvironmentVariableW(L"WINNCDU_KEEP_SIGNED_IN", nullptr);
+        SetEnvironmentVariableW(L"BYTOPSY_KEEP_SIGNED_IN", nullptr);
     }
 
     // Recycle Bin with one item kept: only the other one is removed (never the whole bin).
