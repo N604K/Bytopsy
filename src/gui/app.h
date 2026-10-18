@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../aimodels.h"
+#include "../alerts.h"
 #include "../apps.h"
 #include "../analysis.h"
 #include "../devjunk.h"
@@ -112,6 +113,8 @@ enum Cmd : int {
     CMD_APP_LEFT_DONE,
     CMD_PHOTO_FIND,
     CMD_PHOTO_MARK,
+    CMD_ALERTS,
+    CMD_ALERT_TEST,
     CMD_WIN_ACT = 600,  // + WinAction
     CMD_LANG = 800,     // + 0 Windows' language, 1 the pseudo-language, 2 + an index into langMenu_
 };
@@ -251,6 +254,8 @@ public:
     // `show`: how the program was started (wWinMain's nCmdShow), e.g. minimized from a shortcut.
     bool Create(HINSTANCE inst, const std::wstring& path, const std::wstring& importFile, int show = SW_SHOWDEFAULT);
     int Run();
+    // A notification's "Open Disk health" (bytopsy.exe --alert-link bytopsy:disk-health).
+    void OpenDiskHealth() { ShowView(View::DiskHealth); }
 
 private:
     static LRESULT CALLBACK WndProcThunk(HWND, UINT, WPARAM, LPARAM);
@@ -311,6 +316,9 @@ private:
     void LoadWinTools();
     void LoadGames();
     void LoadDiskHealth();
+    void LoadAlerts();
+    void ShowAlertsDialog();
+    void TestAlertNotification();
     void SortGames();
     void OnGameRow(int row);
     void StartGameUninstall();
@@ -535,6 +543,12 @@ private:
     DiskHealthReport disk_;
     std::vector<DriveTrend> diskTrends_;
     bool diskLoaded_ = false;
+    // Low disk space alerts: the settings (settings.ini), the task that checks, the registration.
+    AlertSettings alerts_;
+    TaskInfo alertTask_;
+    std::wstring alertTaskErr_;
+    bool alertRegistered_ = false;  // the AppUserModelId and bytopsy: protocol keys are there
+    int notifySetting_ = -1;        // NotificationSetting(): 0 on, 1..4 turned off, -1 unknown
     StartupList startup_;
     bool startupLoaded_ = false;
     bool startupShowMs_ = false;  // also list Microsoft's own services and tasks

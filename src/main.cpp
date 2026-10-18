@@ -9,6 +9,7 @@
 #include "export.h"
 #include "fsops.h"
 #include "aimodels.h"
+#include "alerts.h"
 #include "diskhealth.h"
 #include "apps.h"
 #include "games.h"
@@ -70,6 +71,13 @@ void PrintUsage() {
         "                        it and append a line to cleanup.log. Exit code 0 = done,\n"
         "                        1 = some items in use, 2 = bad ids, 3 = all skipped (admin)\n"
         "    --quiet             ...print nothing (used by the scheduled task)\n"
+        "  --check-space         Low disk space alerts: check each fixed drive's free space\n"
+        "                        against the limits set in the windowed app (Disk health) and\n"
+        "                        show a notification for a drive under its limit (once, then\n"
+        "                        after it was above it again or a day later). Exit code 1 = a\n"
+        "                        drive is under its limit\n"
+        "    --dry-run           ...only print what it would notify (nothing is shown or written)\n"
+        "    --quiet             ...print nothing\n"
         "  --startup             List what starts with Windows (Run keys, Startup folders,\n"
         "                        logon/boot tasks, services) with impact estimates, and exit\n"
         "  --apps                List installed apps (size, install date, version, publisher)\n"
@@ -536,6 +544,69 @@ int RunClean(const CleanCommand& cmd) {
     return done(code);
 }
 
+// --check-space [--dry-run] [--quiet]: the low disk space check the scheduled task runs (through
+// bytopsy.exe, which has no console window to flash). --dry-run only says what it would do.
+int RunCheckSpace(const std::vector<std::wstring>& args) {
+    bool dry = false, quiet = false;
+    for (auto& a : args) {
+        if (a == L"--check-space") continue;
+        if (a == L"--dry-run") dry = true;
+        else if (a == L"--quiet" || a == L"-q") quiet = true;
+        else if (a == L"--si") util::g_si = true;
+        else return Fail(L"--check-space can't be combined with " + a + L" (only --dry-run, --quiet and --si)");
+    }
+    SpaceCheck c = RunSpaceCheck(dry);
+    int code = SpaceCheckExitCode(c);
+    if (quiet) return code;
+    UINT oldCp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    const AlertSettings& s = c.settings;
+    std::wstring out = L"Low disk space alerts: " +
+                       (s.enabled ? L"on, " + DescribeCheckInterval(s) + L" (task " + ScheduleFolder() + L"\\" + kAlertTask + L")"
+                                  : std::wstring(L"off (turn them on in the windowed app: Disk health)")) +
+                       L"\n";
+    if (dry)
+        out += L"Dry run: nothing is shown or written.\n";
+    else if (!s.enabled)
+        out += L"Nothing was checked or notified. --dry-run shows what the limits say now.\n";
+    out += L"\n";
+    for (auto& d : c.drives) {
+        wchar_t head[96];
+        double pct = d.d.total ? 100.0 * static_cast<double>(d.d.free) / static_cast<double>(d.d.total) : 0;
+        std::wstring freeText = util::FormatSizeShort(d.d.free) + L" free of " + util::FormatSizeShort(d.d.total) + L" (" +
+                                util::FormatDecimal(pct, pct < 10 ? 1 : 0) + L"%)";
+        swprintf(head, 96, L"  %-3ls %-38ls ", d.d.drive.c_str(), freeText.c_str());
+        out += head;
+        if (!d.watched) {
+            out += L"not watched\n";
+            continue;
+        }
+        std::wstring limit = L"limit " + util::FormatSizeShort(d.limit) +
+                             (d.rule.unit == LimitUnit::Percent ? L" (" + DescribeLimit(d.rule) + L")" : std::wstring());
+        swprintf(head, 96, L"%-26ls ", limit.c_str());
+        out += head;
+        if (!d.low) {
+            out += d.cleared ? L"ok (back above the limit)\n" : L"ok\n";
+            continue;
+        }
+        out += L"UNDER THE LIMIT: ";
+        if (d.notify)
+            out += dry || !s.enabled ? L"would notify\n" : L"notified\n";
+        else
+            out += L"notified " + util::FormatTime(util::UnixToFileTime(d.lastNotified)) + L", not again before " +
+                   util::FormatTime(util::UnixToFileTime(d.lastNotified + kRenotifySeconds)) + L" unless it gets above the limit first\n";
+    }
+    if (c.drives.empty()) out += L"  No fixed drives.\n";
+    if (c.turnedOff) out += L"\nNotifications from Bytopsy are turned off in Windows Settings (System, Notifications).\n";
+    if (!c.error.empty()) out += L"\nA notification couldn't be shown: " + c.error + L"\n";
+    out += L"\nExit code: 0 = every watched drive is above its limit, 1 = one is under it.\n";
+    std::string u = util::WideToUtf8(out);
+    fwrite(u.data(), 1, u.size(), stdout);
+    fflush(stdout);
+    SetConsoleOutputCP(oldCp);
+    return code;
+}
+
 // Scans cfg.path with progress on stderr. Null (after a message) when the path can't be scanned.
 std::unique_ptr<Node> HeadlessScan(const AppConfig& cfg) {
     std::wstring err;
@@ -652,6 +723,7 @@ int wmain(int argc, wchar_t** argv) {
         std::wstring err;
         if (!ParseCleanCommandLine(args, clean, err)) return Fail(err);
         if (clean.clean) return RunClean(clean);
+        if (std::find(args.begin(), args.end(), L"--check-space") != args.end()) return RunCheckSpace(args);
     }
 
     for (int i = 1; i < argc; ++i) {

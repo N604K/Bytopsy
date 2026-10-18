@@ -385,11 +385,10 @@ int64_t DateToTicks(DATE d) {
 
 }  // namespace
 
-bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const ScheduleSpec& when, const std::wstring& exe,
-              const std::wstring& args, const std::wstring& description, std::wstring& err) {
-    Com<ITaskService> svc;
-    if (!Connect(svc, err)) return false;
-    Com<ITaskFolder> folder;
+namespace {
+
+// The folder, created when it isn't there yet.
+bool OpenFolder(Com<ITaskService>& svc, const std::wstring& folderPath, Com<ITaskFolder>& folder, std::wstring& err) {
     HRESULT hr = svc->GetFolder(Bstr(folderPath), &folder);
     if (NotFound(hr)) {
         Com<ITaskFolder> root;
@@ -398,11 +397,14 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
         hr = root->CreateFolder(Bstr(FolderLeaf(folderPath)), Empty(), &folder);
     }
     if (FAILED(hr)) return Fail(N_(L"Couldn't open the task folder"), hr, err);
+    return true;
+}
 
-    Com<ITaskDefinition> def;
-    hr = svc->NewTask(0, &def);
+// A new definition that runs as the current user, only while signed in, never elevated.
+bool NewDefinition(Com<ITaskService>& svc, const std::wstring& description, const std::wstring& user, Com<ITaskDefinition>& def,
+                   std::wstring& err) {
+    HRESULT hr = svc->NewTask(0, &def);
     if (FAILED(hr)) return Fail(N_(L"Couldn't create the task"), hr, err);
-    std::wstring user = CurrentUser();
     {
         Com<IRegistrationInfo> ri;
         if (SUCCEEDED(def->get_RegistrationInfo(&ri))) {
@@ -410,87 +412,156 @@ bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const Sc
             ri->put_Description(Bstr(description));
         }
     }
-    {
-        Com<IPrincipal> pr;
-        hr = def->get_Principal(&pr);
-        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
-        pr->put_LogonType(TASK_LOGON_INTERACTIVE_TOKEN);  // as you, only while you're signed in
-        pr->put_RunLevel(TASK_RUNLEVEL_LUA);              // never elevated
-        if (!user.empty()) pr->put_UserId(Bstr(user));
+    Com<IPrincipal> pr;
+    hr = def->get_Principal(&pr);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
+    pr->put_LogonType(TASK_LOGON_INTERACTIVE_TOKEN);  // as you, only while you're signed in
+    pr->put_RunLevel(TASK_RUNLEVEL_LUA);              // never elevated
+    if (!user.empty()) pr->put_UserId(Bstr(user));
+    return true;
+}
+
+bool SetTaskSettings(Com<ITaskDefinition>& def, bool onBattery, const wchar_t* timeLimit, std::wstring& err) {
+    Com<ITaskSettings> st;
+    HRESULT hr = def->get_Settings(&st);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
+    st->put_StartWhenAvailable(VARIANT_TRUE);  // a missed start runs as soon as possible
+    st->put_DisallowStartIfOnBatteries(onBattery ? VARIANT_FALSE : VARIANT_TRUE);
+    st->put_StopIfGoingOnBatteries(onBattery ? VARIANT_FALSE : VARIANT_TRUE);
+    st->put_RunOnlyIfIdle(VARIANT_FALSE);
+    st->put_WakeToRun(VARIANT_FALSE);
+    st->put_AllowDemandStart(VARIANT_TRUE);
+    st->put_Enabled(VARIANT_TRUE);
+    st->put_MultipleInstances(TASK_INSTANCES_IGNORE_NEW);
+    st->put_ExecutionTimeLimit(Bstr(timeLimit));
+    st->put_Priority(7);  // below normal
+    return true;
+}
+
+bool AddLogonTrigger(Com<ITriggerCollection>& tc, const std::wstring& user, const wchar_t* delay, std::wstring& err) {
+    Com<ITrigger> tr;
+    HRESULT hr = tc->Create(TASK_TRIGGER_LOGON, &tr);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't set up the trigger"), hr, err);
+    tr->put_Enabled(VARIANT_TRUE);
+    Com<ILogonTrigger> t;
+    if (SUCCEEDED(tr->QueryInterface(IID_ILogonTrigger, reinterpret_cast<void**>(&t)))) {
+        if (!user.empty()) t->put_UserId(Bstr(user));  // your logon only (any user's needs admin)
+        t->put_Delay(Bstr(delay));                     // not in the way of signing in
     }
-    {
-        Com<ITaskSettings> st;
-        hr = def->get_Settings(&st);
-        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
-        st->put_StartWhenAvailable(VARIANT_TRUE);  // a missed start runs as soon as possible
-        st->put_DisallowStartIfOnBatteries(VARIANT_TRUE);
-        st->put_StopIfGoingOnBatteries(VARIANT_TRUE);
-        st->put_RunOnlyIfIdle(VARIANT_FALSE);
-        st->put_WakeToRun(VARIANT_FALSE);
-        st->put_AllowDemandStart(VARIANT_TRUE);
-        st->put_Enabled(VARIANT_TRUE);
-        st->put_MultipleInstances(TASK_INSTANCES_IGNORE_NEW);
-        st->put_ExecutionTimeLimit(Bstr(L"PT2H"));
-        st->put_Priority(7);  // below normal
-    }
+    return true;
+}
+
+bool AddExecAction(Com<ITaskDefinition>& def, const std::wstring& exe, const std::wstring& args, std::wstring& err) {
+    Com<IActionCollection> ac;
+    HRESULT hr = def->get_Actions(&ac);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
+    Com<IAction> a;
+    hr = ac->Create(TASK_ACTION_EXEC, &a);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't set up the action"), hr, err);
+    Com<IExecAction> ex;
+    hr = a->QueryInterface(IID_IExecAction, reinterpret_cast<void**>(&ex));
+    if (FAILED(hr)) return Fail(N_(L"Couldn't set up the action"), hr, err);
+    ex->put_Path(Bstr(exe));
+    ex->put_Arguments(Bstr(args));
+    size_t slash = exe.find_last_of(L"\\/");
+    if (slash != std::wstring::npos) ex->put_WorkingDirectory(Bstr(exe.substr(0, slash)));
+    return true;
+}
+
+bool Register(Com<ITaskFolder>& folder, const std::wstring& name, Com<ITaskDefinition>& def, std::wstring& err) {
+    Com<IRegisteredTask> reg;
+    HRESULT hr = folder->RegisterTaskDefinition(Bstr(name), def.p, TASK_CREATE_OR_UPDATE, Empty(), Empty(), TASK_LOGON_INTERACTIVE_TOKEN,
+                                                Empty(), &reg);
+    if (FAILED(hr)) return Fail(N_(L"Couldn't save the task"), hr, err);
+    return true;
+}
+
+}  // namespace
+
+bool TaskSave(const std::wstring& folderPath, const std::wstring& name, const ScheduleSpec& when, const std::wstring& exe,
+              const std::wstring& args, const std::wstring& description, std::wstring& err) {
+    Com<ITaskService> svc;
+    if (!Connect(svc, err)) return false;
+    Com<ITaskFolder> folder;
+    if (!OpenFolder(svc, folderPath, folder, err)) return false;
+    std::wstring user = CurrentUser();
+    Com<ITaskDefinition> def;
+    if (!NewDefinition(svc, description, user, def, err) || !SetTaskSettings(def, false, L"PT2H", err)) return false;
     {
         Com<ITriggerCollection> tc;
-        hr = def->get_Triggers(&tc);
+        HRESULT hr = def->get_Triggers(&tc);
         if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
-        TASK_TRIGGER_TYPE2 type = when.freq == ScheduleFreq::Daily    ? TASK_TRIGGER_DAILY
-                                  : when.freq == ScheduleFreq::Weekly ? TASK_TRIGGER_WEEKLY
-                                  : when.freq == ScheduleFreq::Monthly ? TASK_TRIGGER_MONTHLY
-                                                                       : TASK_TRIGGER_LOGON;
-        Com<ITrigger> tr;
-        hr = tc->Create(type, &tr);
-        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the trigger"), hr, err);
-        SYSTEMTIME now;
-        GetLocalTime(&now);
-        tr->put_StartBoundary(Bstr(ScheduleStartBoundary(when, now.wYear, now.wMonth, now.wDay, now.wDayOfWeek, now.wHour, now.wMinute)));
-        tr->put_Enabled(VARIANT_TRUE);
-        if (when.freq == ScheduleFreq::Daily) {
-            Com<IDailyTrigger> t;
-            if (SUCCEEDED(tr->QueryInterface(IID_IDailyTrigger, reinterpret_cast<void**>(&t)))) t->put_DaysInterval(1);
-        } else if (when.freq == ScheduleFreq::Weekly) {
-            Com<IWeeklyTrigger> t;
-            if (SUCCEEDED(tr->QueryInterface(IID_IWeeklyTrigger, reinterpret_cast<void**>(&t)))) {
-                t->put_DaysOfWeek(static_cast<short>(1 << std::clamp(when.weekday, 0, 6)));
-                t->put_WeeksInterval(1);
-            }
-        } else if (when.freq == ScheduleFreq::Monthly) {
-            Com<IMonthlyTrigger> t;
-            if (SUCCEEDED(tr->QueryInterface(IID_IMonthlyTrigger, reinterpret_cast<void**>(&t)))) {
-                t->put_DaysOfMonth(static_cast<long>(1u << (std::clamp(when.monthDay, 1, 28) - 1)));
-                t->put_MonthsOfYear(0xFFF);
-            }
+        if (when.freq == ScheduleFreq::Logon) {
+            if (!AddLogonTrigger(tc, user, L"PT5M", err)) return false;
         } else {
-            Com<ILogonTrigger> t;
-            if (SUCCEEDED(tr->QueryInterface(IID_ILogonTrigger, reinterpret_cast<void**>(&t)))) {
-                if (!user.empty()) t->put_UserId(Bstr(user));  // your logon only (any user's needs admin)
-                t->put_Delay(Bstr(L"PT5M"));                   // not in the way of signing in
+            TASK_TRIGGER_TYPE2 type = when.freq == ScheduleFreq::Daily    ? TASK_TRIGGER_DAILY
+                                      : when.freq == ScheduleFreq::Weekly ? TASK_TRIGGER_WEEKLY
+                                                                          : TASK_TRIGGER_MONTHLY;
+            Com<ITrigger> tr;
+            hr = tc->Create(type, &tr);
+            if (FAILED(hr)) return Fail(N_(L"Couldn't set up the trigger"), hr, err);
+            SYSTEMTIME now;
+            GetLocalTime(&now);
+            tr->put_StartBoundary(Bstr(ScheduleStartBoundary(when, now.wYear, now.wMonth, now.wDay, now.wDayOfWeek, now.wHour, now.wMinute)));
+            tr->put_Enabled(VARIANT_TRUE);
+            if (when.freq == ScheduleFreq::Daily) {
+                Com<IDailyTrigger> t;
+                if (SUCCEEDED(tr->QueryInterface(IID_IDailyTrigger, reinterpret_cast<void**>(&t)))) t->put_DaysInterval(1);
+            } else if (when.freq == ScheduleFreq::Weekly) {
+                Com<IWeeklyTrigger> t;
+                if (SUCCEEDED(tr->QueryInterface(IID_IWeeklyTrigger, reinterpret_cast<void**>(&t)))) {
+                    t->put_DaysOfWeek(static_cast<short>(1 << std::clamp(when.weekday, 0, 6)));
+                    t->put_WeeksInterval(1);
+                }
+            } else {
+                Com<IMonthlyTrigger> t;
+                if (SUCCEEDED(tr->QueryInterface(IID_IMonthlyTrigger, reinterpret_cast<void**>(&t)))) {
+                    t->put_DaysOfMonth(static_cast<long>(1u << (std::clamp(when.monthDay, 1, 28) - 1)));
+                    t->put_MonthsOfYear(0xFFF);
+                }
             }
         }
     }
+    return AddExecAction(def, exe, args, err) && Register(folder, name, def, err);
+}
+
+std::wstring RepetitionInterval(int hours) { return L"PT" + std::to_wstring(std::clamp(hours, 1, 24)) + L"H"; }
+
+bool TaskSaveRepeating(const std::wstring& folderPath, const std::wstring& name, int everyHours, bool atLogon, const std::wstring& exe,
+                       const std::wstring& args, const std::wstring& description, std::wstring& err) {
+    Com<ITaskService> svc;
+    if (!Connect(svc, err)) return false;
+    Com<ITaskFolder> folder;
+    if (!OpenFolder(svc, folderPath, folder, err)) return false;
+    std::wstring user = CurrentUser();
+    Com<ITaskDefinition> def;
+    // A check takes a second: fine on battery, never more than a few minutes.
+    if (!NewDefinition(svc, description, user, def, err) || !SetTaskSettings(def, true, L"PT10M", err)) return false;
     {
-        Com<IActionCollection> ac;
-        hr = def->get_Actions(&ac);
+        Com<ITriggerCollection> tc;
+        HRESULT hr = def->get_Triggers(&tc);
         if (FAILED(hr)) return Fail(N_(L"Couldn't set up the task"), hr, err);
-        Com<IAction> a;
-        hr = ac->Create(TASK_ACTION_EXEC, &a);
-        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the action"), hr, err);
-        Com<IExecAction> ex;
-        hr = a->QueryInterface(IID_IExecAction, reinterpret_cast<void**>(&ex));
-        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the action"), hr, err);
-        ex->put_Path(Bstr(exe));
-        ex->put_Arguments(Bstr(args));
-        size_t slash = exe.find_last_of(L"\\/");
-        if (slash != std::wstring::npos) ex->put_WorkingDirectory(Bstr(exe.substr(0, slash)));
+        Com<ITrigger> tr;
+        hr = tc->Create(TASK_TRIGGER_TIME, &tr);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the trigger"), hr, err);
+        // From a few minutes from now, every N hours, without end.
+        SYSTEMTIME now;
+        GetLocalTime(&now);
+        int y = now.wYear, m = now.wMonth, d = now.wDay, mins = now.wHour * 60 + now.wMinute + 5;
+        if (mins >= 24 * 60) {
+            mins -= 24 * 60;
+            AddDays(y, m, d, 1);
+        }
+        tr->put_StartBoundary(Bstr(Boundary(y, m, d, mins / 60, mins % 60)));
+        tr->put_Enabled(VARIANT_TRUE);
+        Com<IRepetitionPattern> rep;
+        hr = tr->get_Repetition(&rep);
+        if (FAILED(hr)) return Fail(N_(L"Couldn't set up the trigger"), hr, err);
+        rep->put_Interval(Bstr(RepetitionInterval(everyHours)));
+        rep->put_StopAtDurationEnd(VARIANT_FALSE);
+        if (atLogon && !AddLogonTrigger(tc, user, L"PT2M", err)) return false;
     }
-    Com<IRegisteredTask> reg;
-    hr = folder->RegisterTaskDefinition(Bstr(name), def.p, TASK_CREATE_OR_UPDATE, Empty(), Empty(), TASK_LOGON_INTERACTIVE_TOKEN,
-                                        Empty(), &reg);
-    if (FAILED(hr)) return Fail(N_(L"Couldn't save the task"), hr, err);
-    return true;
+    return AddExecAction(def, exe, args, err) && Register(folder, name, def, err);
 }
 
 bool TaskQuery(const std::wstring& folderPath, const std::wstring& name, TaskInfo& info, std::wstring& err) {
