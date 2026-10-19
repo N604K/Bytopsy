@@ -268,7 +268,9 @@ int main() {
         Check(code == 2 && out.find("unknown cleanup category nope") != std::string::npos && out.find("fixture, fixadmin, fixopt") != std::string::npos,
               L"unknown id: exit 2 and the valid ids (" + std::to_wstring(code) + L")");
         code = RunCli(L"--clean all-safe", out);
-        Check(code == 0 && out.find("Dry run") != std::string::npos && out.find("Would free 10 B") != std::string::npos &&
+        // As administrator the admin category counts too (10 B + 5 B), as on the GitHub runner.
+        const char* wouldFree = elevated ? "Would free 15 B" : "Would free 10 B";
+        Check(code == 0 && out.find("Dry run") != std::string::npos && out.find(wouldFree) != std::string::npos &&
                   out.find("[fixture]") != std::string::npos && out.find("[fixopt]") == std::string::npos,
               L"dry run: exit 0, what would be freed (" + util::Utf8ToWide(out.substr(0, 400)) + L")");
         Check(PathExists(cache + L"\\old.tmp") && PathExists(admin + L"\\a.tmp") && !PathExists(data + L"\\cleanup.log"),
@@ -287,7 +289,8 @@ int main() {
         Check(journal.find("\tclean\t10\t2\tTest fixture\t") != std::string::npos && journal.find("command line") != std::string::npos,
               L"journaled like the windowed app");
         std::string log = Slurp(data + L"\\cleanup.log");
-        Check(log.find("clean fixture,fixadmin: freed 10 B") != std::string::npos && (elevated || log.find("skipped fixadmin (needs administrator rights)") != std::string::npos) &&
+        Check(log.find(elevated ? "clean fixture,fixadmin: freed 15 B" : "clean fixture,fixadmin: freed 10 B") != std::string::npos &&
+                  (elevated || log.find("skipped fixadmin (needs administrator rights)") != std::string::npos) &&
                   log.find("exit 0") != std::string::npos,
               L"a line in cleanup.log: " + util::Utf8ToWide(log));
         if (!elevated) {
