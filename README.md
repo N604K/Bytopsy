@@ -1,4 +1,18 @@
-# Bytopsy
+# Bytopsy: free disk space analyzer and PC cleaner for Windows
+
+[![Latest release](https://img.shields.io/github/v/release/N604K/Bytopsy?label=release&color=7C8CFF)](https://github.com/N604K/Bytopsy/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/N604K/Bytopsy/build.yml?label=build)](https://github.com/N604K/Bytopsy/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/github/license/N604K/Bytopsy?color=3DD68C)](LICENSE)
+![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-5C6EF1)
+
+**[Website](https://bytopsy.com)** · **[Download](https://github.com/N604K/Bytopsy/releases/latest)** · [Features](#the-windowed-app-bytopsyexe) · [Compare](#bytopsy-compared-with-other-tools) · [FAQ](#faq) · [Privacy](#privacy)
+
+**Bytopsy** is a free, open-source disk space analyzer and PC cleaner for Windows. It shows what is
+filling your drives with a treemap, cleans caches and junk without breaking anything, and keeps
+drivers, apps and disks healthy. No ads, no upsell, no registry cleaner and no telemetry in the
+program, under the MIT license.
+
+[![Bytopsy's folder list and treemap showing what fills a Windows drive](https://bytopsy.com/screens/treemap-dark.webp)](https://bytopsy.com)
 
 A byte autopsy for your Windows PC: a fast disk usage analyzer that finds out what really uses the
 space, cleans it up safely, and looks after the rest: apps, startup, games, AI models, WSL and Docker
@@ -10,6 +24,66 @@ self-contained `.exe` files.
 - **`bytopsy-cli.exe`**: the ncdu-style terminal app, for consoles, SSH sessions and scripting.
 
 Both share the same scanner, so results, exports and imports are interchangeable.
+
+## Quick start
+
+1. Download `bytopsy-<version>-x64.zip` from the [latest release](https://github.com/N604K/Bytopsy/releases/latest)
+   and check it against the `.sha256` file next to it.
+2. Unpack it anywhere and start `bytopsy.exe`. There is no installer and no account.
+3. Pick a drive. The biggest rectangle in the treemap is what to look at first.
+
+Details, portable mode and package managers are under [Install](#install). Windows SmartScreen may
+warn on the first start until [code signing](#code-signing-policy) is in place.
+
+## What it does
+
+| You want to | Bytopsy gives you |
+| --- | --- |
+| **See what is taking up space** on a drive | A folder list sorted by size above a treemap of every file, largest files, file types, old files and empty folders, and a search box that understands `>1G`, `older:1y` and `ext:mp4,mkv` |
+| **Free up disk space** safely | Cleanup of temporary files, browser and app caches, developer junk (`node_modules`, build folders) and AI model downloads, each measured first and checked against protection rules, deleted to the Recycle Bin by default, with a journal to restore from |
+| **Find duplicate files** and similar photos | Size, then a quick hash, then SHA-256; perceptual hashes for resized or re-saved photos |
+| **Shrink WSL and Docker disks** | The size of each `ext4.vhdx` / `docker_data.vhdx` next to what Linux really uses, and compacting the way Microsoft documents it |
+| **Keep Windows current** | Driver updates from Windows Update, app updates through winget, low disk space alerts |
+| **Tidy startup and apps** | Startup entries, services and scheduled tasks with their impact, and uninstalls that show the folders they leave behind |
+| **Keep an eye on drives** | Health, wear, temperature and errors from the drives' own SMART logs, and scan history to compare a drive month to month |
+| **Work from a terminal** | `bytopsy-cli`: the same scanner, ncdu-style, with ncdu-compatible JSON export and import |
+
+## Bytopsy compared with other tools
+
+As of October 2026, from each vendor's public pages. Something out of date? [Open an issue](https://github.com/N604K/Bytopsy/issues).
+
+| | Bytopsy | WinDirStat | WizTree | TreeSize Free | CCleaner |
+| --- | --- | --- | --- | --- | --- |
+| Price | Free | Free | Free for personal use | Free for private use | Free edition plus paid Pro |
+| Free at work and on clients' PCs | Yes | Yes | Needs a commercial license | No (non-commercial only) | Pro features are paid |
+| Open source | MIT | GPL v3 or later | No | No | No |
+| Treemap | Yes | Yes | Yes | Yes | See ccleaner.com |
+| Cleans what it finds | Yes, with protection rules and undo | Cleanup tools | No | No | Yes |
+| Registry cleaner | No, on purpose | No | No | No | Yes |
+| Drivers and app updates | Yes, free | No | No | No | Paid tier |
+
+WizTree reads the NTFS file table directly, which makes it faster on a very large drive; Bytopsy
+walks the file system with the standard Windows APIs. More detail, with each tool's strengths:
+[WinDirStat alternative](https://bytopsy.com/alternatives/windirstat),
+[WizTree alternative](https://bytopsy.com/alternatives/wiztree),
+[TreeSize Free alternative](https://bytopsy.com/alternatives/treesize-free) and
+[CCleaner alternative](https://bytopsy.com/alternatives/ccleaner).
+
+Guides: [how to free up disk space on Windows](https://bytopsy.com/guides/free-up-disk-space-windows),
+[what is taking up space on your C: drive](https://bytopsy.com/guides/what-is-taking-up-space-on-c-drive),
+[shrinking the WSL 2 and Docker Desktop disk](https://bytopsy.com/guides/shrink-wsl-docker-disk) and
+[are registry cleaners safe?](https://bytopsy.com/guides/registry-cleaners)
+
+<details>
+<summary>More screenshots</summary>
+
+![Bytopsy's cleanup view, with each item measured and checked against protection rules](https://bytopsy.com/screens/cleanup.webp)
+![Bytopsy's developer junk view, grouped by project](https://bytopsy.com/screens/dev-junk.webp)
+![Bytopsy's AI models view for Hugging Face, Ollama and LM Studio](https://bytopsy.com/screens/ai-models.webp)
+![Bytopsy's Drivers view, with updates from Windows Update](https://bytopsy.com/screens/drivers.webp)
+![Bytopsy's disk health view](https://bytopsy.com/screens/disk-health.webp)
+
+</details>
 
 ## The windowed app (`bytopsy.exe`)
 
@@ -548,6 +622,47 @@ Bytopsy was called WinNCDU before. On its first start it renames the old data fo
 counts as the marker), so settings, history, the journal and your rules carry over. An "Analyze with
 WinNCDU" Explorer entry is replaced by "Analyze with Bytopsy". A cleanup scheduled under the old name
 (`\WinNCDU\Scheduled cleanup`) is not moved: remove it in Task Scheduler and schedule again.
+
+## FAQ
+
+**Is Bytopsy really free?** Yes, every feature, for everyone. It is MIT licensed: use it at home, at
+work and on your clients' PCs, change it and share it. There is no Pro tier, no trial and no ads.
+
+**What is the best way to see what is taking up space on my C: drive?** Scan the drive with
+Bytopsy, as administrator so Windows' protected folders are counted, then follow the biggest
+rectangle in the treemap down through the folder list. The hidden space Windows keeps for itself
+(hibernation file, restore points, the component store) is measured under *Windows*.
+
+**Is Bytopsy an alternative to WinDirStat, WizTree or TreeSize?** It does the same job (a treemap
+and a size-sorted folder list) and goes on to the cleaning. Like WinDirStat it is open source; unlike
+WizTree and TreeSize Free it has no personal-use limit. See [the comparison](#bytopsy-compared-with-other-tools).
+
+**Is it a CCleaner alternative?** For cleaning caches, junk, startup entries and apps, yes, with every
+feature free and a source you can read. Bytopsy has no registry cleaner on purpose, see
+[No registry cleaner](#no-registry-cleaner).
+
+**Can it delete something I need?** It is built not to: drive roots, Windows, your profile and registry
+hives are *Blocked*; SSH keys, wallets, game saves, mail and Git repositories are *Important* and get an
+extra warning. Deletes go to the Recycle Bin by default and the journal can restore them. See
+[Protected locations](#protected-locations).
+
+**Does it send anything anywhere?** No. Bytopsy has no telemetry. The only network access is the
+update check, and it is off until you turn it on. See [Privacy](#privacy).
+
+**Why does Windows SmartScreen warn me?** Until the SignPath Foundation accepts the project, releases are
+not code signed, so Windows does not know the publisher yet. Check the download against its SHA-256
+file; the build runs in public on GitHub Actions. See the [code signing policy](#code-signing-policy).
+
+**Does it need administrator rights?** No. Scanning, cleanup and almost every view work as a normal
+user. Windows asks for permission only for the few actions that need it, such as compacting a WSL disk
+or cleaning Windows Update downloads.
+
+**Which Windows versions does it run on?** 64-bit Windows (x64). It is native C++ with no runtime to
+install.
+
+**How do I shrink a WSL or Docker Desktop disk?** Open *WSL & Docker*, choose the disks and press
+*Free up*. It does what [Microsoft documents](https://learn.microsoft.com/windows/wsl/disk-space):
+trims free space inside the distros, shuts WSL down and compacts each `.vhdx` with `diskpart`.
 
 ## Build
 
