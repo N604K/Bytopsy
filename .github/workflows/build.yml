@@ -46,8 +46,21 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      # A failing test's last output lines also become an annotation: readable on the run's page
+      # (and through the API) without signing in, unlike the log.
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        shell: pwsh
+        run: |
+          ctest --test-dir build --output-on-failure --output-junit ctest-results.xml
+          if ($LASTEXITCODE -ne 0) {
+            [xml]$junit = Get-Content build/ctest-results.xml
+            foreach ($t in @($junit.testsuite.testcase) | Where-Object { $_.status -eq 'fail' }) {
+              $out = (($t.'system-out' | Out-String) -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 30) -join "`n"
+              $msg = $out.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              "::error title=Test $($t.name) failed::$msg"
+            }
+            exit 1
+          }
 
       # res/lang/template.lang must list exactly the strings in the code (Tr, TrF, TrN, N_ and
       # res/cleaners.ini), with matching {0} placeholders; regenerate it with the same script.
