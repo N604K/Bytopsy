@@ -51,7 +51,7 @@ HEADER = """\
 # @name: the language's own name, e.g. Deutsch.
 # @plural: one (1 | other: English, German, Spanish, ...), zero-one (0, 1 | other: French),
 #   none (Japanese, Chinese, ...), east-slavic, polish, czech, romanian, lithuanian, slovenian,
-#   arabic. Leave it empty to use the usual rule for the file's language code.
+#   arabic, hebrew. Leave it empty to use the usual rule for the file's language code.
 # @translators: your name(s), optional.
 @name =
 @plural =

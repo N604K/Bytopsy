@@ -66,7 +66,8 @@ bool App::Create(HINSTANCE inst, const std::wstring& path, const std::wstring& i
         MessageBoxW(hwnd_, Tr(L"Direct2D could not be initialized.").c_str(), L"Bytopsy", MB_ICONERROR);
         return false;
     }
-    gfx_.SetLocale(i18n::CurrentCode() == i18n::kPseudoCode ? L"en-US" : i18n::CurrentCode());
+    gfx_.SetLocale(i18n::CurrentCode());
+    gfx_.SetMirror(i18n::IsRtl());
     ApplyTheme();
     CreateSearchBox();
     DragAcceptFiles(hwnd_, TRUE);
@@ -131,7 +132,9 @@ void App::ApplyLanguage(bool redraw) {
                       1, GetTickCount64() + 12000};
         return;
     }
-    gfx_.SetLocale(code == i18n::kPseudoCode ? L"en-US" : code);
+    gfx_.SetLocale(code);
+    gfx_.SetMirror(i18n::IsRtl());
+    UpdateSearchBox();
     typeNames_.clear();
     fitCache_.clear();
     SetWindowTextW(hwnd_, elevated_ ? Tr(L"Bytopsy (Administrator)").c_str() : L"Bytopsy");
@@ -151,6 +154,13 @@ void App::UpdateSearchBox() {
                               CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
     SendMessageW(search_, WM_SETFONT, reinterpret_cast<WPARAM>(searchFont_), TRUE);
     SendMessageW(search_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, 0);
+    // Right-to-left layout: the text starts on the right and reads right to left.
+    LONG_PTR ex = GetWindowLongPtrW(search_, GWL_EXSTYLE);
+    LONG_PTR want = gfx_.Mirror() ? (ex | WS_EX_RTLREADING | WS_EX_RIGHT) : (ex & ~static_cast<LONG_PTR>(WS_EX_RTLREADING | WS_EX_RIGHT));
+    if (want != ex) {
+        SetWindowLongPtrW(search_, GWL_EXSTYLE, want);
+        InvalidateRect(search_, nullptr, TRUE);
+    }
     OnSize();
 }
 
@@ -176,7 +186,9 @@ void App::OnSize() {
     // The edit control sits inside the rounded search box drawn by DrawTopBar.
     float textH = 20;
     float y = (kTopH - textH) / 2 + 1;
-    if (search_) MoveWindow(search_, Dip2Px(left + 38), Dip2Px(y), Dip2Px(boxW - 38 - 34), Dip2Px(textH), TRUE);
+    float boxX = left + 38, boxCx = boxW - 38 - 34;
+    if (gfx_.Mirror()) boxX = w - boxX - boxCx;
+    if (search_) MoveWindow(search_, Dip2Px(boxX), Dip2Px(y), Dip2Px(boxCx), Dip2Px(textH), TRUE);
     tmDirty_ = true;
 }
 
@@ -295,7 +307,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
                 TrackMouseEvent(&tme);
                 tracking_ = true;
             }
-            OnMouseMove(Px2Dip(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp)));
+            OnMouseMove(MouseX(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp)));
             return 0;
         case WM_MOUSELEAVE:
             tracking_ = false;
@@ -309,17 +321,17 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_LBUTTONDOWN:
         case WM_LBUTTONDBLCLK:
             SetFocus(hwnd_);
-            OnLButtonDown(Px2Dip(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp)), msg == WM_LBUTTONDBLCLK);
+            OnLButtonDown(MouseX(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp)), msg == WM_LBUTTONDBLCLK);
             return 0;
-        case WM_LBUTTONUP: OnLButtonUp(Px2Dip(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp))); return 0;
-        case WM_RBUTTONUP: OnRButtonUp(Px2Dip(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp))); return 0;
+        case WM_LBUTTONUP: OnLButtonUp(MouseX(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp))); return 0;
+        case WM_RBUTTONUP: OnRButtonUp(MouseX(GET_X_LPARAM(lp)), Px2Dip(GET_Y_LPARAM(lp))); return 0;
         case WM_XBUTTONUP:
             OnCommand(GET_XBUTTON_WPARAM(wp) == XBUTTON1 ? CMD_BACK : CMD_FORWARD);
             return TRUE;
         case WM_MOUSEWHEEL: {
             POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             ScreenToClient(hwnd_, &pt);
-            OnWheel(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wp)), Px2Dip(pt.x), Px2Dip(pt.y));
+            OnWheel(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wp)), MouseX(pt.x), Px2Dip(pt.y));
             return 0;
         }
         case WM_KEYDOWN:
@@ -330,7 +342,7 @@ LRESULT App::WndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_CONTEXTMENU:
             if (reinterpret_cast<HWND>(wp) == hwnd_ && GET_X_LPARAM(lp) == -1) {
                 // Keyboard invoked: open at the focused row.
-                POINT pt{Dip2Px(listArea_.left + 60), Dip2Px(listArea_.top + 40)};
+                POINT pt{Dip2Px(gfx_.MirrorX(listArea_.left + 60)), Dip2Px(listArea_.top + 40)};
                 ClientToScreen(hwnd_, &pt);
                 ShowContextMenu(pt.x, pt.y);
                 return 0;
@@ -729,7 +741,7 @@ void App::OnRButtonUp(float x, float y) {
         return;
     }
     Invalidate();
-    POINT pt{Dip2Px(x), Dip2Px(y)};
+    POINT pt{Dip2Px(gfx_.MirrorX(x)), Dip2Px(y)};
     ClientToScreen(hwnd_, &pt);
     ShowContextMenu(pt.x, pt.y);
 }
@@ -749,6 +761,8 @@ void App::OnWheel(float delta, float x, float y) {
 // Keyboard
 
 void App::OnKeyDown(WPARAM vk) {
+    // Right-to-left layout: the arrow keys follow the mirrored directions.
+    if (gfx_.Mirror() && (vk == VK_LEFT || vk == VK_RIGHT)) vk = vk == VK_LEFT ? VK_RIGHT : VK_LEFT;
     bool ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0, alt = GetKeyState(VK_MENU) < 0;
     if (task_) {
         if (vk == VK_ESCAPE && task_->cancel && !task_->cancelRequested) {

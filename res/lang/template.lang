@@ -16,7 +16,7 @@
 # @name: the language's own name, e.g. Deutsch.
 # @plural: one (1 | other: English, German, Spanish, ...), zero-one (0, 1 | other: French),
 #   none (Japanese, Chinese, ...), east-slavic, polish, czech, romanian, lithuanian, slovenian,
-#   arabic. Leave it empty to use the usual rule for the file's language code.
+#   arabic, hebrew. Leave it empty to use the usual rule for the file's language code.
 # @translators: your name(s), optional.
 @name =
 @plural =
@@ -31,10 +31,10 @@
 # src/gui/actions.cpp:1955
 (close {0}) =
 
-# src/gui/draw.cpp:3048
+# src/gui/draw.cpp:3057
 (deleted) =
 
-# src/gui/draw.cpp:1223
+# src/gui/draw.cpp:1232
 (none) =
 
 # src/gui/drivers_view.cpp:453
@@ -52,7 +52,7 @@
 # src/gui/actions.cpp:1887
 ({0} kept)|({0} kept) =
 
-# src/gui/draw.cpp:1364
+# src/gui/draw.cpp:1373
 ({0} unreadable) =
 
 # src/gui/draw.cpp:112
@@ -103,7 +103,7 @@ A System Restore point first, then Windows Update downloads and installs =
 # src/gui/apps_view.cpp:871
 A test setting stands in for winget, so nothing was run. =
 
-# src/gui/draw.cpp:2422
+# src/gui/draw.cpp:2431
 A trend needs measurements a day or more apart =
 
 # src/protect.cpp:296
@@ -124,7 +124,7 @@ A whole virtual machine or WSL disk. =
 # src/diskhealth.cpp:310
 Aborted =
 
-# src/gui/actions.cpp:2698
+# src/gui/actions.cpp:2695
 About && shortcuts\tF1 =
 
 # src/schedule.cpp:343
@@ -133,13 +133,13 @@ access denied =
 # src/driverupdates.cpp:559
 Access denied: run as administrator =
 
-# src/gui/actions.cpp:3002
+# src/gui/actions.cpp:3000
 Add your own cleanup categories, then click Measure in Cleanup =
 
-# src/gui/actions.cpp:2687
+# src/gui/actions.cpp:2684
 Add “Analyze with Bytopsy” to Explorer =
 
-# src/gui/actions.cpp:2985
+# src/gui/actions.cpp:2983
 Added “Analyze with Bytopsy” to the Explorer right-click menu =
 
 # src/gui/draw.cpp:560
@@ -157,7 +157,7 @@ AI =
 # src/protect.cpp:356
 AI assistant data: conversation history, sessions, project memory, settings and sign-in. It can't be downloaded again. =
 
-# src/protect.cpp:414, src/gui/draw.cpp:486, src/gui/draw.cpp:1625, src/gui/uia_app.cpp:43
+# src/protect.cpp:414, src/gui/draw.cpp:486, src/gui/draw.cpp:1634, src/gui/uia_app.cpp:43
 AI models =
 
 # src/protect.cpp:396
@@ -193,7 +193,7 @@ Amp (config) =
 # src/protect.cpp:401
 Amp (threads) =
 
-# src/gui/draw.cpp:1850, src/gui/draw.cpp:1857
+# src/gui/draw.cpp:1859, src/gui/draw.cpp:1866
 Analyze =
 
 # src/gui/platform.cpp:192
@@ -214,7 +214,7 @@ Another installation is in progress: try again later =
 # src/protect.cpp:287
 Antivirus definitions and quarantine. =
 
-# src/gui/draw.cpp:1131, src/gui/draw.cpp:1402
+# src/gui/draw.cpp:1140, src/gui/draw.cpp:1411
 Any =
 
 # src/gui/apps_view.cpp:735
@@ -316,7 +316,7 @@ Back =
 # src/gui/draw.cpp:764
 Back (Alt+←) =
 
-# src/gui/draw.cpp:1112
+# src/gui/draw.cpp:1121
 Back to file types =
 
 # src/analysis.cpp:112
@@ -334,7 +334,7 @@ bad value for {0}: "{1}" =
 # src/games.cpp:99
 Battle.net asks you to confirm =
 
-# src/gui/draw.cpp:3033
+# src/gui/draw.cpp:3042
 Before =
 
 # src/protect.cpp:442
@@ -364,7 +364,7 @@ Box =
 # src/protect.cpp:457
 Brave profile =
 
-# src/gui/draw.cpp:3130
+# src/gui/draw.cpp:3139
 Browse a .json export (also from Linux ncdu) =
 
 # src/protect.cpp:217, src/protect.cpp:460, src/protect.cpp:461
@@ -382,10 +382,10 @@ Browser history =
 # src/protect.cpp:218
 Browser profile: saved passwords, cookies, bookmarks, history and extension data (including crypto wallet extensions). Use Cleanup → Browser caches to free space safely. =
 
-# src/gui/draw.cpp:1744
+# src/gui/draw.cpp:1753
 Build cache =
 
-# src/gui/draw.cpp:1497
+# src/gui/draw.cpp:1506
 Build output and dependencies your projects recreate on the next build or install =
 
 # src/devjunk.cpp:48
@@ -400,7 +400,7 @@ built-in cleaners.ini {0} =
 # src/gui/uia_app.cpp:283
 Button =
 
-# src/gui/app.cpp:50, src/gui/app.cpp:137
+# src/gui/app.cpp:50, src/gui/app.cpp:140
 Bytopsy (Administrator) =
 
 # src/gui/update_gui.cpp:69
@@ -430,10 +430,10 @@ Bytopsy never deletes system folders. Edit protect.txt only if you are sure (men
 # src/gui/update_gui.cpp:155
 Bytopsy no longer looks for new versions by itself =
 
-# src/gui/draw.cpp:2388
+# src/gui/draw.cpp:2397
 Bytopsy notes each drive's free space when this view opens or a scan finishes =
 
-# src/gui/draw.cpp:2387
+# src/gui/draw.cpp:2396
 Bytopsy notes each drive's free space when this view opens, a scan finishes or an alert check runs =
 
 # src/alerts.cpp:506
@@ -451,16 +451,16 @@ Bytopsy {0} is the latest version =
 # src/gui/update_gui.cpp:163
 Bytopsy {0} won't be offered again; ⋯ > Check for updates now still finds it =
 
-# src/gui/draw.cpp:2202
+# src/gui/draw.cpp:2211
 Bytopsy's notification registration is missing: Change, then Save, writes it again =
 
 # src/gui/actions.cpp:2040, src/gui/drivers_view.cpp:99
 bytopsy-cli.exe was not found next to bytopsy.exe =
 
-# src/gui/draw.cpp:3131
+# src/gui/draw.cpp:3140
 Caches, temp files and the Recycle Bin =
 
-# src/gui/draw.cpp:1748, src/gui/draw.cpp:1749
+# src/gui/draw.cpp:1757, src/gui/draw.cpp:1758
 can hold data: remove them in Docker Desktop if you're sure =
 
 # src/gui/drivers_view.cpp:444
@@ -472,7 +472,7 @@ Can't find the local app data folder. =
 # src/gui/actions.cpp:1677
 Can't open this file =
 
-# src/gui/actions.cpp:3001, src/gui/actions.cpp:3015
+# src/gui/actions.cpp:2999, src/gui/actions.cpp:3013
 Can't open {0} =
 
 # src/vdisks.cpp:203
@@ -523,16 +523,16 @@ Category =
 # src/protect.cpp:1029
 Caution =
 
-# src/gui/draw.cpp:2233, src/gui/draw.cpp:2647, src/gui/draw.cpp:3035
+# src/gui/draw.cpp:2242, src/gui/draw.cpp:2656, src/gui/draw.cpp:3044
 Change =
 
-# src/gui/draw.cpp:1571
+# src/gui/draw.cpp:1580
 changed {0} =
 
-# src/gui/draw.cpp:1941
+# src/gui/draw.cpp:1950
 Changes here need administrator rights: Windows asks each time, or restart as administrator once. =
 
-# src/gui/draw.cpp:3020
+# src/gui/draw.cpp:3029
 Changes since {0} =
 
 # res/cleaners.ini:104
@@ -541,7 +541,7 @@ Chat app caches =
 # src/protect.cpp:371, src/protect.cpp:372
 ChatGPT desktop app =
 
-# src/gui/draw.cpp:1602
+# src/gui/draw.cpp:1611
 chats and settings are never touched =
 
 # src/gui/actions.cpp:2201
@@ -556,10 +556,10 @@ Check all =
 # src/gui/update_gui.cpp:68
 Check for new versions? =
 
-# src/gui/actions.cpp:2694
+# src/gui/actions.cpp:2691
 Check for updates daily =
 
-# src/gui/actions.cpp:2695
+# src/gui/actions.cpp:2692
 Check for updates now =
 
 # src/gui/apps_view.cpp:654
@@ -586,7 +586,7 @@ check what to move to the Recycle Bin =
 # src/gui/drivers_view.cpp:229
 Check Windows Update =
 
-# src/gui/draw.cpp:2188
+# src/gui/draw.cpp:2197
 checked {0} =
 
 # src/gui/update_gui.cpp:112
@@ -595,10 +595,10 @@ Checking for updates… =
 # src/gui/update_gui.cpp:239
 Checking the download =
 
-# src/gui/draw.cpp:2672
+# src/gui/draw.cpp:2681
 Checking {0} community app cleaner…|Checking {0} community app cleaners… =
 
-# src/gui/actions.cpp:2733
+# src/gui/actions.cpp:2731
 Choose a folder to analyze =
 
 # src/gui/actions.cpp:1092
@@ -610,10 +610,10 @@ Choose an app first =
 # src/gui/apps_view.cpp:160
 Choose an update first =
 
-# src/gui/draw.cpp:3129
+# src/gui/draw.cpp:3138
 Choose any folder or network share =
 
-# src/gui/draw.cpp:2068
+# src/gui/draw.cpp:2077
 choose one to uninstall it through its launcher =
 
 # src/gui/apps_view.cpp:827
@@ -655,7 +655,7 @@ Claude desktop app (program) =
 # src/protect.cpp:362
 Claude desktop settings, MCP server config and local data. =
 
-# src/gui/actions.cpp:828, src/gui/actions.cpp:1899, src/gui/draw.cpp:1858, src/gui/draw.cpp:2587
+# src/gui/actions.cpp:828, src/gui/actions.cpp:1899, src/gui/draw.cpp:1867, src/gui/draw.cpp:2596
 Clean up =
 
 # src/gui/actions.cpp:1942
@@ -664,13 +664,13 @@ Clean up again without the restore point option, or turn System Protection on fi
 # src/gui/actions.cpp:825
 Clean up the component store? =
 
-# src/gui/draw.cpp:2587
+# src/gui/draw.cpp:2596
 Clean up {0} =
 
 # src/gui/actions.cpp:1879
 Clean up {0}? =
 
-# src/gui/draw.cpp:2982
+# src/gui/draw.cpp:2991
 Cleaned up =
 
 # src/gui/actions.cpp:1929
@@ -679,22 +679,22 @@ Cleaning up =
 # src/gui/actions.cpp:830
 Cleaning up the component store =
 
-# src/gui/draw.cpp:483, src/gui/draw.cpp:2600, src/gui/draw.cpp:2997, src/gui/uia_app.cpp:39
+# src/gui/draw.cpp:483, src/gui/draw.cpp:2609, src/gui/draw.cpp:3006, src/gui/uia_app.cpp:39
 Cleanup =
 
 # src/gui/actions.cpp:1950
 Cleanup freed {0} =
 
-# src/gui/draw.cpp:1855
+# src/gui/draw.cpp:1864
 cleanup recommended =
 
-# src/gui/actions.cpp:2689
+# src/gui/actions.cpp:2686
 Cleanup rules… =
 
 # src/gui/actions.cpp:2122
 Cleanup scheduled: {0} =
 
-# src/gui/actions.cpp:921, src/gui/draw.cpp:1924
+# src/gui/actions.cpp:921, src/gui/draw.cpp:1933
 Clear =
 
 # src/gui/uia_app.cpp:289
@@ -706,13 +706,13 @@ Clear the event logs? =
 # src/gui/actions.cpp:922
 Clearing event logs =
 
-# src/gui/draw.cpp:2025
+# src/gui/draw.cpp:2034
 Click a game to choose it =
 
-# src/gui/draw.cpp:1628
+# src/gui/draw.cpp:1637
 Click a model to select it =
 
-# src/gui/draw.cpp:1525
+# src/gui/draw.cpp:1534
 Click a project to select all its folders =
 
 # src/gui/apps_view.cpp:700
@@ -724,7 +724,7 @@ Click an update to check it =
 # src/gui/drivers_view.cpp:369
 click one to check or uncheck it =
 
-# src/gui/draw.cpp:1735
+# src/gui/draw.cpp:1744
 Click to select =
 
 # src/gui/draw.cpp:931
@@ -754,19 +754,19 @@ Codex sessions and history, AGENTS.md, config.toml and sign-in (auth.json). =
 # src/gui/uia_app.cpp:248
 Columns =
 
-# src/gui/draw.cpp:1537
+# src/gui/draw.cpp:1546
 Comes back with =
 
-# src/gui/draw.cpp:2477
+# src/gui/draw.cpp:2486
 Command =
 
 # src/gui/cleanup.cpp:483
 command needs kind \= command =
 
-# src/gui/draw.cpp:2674
+# src/gui/draw.cpp:2683
 community rules, never preselected: review before cleaning =
 
-# src/gui/actions.cpp:909, src/gui/actions.cpp:915, src/gui/draw.cpp:1914
+# src/gui/actions.cpp:909, src/gui/actions.cpp:915, src/gui/draw.cpp:1923
 Compact OS =
 
 # src/gui/actions.cpp:915
@@ -787,19 +787,19 @@ Compacting gives the free space inside each disk back to Windows. =
 # src/vdisks.cpp:506
 Compacting {0} virtual disk (this can take a while)|Compacting {0} virtual disks (this can take a while) =
 
-# src/gui/draw.cpp:2903
+# src/gui/draw.cpp:2912
 Compare =
 
 # src/gui/uia_app.cpp:41
 Compare scans =
 
-# src/gui/draw.cpp:2867
+# src/gui/draw.cpp:2876
 compare to see what grew =
 
 # src/gui/actions.cpp:1732
 Comparing contents (SHA-256) =
 
-# src/gui/draw.cpp:1423
+# src/gui/draw.cpp:1432
 Comparing photos needs to read the real files. =
 
 # src/gui/actions.cpp:1765
@@ -808,7 +808,7 @@ Comparing pictures =
 # src/diskhealth.cpp:313
 Completed =
 
-# src/gui/actions.cpp:830, src/gui/draw.cpp:1845
+# src/gui/actions.cpp:830, src/gui/draw.cpp:1854
 Component store (WinSxS) =
 
 # src/gui/actions.cpp:830
@@ -850,10 +850,10 @@ Continue… =
 # src/gui/actions.cpp:1895
 Cookies and history are removed inside the browsers' own databases; close the browsers first, or they are skipped. =
 
-# src/gui/actions.cpp:2949
+# src/gui/actions.cpp:2947
 Copied {0} path|Copied {0} paths =
 
-# src/gui/actions.cpp:2949, src/gui/update_gui.cpp:167
+# src/gui/actions.cpp:2947, src/gui/update_gui.cpp:167
 Copied: {0} =
 
 # src/protect.cpp:391
@@ -868,7 +868,7 @@ Copy path\tCtrl+C =
 # src/gui/actions.cpp:2638
 Copy paths\tCtrl+C =
 
-# src/gui/draw.cpp:1743
+# src/gui/draw.cpp:1752
 Could free =
 
 # src/gui/actions.cpp:2478
@@ -898,28 +898,28 @@ Couldn't create the task =
 # src/gui/browserdata.cpp:458
 couldn't open it: {0} =
 
-# src/gui/actions.cpp:2902
+# src/gui/actions.cpp:2900
 Couldn't open Settings =
 
 # src/schedule.cpp:396
 Couldn't open Task Scheduler =
 
-# src/gui/actions.cpp:2905
+# src/gui/actions.cpp:2903
 Couldn't open the browser =
 
-# src/gui/actions.cpp:2898
+# src/gui/actions.cpp:2896
 Couldn't open the Microsoft Store =
 
 # src/schedule.cpp:399, src/schedule.cpp:574, src/schedule.cpp:647
 Couldn't open the task folder =
 
-# src/gui/actions.cpp:2937, src/gui/drivers_view.cpp:206
+# src/gui/actions.cpp:2935, src/gui/drivers_view.cpp:206
 Couldn't open {0} =
 
 # src/games.cpp:346
 Couldn't open {0} (is it installed?) =
 
-# src/gui/draw.cpp:1922
+# src/gui/draw.cpp:1931
 Couldn't read the log folder =
 
 # src/schedule.cpp:578
@@ -961,7 +961,7 @@ Couldn't write {0} =
 # src/update.cpp:1171
 couldn't write {0}: {1} =
 
-# src/gui/actions.cpp:2685
+# src/gui/actions.cpp:2682
 Count hard links once (slower scans) =
 
 # res/cleaners.ini:166
@@ -1006,7 +1006,7 @@ Cursor chat and composer history (state.vscdb), workspace history and settings. 
 # src/protect.cpp:503
 Cursor project rules =
 
-# src/gui/draw.cpp:2636
+# src/gui/draw.cpp:2645
 Custom schedule (changed in Task Scheduler) =
 
 # src/gui/actions.cpp:2062
@@ -1021,7 +1021,7 @@ Dark =
 # src/gui/draw.cpp:379
 Dark theme =
 
-# src/gui/draw.cpp:1813
+# src/gui/draw.cpp:1822
 data inside Docker's disk: compact the disk afterwards to give the space to Windows =
 
 # src/protect.cpp:308
@@ -1033,7 +1033,7 @@ Day =
 # src/gui/actions.cpp:2065
 day {0} =
 
-# src/gui/actions.cpp:2683
+# src/gui/actions.cpp:2680
 Decimal units (GB instead of GiB) =
 
 # src/gui/actions.cpp:915
@@ -1045,7 +1045,7 @@ Default profile =
 # src/diskhealth.cpp:299
 Degraded =
 
-# src/gui/apps_view.cpp:649, src/gui/draw.cpp:2000
+# src/gui/apps_view.cpp:649, src/gui/draw.cpp:2009
 Delete leftovers {0} =
 
 # src/gui/actions.cpp:527, src/gui/actions.cpp:1549
@@ -1057,25 +1057,25 @@ Delete permanently\tShift+Del =
 # src/gui/actions.cpp:1526
 Delete permanently (skip the Recycle Bin) =
 
-# src/gui/actions.cpp:2686
+# src/gui/actions.cpp:2683
 Delete permanently by default =
 
-# src/gui/draw.cpp:1251, src/gui/draw.cpp:1376, src/gui/draw.cpp:1503
+# src/gui/draw.cpp:1260, src/gui/draw.cpp:1385, src/gui/draw.cpp:1512
 Delete selected =
 
 # src/gui/uia_app.cpp:374
 Delete this scan from history =
 
-# src/gui/draw.cpp:1605
+# src/gui/draw.cpp:1614
 Delete {0} =
 
 # src/gui/actions.cpp:506
 Delete {0} model ({1})?|Delete {0} models ({1})? =
 
-# src/gui/draw.cpp:2813
+# src/gui/draw.cpp:2822
 Deleted =
 
-# src/gui/draw.cpp:2982
+# src/gui/draw.cpp:2991
 Deleted permanently =
 
 # src/gui/actions.cpp:1629
@@ -1105,13 +1105,13 @@ Delivery Optimization cache =
 # src/protect.cpp:326
 Desktop =
 
-# src/gui/draw.cpp:1641, src/gui/draw.cpp:1740
+# src/gui/draw.cpp:1650, src/gui/draw.cpp:1749
 Details =
 
 # src/protect.cpp:436, src/protect.cpp:439
 Dev =
 
-# src/gui/draw.cpp:447, src/gui/draw.cpp:1515, src/gui/uia_app.cpp:37
+# src/gui/draw.cpp:447, src/gui/draw.cpp:1524, src/gui/uia_app.cpp:37
 Developer junk =
 
 # res/cleaners.ini:219
@@ -1132,16 +1132,16 @@ Direct2D could not be initialized. =
 # res/cleaners.ini:199
 DirectX / NVIDIA / AMD shader caches; games rebuild them. =
 
-# src/diskhealth.cpp:291, src/gui/draw.cpp:1739
+# src/diskhealth.cpp:291, src/gui/draw.cpp:1748
 Disk =
 
-# src/gui/draw.cpp:501, src/gui/draw.cpp:2082, src/gui/uia_app.cpp:50
+# src/gui/draw.cpp:501, src/gui/draw.cpp:2091, src/gui/uia_app.cpp:50
 Disk health =
 
-# src/gui/draw.cpp:777, src/gui/draw.cpp:884, src/gui/draw.cpp:1156, src/gui/draw.cpp:1211 (+1 more)
+# src/gui/draw.cpp:777, src/gui/draw.cpp:884, src/gui/draw.cpp:1165, src/gui/draw.cpp:1220 (+1 more)
 Disk usage =
 
-# src/gui/draw.cpp:2115
+# src/gui/draw.cpp:2124
 disk {0} =
 
 # src/wintools.cpp:131
@@ -1216,16 +1216,16 @@ Done =
 # src/diskhealth.cpp:311
 Dormant =
 
-# src/gui/draw.cpp:1735
+# src/gui/draw.cpp:1744
 double-click a disk to show its file =
 
-# src/gui/draw.cpp:1176
+# src/gui/draw.cpp:1185
 double-click a type to list its files =
 
-# src/gui/apps_view.cpp:700, src/gui/draw.cpp:2025
+# src/gui/apps_view.cpp:700, src/gui/draw.cpp:2034
 double-click to open its folder =
 
-# src/gui/draw.cpp:1628
+# src/gui/draw.cpp:1637
 double-click to show its files =
 
 # src/gui/update_gui.cpp:213
@@ -1240,7 +1240,7 @@ download it again in LM Studio (Discover) =
 # src/gui/update_gui.cpp:189
 Download the new version from its release page and unpack it there. =
 
-# src/gui/draw.cpp:1643, src/gui/update_gui.cpp:246
+# src/gui/draw.cpp:1652, src/gui/update_gui.cpp:246
 Downloaded =
 
 # src/gui/update_gui.cpp:238
@@ -1273,16 +1273,16 @@ Drivers Windows Update doesn't have (chipset, audio, utilities, firmware) usuall
 # src/gui/actions.cpp:735
 Drivers, System Restore, hibernation, event logs =
 
-# src/gui/draw.cpp:513, src/gui/draw.cpp:3084
+# src/gui/draw.cpp:513, src/gui/draw.cpp:3093
 DRIVES =
 
 # src/protect.cpp:344
 Dropbox =
 
-# src/gui/draw.cpp:1283
+# src/gui/draw.cpp:1292
 Duplicate detection needs to read the real files. =
 
-# src/gui/draw.cpp:1263
+# src/gui/draw.cpp:1272
 Duplicate files =
 
 # src/gui/actions.cpp:1744
@@ -1291,13 +1291,13 @@ Duplicate search cancelled =
 # src/gui/draw.cpp:444, src/gui/uia_app.cpp:34
 Duplicates =
 
-# src/gui/draw.cpp:2083
+# src/gui/draw.cpp:2092
 Each physical disk's health, wear and temperature, and used space over time =
 
 # src/gui/apps_view.cpp:635
 each through the app's own installer =
 
-# src/gui/draw.cpp:2867
+# src/gui/draw.cpp:2876
 Earlier scans of {0} =
 
 # src/gui/actions.cpp:2587
@@ -1309,7 +1309,7 @@ Elapsed =
 # src/protect.cpp:462, src/protect.cpp:463, src/protect.cpp:464, src/protect.cpp:495
 Email =
 
-# src/gui/draw.cpp:446, src/gui/draw.cpp:1099, src/gui/uia_app.cpp:36
+# src/gui/draw.cpp:446, src/gui/draw.cpp:1108, src/gui/uia_app.cpp:36
 Empty folders =
 
 # src/fsops.cpp:121
@@ -1330,7 +1330,7 @@ Environment secrets (.env) =
 # src/diskhealth.cpp:302
 Error =
 
-# src/gui/draw.cpp:2144
+# src/gui/draw.cpp:2153
 ERRORS =
 
 # src/startup.cpp:773
@@ -1351,25 +1351,25 @@ Estimate: an Electron/Chromium app (it loads a whole browser engine), {0} =
 # src/startup.cpp:767
 Estimate: delayed start, so Windows starts it after sign-in has settled =
 
-# src/gui/actions.cpp:922, src/gui/draw.cpp:1921
+# src/gui/actions.cpp:922, src/gui/draw.cpp:1930
 Event logs =
 
 # src/gui/actions.cpp:922
 Event logs cleared =
 
-# src/gui/draw.cpp:2868
+# src/gui/draw.cpp:2877
 Every completed scan is saved automatically (folder sizes only) =
 
-# src/gui/draw.cpp:1288
+# src/gui/draw.cpp:1297
 Every file larger than the minimum size is unique. =
 
 # src/alerts.cpp:259
 every hour =
 
-# src/gui/actions.cpp:2831
+# src/gui/actions.cpp:2829
 Every project here was changed in the last three months =
 
-# src/gui/actions.cpp:2846
+# src/gui/actions.cpp:2844
 Every revision here is still referenced by a branch, tag or PR =
 
 # src/gui/actions.cpp:919
@@ -1378,13 +1378,13 @@ Every Windows event log except Security is emptied. The history that helps troub
 # src/alerts.cpp:261
 every {0} hours =
 
-# src/gui/draw.cpp:2938
+# src/gui/draw.cpp:2947
 Everything Bytopsy deleted or cleaned up, newest first =
 
 # src/gui/apps_view.cpp:728
 Everything is up to date =
 
-# src/gui/draw.cpp:2944
+# src/gui/draw.cpp:2953
 Everything you delete or clean up with Bytopsy is listed here. Items still in the Recycle Bin can be restored with one click. =
 
 # src/gui/actions.cpp:1880
@@ -1402,7 +1402,7 @@ Explorer rebuilds thumbnails automatically when needed. =
 # src/gui/platform.cpp:269
 Export as CSV =
 
-# src/gui/actions.cpp:2679
+# src/gui/actions.cpp:2676
 Export as CSV… =
 
 # src/gui/actions.cpp:1718
@@ -1411,7 +1411,7 @@ Export failed: {0} =
 # src/gui/actions.cpp:1709
 Exporting CSV =
 
-# src/gui/draw.cpp:3167
+# src/gui/draw.cpp:3176
 F1 shows all shortcuts =
 
 # src/alerts.cpp:528, src/schedule.cpp:287
@@ -1432,10 +1432,10 @@ failed: bytopsy.exe was not found =
 # src/gui/drivers_view.cpp:388
 Failed: {0} =
 
-# src/gui/draw.cpp:1903
+# src/gui/draw.cpp:1912
 Fast Startup off =
 
-# src/gui/draw.cpp:1903
+# src/gui/draw.cpp:1912
 Fast Startup on =
 
 # src/protect.cpp:329
@@ -1444,13 +1444,13 @@ Favorites =
 # src/export.cpp:526
 File too large to load =
 
-# src/gui/draw.cpp:443, src/gui/draw.cpp:1174, src/gui/uia_app.cpp:32
+# src/gui/draw.cpp:443, src/gui/draw.cpp:1183, src/gui/uia_app.cpp:32
 File types =
 
-# src/gui/actions.cpp:1271, src/gui/actions.cpp:1735, src/gui/draw.cpp:1210
+# src/gui/actions.cpp:1271, src/gui/actions.cpp:1735, src/gui/draw.cpp:1219
 Files =
 
-# src/gui/draw.cpp:1095
+# src/gui/draw.cpp:1104
 Files not modified for a long time =
 
 # src/gui/uia_app.cpp:33
@@ -1465,16 +1465,16 @@ Files you deleted earlier still use space until the bin is emptied. =
 # src/aimodels.cpp:347
 filled again by the next download =
 
-# src/gui/app.cpp:120, src/gui/draw.cpp:366
+# src/gui/app.cpp:121, src/gui/draw.cpp:366
 Filter apps by name or publisher =
 
-# src/gui/draw.cpp:1277
+# src/gui/draw.cpp:1286
 Find duplicates =
 
-# src/gui/draw.cpp:1247
+# src/gui/draw.cpp:1256
 Find files with identical content (compared by size, then SHA-256) =
 
-# src/gui/draw.cpp:1403
+# src/gui/draw.cpp:1412
 Find similar photos =
 
 # src/gui/actions.cpp:1765
@@ -1495,19 +1495,19 @@ Finish uninstalling {0} first =
 # src/protect.cpp:461
 Firefox profile =
 
-# src/gui/apps_view.cpp:397, src/gui/draw.cpp:1155, src/gui/draw.cpp:1292, src/gui/draw.cpp:1436 (+3 more)
+# src/gui/apps_view.cpp:397, src/gui/draw.cpp:1164, src/gui/draw.cpp:1301, src/gui/draw.cpp:1445 (+3 more)
 Folder =
 
-# src/gui/draw.cpp:3027
+# src/gui/draw.cpp:3036
 Folder sizes are about the same as in this snapshot. =
 
 # src/gui/actions.cpp:1272, src/gui/draw.cpp:441, src/gui/uia_app.cpp:30
 Folders =
 
-# src/gui/draw.cpp:2067
+# src/gui/draw.cpp:2076
 folders of games no launcher has installed any more: check them to move them to the Recycle Bin =
 
-# src/gui/draw.cpp:1100
+# src/gui/draw.cpp:1109
 Folders without a single file inside =
 
 # src/gui/draw.cpp:766
@@ -1519,7 +1519,7 @@ Free up space =
 # src/gui/actions.cpp:649
 Free up to {0}? =
 
-# src/gui/draw.cpp:1714
+# src/gui/draw.cpp:1723
 Free up {0} =
 
 # src/gui/actions.cpp:1934
@@ -1528,7 +1528,7 @@ Freed =
 # src/gui/actions.cpp:689
 Freeing up space =
 
-# src/gui/draw.cpp:1642
+# src/gui/draw.cpp:1651
 Frees =
 
 # src/gui/actions.cpp:2063
@@ -1540,19 +1540,19 @@ Friday =
 # src/gui/actions.cpp:553
 From =
 
-# src/gui/draw.cpp:2668
+# src/gui/draw.cpp:2677
 FROM WINAPP2.INI =
 
-# src/gui/draw.cpp:2425
+# src/gui/draw.cpp:2434
 From {0} free-space measurement|From {0} free-space measurements =
 
-# src/gui/draw.cpp:2423
+# src/gui/draw.cpp:2432
 From {0} scan of {1}\\ (the size of the files it found)|From {0} scans of {1}\\ (the size of the files they found) =
 
 # src/diskhealth.cpp:534
 fsutil printed nothing =
 
-# src/gui/draw.cpp:2029
+# src/gui/draw.cpp:2038
 Game =
 
 # res/cleaners.ini:209
@@ -1567,7 +1567,7 @@ Game progress. Many games don't sync saves to the cloud. =
 # src/protect.cpp:337
 Game saves and settings =
 
-# src/protect.cpp:336, src/protect.cpp:337, src/gui/draw.cpp:497, src/gui/draw.cpp:2008 (+1 more)
+# src/protect.cpp:336, src/protect.cpp:337, src/gui/draw.cpp:497, src/gui/draw.cpp:2017 (+1 more)
 Games =
 
 # src/protect.cpp:432, src/protect.cpp:433
@@ -1651,16 +1651,16 @@ Grouping files by size =
 # src/diskhealth.cpp:288
 Hard disk =
 
-# src/gui/draw.cpp:2172
+# src/gui/draw.cpp:2181
 hard disks don't need it =
 
 # src/gui/draw.cpp:712
 Hard link =
 
-# src/gui/actions.cpp:2978
+# src/gui/actions.cpp:2976
 Hard link detection off =
 
-# src/gui/actions.cpp:2978
+# src/gui/actions.cpp:2976
 Hard links will be counted once from the next scan =
 
 # src/gui/actions.cpp:1535
@@ -1672,7 +1672,7 @@ Health, wear, temperature and TRIM (read-only) =
 # src/diskhealth.cpp:325
 Healthy =
 
-# src/gui/draw.cpp:1901
+# src/gui/draw.cpp:1910
 hiberfil.sys holds memory while the PC hibernates. Off also turns off Fast Startup; reduced keeps Fast Startup. =
 
 # src/gui/actions.cpp:889
@@ -1696,10 +1696,10 @@ hidden in Windows Update =
 # src/gui/draw.cpp:775
 Hide treemap =
 
-# src/gui/draw.cpp:2539
+# src/gui/draw.cpp:2548
 High =
 
-# src/gui/draw.cpp:507, src/gui/draw.cpp:2866, src/gui/uia_app.cpp:40
+# src/gui/draw.cpp:507, src/gui/draw.cpp:2875, src/gui/uia_app.cpp:40
 History =
 
 # src/apps.cpp:682
@@ -1711,7 +1711,7 @@ Home =
 # src/aimodels.cpp:225, src/protect.cpp:421
 Hugging Face cache =
 
-# src/gui/draw.cpp:1600
+# src/gui/draw.cpp:1609
 Hugging Face, Ollama and LM Studio downloads, one model at a time =
 
 # src/protect.cpp:483
@@ -1726,7 +1726,7 @@ iCloud Drive =
 # src/protect.cpp:347
 iCloud Photos =
 
-# src/gui/draw.cpp:1266, src/gui/draw.cpp:1391
+# src/gui/draw.cpp:1275, src/gui/draw.cpp:1400
 Identical files =
 
 # src/gui/actions.cpp:981
@@ -1735,10 +1735,10 @@ If Task Scheduler doesn't let this account change it, Windows asks for administr
 # src/gui/actions.cpp:1503
 If you continue, the Recycle Bin is preselected so you can still restore it. =
 
-# src/gui/draw.cpp:1270
+# src/gui/draw.cpp:1279
 Ignore files smaller than =
 
-# src/gui/draw.cpp:1401
+# src/gui/draw.cpp:1410
 Ignore smaller than =
 
 # src/gui/actions.cpp:1768, src/gui/theme.h:89
@@ -1747,19 +1747,19 @@ Images =
 # src/protect.cpp:480
 Images, containers and volumes. Free space with: docker system prune =
 
-# src/gui/draw.cpp:2476
+# src/gui/draw.cpp:2485
 Impact =
 
-# src/gui/draw.cpp:2462
+# src/gui/draw.cpp:2471
 Impact: estimated from program size and type (hover for why); measured needs admin =
 
-# src/gui/draw.cpp:2461
+# src/gui/draw.cpp:2470
 Impact: measured where Windows logged a slow start, else estimated (hover for why) =
 
-# src/gui/actions.cpp:3020
+# src/gui/actions.cpp:3018
 Import winapp2.ini =
 
-# src/gui/actions.cpp:2691
+# src/gui/actions.cpp:2688
 Import winapp2.ini… =
 
 # src/protect.cpp:1028
@@ -1771,10 +1771,10 @@ Important: versions before {0} should be updated. You have {1}. =
 # src/gui/actions.cpp:1356
 Imported scans can't be rescanned =
 
-# src/gui/actions.cpp:3029
+# src/gui/actions.cpp:3027
 Imported {0} app cleaner ({1} about personal data left out)|Imported {0} app cleaners ({1} about personal data left out) =
 
-# src/gui/actions.cpp:3028
+# src/gui/actions.cpp:3026
 Imported. Click Measure in a moment to include it. =
 
 # src/diskhealth.cpp:315
@@ -1822,10 +1822,10 @@ Installed =
 # src/gui/apps_view.cpp:825
 Installed apps =
 
-# src/gui/draw.cpp:2066
+# src/gui/draw.cpp:2075
 Installed games =
 
-# src/gui/draw.cpp:1990
+# src/gui/draw.cpp:1999
 Installed games from every launcher, uninstalled through the launcher itself =
 
 # src/protect.cpp:276
@@ -1867,7 +1867,7 @@ Installing failed: {0} =
 # src/driverupdates.cpp:545
 Installing needs a signed-in user =
 
-# src/gui/draw.cpp:1814
+# src/gui/draw.cpp:1823
 isn't running: start Docker Desktop to see what it could remove =
 
 # src/gui/actions.cpp:994
@@ -1888,7 +1888,7 @@ It is running hot: {0} °C (rated for {1} °C) =
 # src/diskhealth.cpp:374
 It is warm: {0} °C =
 
-# src/gui/actions.cpp:1585, src/gui/draw.cpp:2811
+# src/gui/actions.cpp:1585, src/gui/draw.cpp:2820
 Item =
 
 # src/gui/actions.cpp:1672, src/gui/draw.cpp:886
@@ -1939,16 +1939,16 @@ Java build caches =
 # src/gui/draw.cpp:49
 just now =
 
-# src/gui/draw.cpp:2794
+# src/gui/draw.cpp:2803
 Keep all =
 
 # src/diskhealth.cpp:380, src/diskhealth.cpp:384
 Keep backups current =
 
-# src/gui/actions.cpp:2690, src/gui/draw.cpp:2716
+# src/gui/actions.cpp:2687, src/gui/draw.cpp:2725
 Keep me signed in to… =
 
-# src/gui/draw.cpp:1483
+# src/gui/draw.cpp:1492
 keep ★ {0} =
 
 # src/protect.cpp:441
@@ -1960,10 +1960,10 @@ KeePass database =
 # src/protect.cpp:441
 KeePass settings =
 
-# src/gui/draw.cpp:2717
+# src/gui/draw.cpp:2726
 Keeps you signed in to {0} site|Keeps you signed in to {0} sites =
 
-# src/gui/draw.cpp:2839
+# src/gui/draw.cpp:2848
 Kept =
 
 # src/protect.cpp:498
@@ -1990,40 +1990,40 @@ kubeconfig with cluster endpoints and credentials. =
 # src/protect.cpp:431
 Kubernetes config =
 
-# src/gui/actions.cpp:2682
+# src/gui/actions.cpp:2679
 Language =
 
-# src/gui/draw.cpp:1130
+# src/gui/draw.cpp:1139
 Larger than =
 
-# src/gui/draw.cpp:442, src/gui/draw.cpp:1085, src/gui/uia_app.cpp:31
+# src/gui/draw.cpp:442, src/gui/draw.cpp:1094, src/gui/uia_app.cpp:31
 Largest files =
 
-# src/gui/draw.cpp:2191
+# src/gui/draw.cpp:2200
 last check {0}: {1} =
 
-# src/gui/draw.cpp:1856
+# src/gui/draw.cpp:1865
 last cleanup {0} =
 
-# src/gui/draw.cpp:2032
+# src/gui/draw.cpp:2041
 Last played =
 
-# src/gui/draw.cpp:2646
+# src/gui/draw.cpp:2655
 last run {0} =
 
-# src/gui/draw.cpp:2645
+# src/gui/draw.cpp:2654
 last run {0}: {1} =
 
-# src/gui/draw.cpp:1644
+# src/gui/draw.cpp:1653
 Last used =
 
-# src/gui/draw.cpp:2030
+# src/gui/draw.cpp:2039
 Launcher =
 
-# src/gui/draw.cpp:1524
+# src/gui/draw.cpp:1533
 Least recently changed =
 
-# src/gui/draw.cpp:2024
+# src/gui/draw.cpp:2033
 Least recently played =
 
 # src/gui/apps_view.cpp:825
@@ -2032,7 +2032,7 @@ Left behind by {0} =
 # src/gui/actions.cpp:2058
 Left out: {0}. =
 
-# src/gui/draw.cpp:2066
+# src/gui/draw.cpp:2075
 Leftovers =
 
 # res/cleaners.ini:40
@@ -2041,7 +2041,7 @@ Leftovers from apps and installers (older than 1 day). =
 # src/gui/drivers_view.cpp:467
 license terms not accepted yet =
 
-# src/gui/draw.cpp:2151
+# src/gui/draw.cpp:2160
 lifetime =
 
 # src/gui/actions.cpp:2661
@@ -2056,7 +2056,7 @@ like all drives =
 # src/gui/actions.cpp:865
 Limit System Restore on {0}? =
 
-# src/gui/draw.cpp:2132
+# src/gui/draw.cpp:2141
 limit {0} °C =
 
 # src/gui/actions.cpp:873
@@ -2068,7 +2068,7 @@ line {0}: {1} =
 # src/gui/draw.cpp:711
 Link =
 
-# src/gui/draw.cpp:1710
+# src/gui/draw.cpp:1719
 Linux disks grow but never shrink by themselves =
 
 # src/protect.cpp:478
@@ -2101,16 +2101,16 @@ Local AI models. They can be downloaded again, but that can take a long time. =
 # src/protect.cpp:467
 Local chat history and media. =
 
-# src/gui/draw.cpp:72, src/gui/draw.cpp:2396
+# src/gui/draw.cpp:72, src/gui/draw.cpp:2405
 Local disk =
 
 # src/gui/apps_view.cpp:680
 Look for leftovers =
 
-# src/gui/draw.cpp:2013
+# src/gui/draw.cpp:2022
 Looked for Steam libraries, Epic Games manifests, GOG, EA app, Ubisoft Connect and Battle.net games, and XboxGames folders. =
 
-# src/gui/draw.cpp:1636
+# src/gui/draw.cpp:1645
 Looked for the Hugging Face cache (HF_HOME, HF_HUB_CACHE, ~\\.cache\\huggingface), Ollama (OLLAMA_MODELS, ~\\.ollama\\models) and LM Studio (its models and downloads folders). =
 
 # src/gui/drivers_view.cpp:49
@@ -2137,16 +2137,16 @@ Looking for similar photos =
 # src/gui/apps_view.cpp:484
 Looking for what {0} left behind =
 
-# src/gui/draw.cpp:1399
+# src/gui/draw.cpp:1408
 Loose =
 
 # src/diskhealth.cpp:309
 Lost Communication =
 
-# src/gui/draw.cpp:2541
+# src/gui/draw.cpp:2550
 Low =
 
-# src/gui/actions.cpp:2175, src/gui/draw.cpp:2220
+# src/gui/actions.cpp:2175, src/gui/draw.cpp:2229
 Low disk space alerts =
 
 # src/gui/actions.cpp:2278
@@ -2155,7 +2155,7 @@ Low disk space alerts on: checked {0} =
 # src/gui/actions.cpp:2233
 Low disk space alerts turned off =
 
-# src/gui/draw.cpp:2187
+# src/gui/draw.cpp:2196
 Low disk space alerts: on =
 
 # src/protect.cpp:288
@@ -2176,7 +2176,7 @@ Managed by Windows. Uninstall Store apps in Settings → Apps. =
 # src/gui/apps_view.cpp:702
 marked + : not in Installed apps (a Store app) =
 
-# src/gui/draw.cpp:1396
+# src/gui/draw.cpp:1405
 Match =
 
 # res/cleaners.ini:249
@@ -2194,22 +2194,22 @@ May contain upload tokens. =
 # src/gui/drivers_view.cpp:465
 may need a restart =
 
-# src/gui/draw.cpp:2591
+# src/gui/draw.cpp:2600
 Measure =
 
 # src/startup.cpp:749
 Measured: Windows logged it slowing a boot down ({0} s, Diagnostics-Performance log) =
 
-# src/gui/draw.cpp:2803
+# src/gui/draw.cpp:2812
 Measuring again… =
 
-# src/gui/draw.cpp:2601
+# src/gui/draw.cpp:2610
 Measuring caches and leftovers… =
 
-# src/gui/draw.cpp:2145
+# src/gui/draw.cpp:2154
 media errors =
 
-# src/gui/draw.cpp:2540
+# src/gui/draw.cpp:2549
 Medium =
 
 # src/protect.cpp:349
@@ -2245,10 +2245,10 @@ Microsoft Store apps =
 # src/gui/cleanup.cpp:477
 missing name =
 
-# src/gui/draw.cpp:1640
+# src/gui/draw.cpp:1649
 Model =
 
-# src/gui/draw.cpp:887, src/gui/draw.cpp:1157, src/gui/draw.cpp:1294, src/gui/draw.cpp:1439 (+2 more)
+# src/gui/draw.cpp:887, src/gui/draw.cpp:1166, src/gui/draw.cpp:1303, src/gui/draw.cpp:1448 (+2 more)
 Modified =
 
 # src/gui/actions.cpp:2063
@@ -2269,7 +2269,7 @@ Monthly on day {0} at {1} =
 # src/appupdates.cpp:454
 More than one package matches this id =
 
-# src/gui/draw.cpp:3121
+# src/gui/draw.cpp:3130
 MORE WAYS TO START =
 
 # src/gui/actions.cpp:1544
@@ -2314,7 +2314,7 @@ Msty (chats) =
 # src/protect.cpp:328
 Music =
 
-# src/gui/draw.cpp:883, src/gui/draw.cpp:1154, src/gui/draw.cpp:1291, src/gui/draw.cpp:1435 (+1 more)
+# src/gui/draw.cpp:883, src/gui/draw.cpp:1163, src/gui/draw.cpp:1300, src/gui/draw.cpp:1444 (+1 more)
 Name =
 
 # src/apps.cpp:629, src/apps.cpp:651
@@ -2344,7 +2344,7 @@ Needed to update, repair and uninstall programs. Deleting it breaks uninstallers
 # src/gui/drivers_view.cpp:465
 needs a restart =
 
-# src/gui/draw.cpp:2706
+# src/gui/draw.cpp:2715
 Needs admin =
 
 # src/wintools.cpp:276
@@ -2356,7 +2356,7 @@ Network =
 # src/gui/draw.cpp:73
 Network drive =
 
-# src/gui/draw.cpp:59, src/gui/draw.cpp:2054
+# src/gui/draw.cpp:59, src/gui/draw.cpp:2063
 never =
 
 # src/gui/update_gui.cpp:213
@@ -2371,10 +2371,10 @@ newer drivers for connected devices are checked =
 # src/gui/actions.cpp:846
 Newer versions of these drivers are installed, and no device uses these ones. pnputil removes them from the driver store; it refuses any that a device starts using. =
 
-# src/gui/draw.cpp:2189
+# src/gui/draw.cpp:2198
 next check {0} =
 
-# src/gui/draw.cpp:2644
+# src/gui/draw.cpp:2653
 next run {0} =
 
 # src/gui/uia_app.cpp:395
@@ -2404,13 +2404,13 @@ no block table in the VHDX =
 # src/gui/actions.cpp:2060
 No categories are checked. Remove the schedule, or check categories and come back to change it. =
 
-# src/gui/draw.cpp:1855
+# src/gui/draw.cpp:1864
 no cleanup needed =
 
 # src/diskhealth.cpp:308
 No Contact =
 
-# src/gui/draw.cpp:1531
+# src/gui/draw.cpp:1540
 No developer junk found =
 
 # src/gui/drivers_view.cpp:111
@@ -2419,31 +2419,31 @@ no device found =
 # src/gui/drivers_view.cpp:453
 No device with this hardware id found =
 
-# src/gui/draw.cpp:2312
+# src/gui/draw.cpp:2321
 No disk information. =
 
-# src/gui/draw.cpp:2117
+# src/gui/draw.cpp:2126
 no drive letters =
 
 # src/gui/actions.cpp:1749
 No duplicate files found =
 
-# src/gui/draw.cpp:1288
+# src/gui/draw.cpp:1297
 No duplicates found =
 
 # src/vdisks.cpp:249
 no ext4 file system (or never formatted) =
 
-# src/gui/draw.cpp:1151
+# src/gui/draw.cpp:1160
 No files or folders match your search. =
 
 # src/gui/apps_view.cpp:829
 no folders found in Program Files, ProgramData or AppData =
 
-# src/gui/draw.cpp:2012
+# src/gui/draw.cpp:2021
 No games found =
 
-# src/gui/draw.cpp:2873
+# src/gui/draw.cpp:2882
 No history yet =
 
 # src/gui/actions.cpp:1787
@@ -2455,13 +2455,13 @@ No install folder is known for {0} =
 # src/gui/actions.cpp:1124
 No launcher has these games installed any more. If a game still keeps saves or settings in its folder, you can restore it from Recently deleted. =
 
-# src/gui/draw.cpp:1887
+# src/gui/draw.cpp:1896
 no limit =
 
-# src/gui/draw.cpp:1635
+# src/gui/draw.cpp:1644
 No local AI models found =
 
-# src/gui/draw.cpp:2979
+# src/gui/draw.cpp:2988
 No longer in the Recycle Bin =
 
 # src/vdisks.cpp:186
@@ -2470,7 +2470,7 @@ no metadata in the VHDX =
 # src/appupdates.cpp:466
 No network connection =
 
-# src/gui/draw.cpp:1532
+# src/gui/draw.cpp:1541
 No node_modules, target, bin/obj, build, .gradle, Unity Library, __pycache__ or .venv folders next to their projects in this scan. App folders (AppData, Program Files) are not searched. =
 
 # src/gui/cleanup.cpp:480
@@ -2479,7 +2479,7 @@ no path =
 # src/gui/actions.cpp:2431
 No program to show =
 
-# src/gui/draw.cpp:1880
+# src/gui/draw.cpp:1889
 No restore point storage on this PC =
 
 # src/gui/actions.cpp:1941
@@ -2488,28 +2488,28 @@ No restore point, so nothing was cleaned =
 # src/gui/drivers_view.cpp:159
 No restore point, so nothing was installed =
 
-# src/gui/draw.cpp:2469
+# src/gui/draw.cpp:2478
 No Run keys, Startup folder items, logon tasks or services were found. =
 
-# src/gui/draw.cpp:3027
+# src/gui/draw.cpp:3036
 No significant changes =
 
-# src/gui/actions.cpp:1787, src/gui/draw.cpp:1429
+# src/gui/actions.cpp:1787, src/gui/draw.cpp:1438
 No similar photos found =
 
 # src/games.cpp:340
 No uninstaller is registered for {0} =
 
-# src/gui/draw.cpp:1731
+# src/gui/draw.cpp:1740
 No WSL or Docker disks found =
 
 # src/diskhealth.cpp:303
 Non-Recoverable Error =
 
-# src/gui/draw.cpp:2144
+# src/gui/draw.cpp:2153
 None =
 
-# src/gui/draw.cpp:1399
+# src/gui/draw.cpp:1408
 Normal =
 
 # src/gui/browserdata.cpp:428
@@ -2533,10 +2533,10 @@ Not a valid ncdu JSON export: {0} =
 # src/vdisks.cpp:170
 not a VHDX file =
 
-# src/gui/draw.cpp:1849
+# src/gui/draw.cpp:1858
 Not analyzed yet: DISM takes a few minutes =
 
-# src/gui/draw.cpp:1282, src/gui/draw.cpp:1422
+# src/gui/draw.cpp:1291, src/gui/draw.cpp:1431
 Not available for saved scans =
 
 # src/appupdates.cpp:465
@@ -2545,25 +2545,25 @@ Not enough memory =
 # src/update.cpp:561
 not found (404) =
 
-# src/gui/actions.cpp:2431, src/gui/draw.cpp:2555
+# src/gui/actions.cpp:2431, src/gui/draw.cpp:2564
 Not found: {0} =
 
-# src/gui/draw.cpp:1120
+# src/gui/draw.cpp:1129
 Not modified for =
 
 # src/gui/update_gui.cpp:308
 Not now =
 
-# src/gui/draw.cpp:2738
+# src/gui/draw.cpp:2747
 Not present =
 
-# src/gui/draw.cpp:3114
+# src/gui/draw.cpp:3123
 Not ready =
 
 # src/aimodels.cpp:321
 not referenced by any branch, tag or PR =
 
-# src/gui/draw.cpp:3114
+# src/gui/draw.cpp:3123
 Not responding =
 
 # src/alerts.cpp:520, src/schedule.cpp:278
@@ -2575,7 +2575,7 @@ not the database Bytopsy expected; left alone =
 # src/diskhealth.cpp:316
 Not Usable =
 
-# src/gui/draw.cpp:2172
+# src/gui/draw.cpp:2181
 Not used =
 
 # src/gui/actions.cpp:2194
@@ -2584,13 +2584,13 @@ not watched =
 # src/gui/drivers_view.cpp:455
 nothing =
 
-# src/gui/draw.cpp:2943
+# src/gui/draw.cpp:2952
 Nothing deleted yet =
 
-# src/gui/draw.cpp:1150
+# src/gui/draw.cpp:1159
 Nothing found =
 
-# src/gui/actions.cpp:3043
+# src/gui/actions.cpp:3041
 Nothing has been deleted yet =
 
 # src/gui/apps_view.cpp:688
@@ -2599,19 +2599,19 @@ Nothing in the Uninstall registry keys looks like an app (system components, upd
 # src/schedule.cpp:277
 nothing ran: the categories need administrator rights =
 
-# src/gui/draw.cpp:2467
+# src/gui/draw.cpp:2476
 Nothing starts with Windows =
 
-# src/gui/draw.cpp:2808
+# src/gui/draw.cpp:2817
 Nothing to clean here =
 
 # src/gui/update_gui.cpp:264
 Nothing was changed: you still have the version you had. =
 
-# src/alerts.cpp:512, src/gui/draw.cpp:2204
+# src/alerts.cpp:512, src/gui/draw.cpp:2213
 Notifications from Bytopsy are turned off in Windows Settings (System, Notifications) =
 
-# src/gui/actions.cpp:692, src/gui/draw.cpp:3034
+# src/gui/actions.cpp:692, src/gui/draw.cpp:3043
 Now =
 
 # src/gui/uia_app.cpp:396
@@ -2620,13 +2620,13 @@ now {0} =
 # src/protect.cpp:437
 npm configuration =
 
-# src/gui/draw.cpp:2126
+# src/gui/draw.cpp:2135
 of rated life =
 
-# src/gui/draw.cpp:1902, src/gui/draw.cpp:1915, src/gui/draw.cpp:2167
+# src/gui/draw.cpp:1911, src/gui/draw.cpp:1924, src/gui/draw.cpp:2176
 Off =
 
-# src/gui/draw.cpp:2221
+# src/gui/draw.cpp:2230
 Off. Bytopsy can check the drives' free space every few hours and show a Windows notification when one drops below a limit you choose; no program stays running. =
 
 # src/protect.cpp:303
@@ -2635,13 +2635,13 @@ Often holds game saves and app settings. =
 # src/diskhealth.cpp:298, src/schedule.cpp:274, src/gui/actions.cpp:1317, src/gui/actions.cpp:1485 (+9 more)
 OK =
 
-# src/gui/actions.cpp:854, src/gui/draw.cpp:1870
+# src/gui/actions.cpp:854, src/gui/draw.cpp:1879
 Old driver packages =
 
 # src/gui/actions.cpp:854
 Old driver packages removed =
 
-# src/gui/draw.cpp:445, src/gui/draw.cpp:1094, src/gui/uia_app.cpp:35
+# src/gui/draw.cpp:445, src/gui/draw.cpp:1103, src/gui/uia_app.cpp:35
 Old files =
 
 # src/gui/drivers_view.cpp:443
@@ -2650,10 +2650,10 @@ Older than installed =
 # src/gui/drivers_view.cpp:113
 Older than the driver the device has now =
 
-# src/gui/draw.cpp:1871
+# src/gui/draw.cpp:1880
 Older versions of drivers that a newer version replaced. Drivers a device uses, and printer drivers, are kept. =
 
-# src/gui/draw.cpp:1846
+# src/gui/draw.cpp:1855
 Older versions of Windows components kept after updates. DISM removes the ones newer updates replaced. =
 
 # src/protect.cpp:416
@@ -2665,13 +2665,13 @@ Ollama models =
 # src/protect.cpp:417
 Ollama models (re-downloadable) and its identity key (id_ed25519). Use `ollama rm <model>` to remove one model. =
 
-# src/gui/draw.cpp:1903, src/gui/draw.cpp:2167, src/gui/draw.cpp:2472
+# src/gui/draw.cpp:1912, src/gui/draw.cpp:2176, src/gui/draw.cpp:2481
 On =
 
-# src/gui/draw.cpp:1903
+# src/gui/draw.cpp:1912
 On, reduced (Fast Startup only) =
 
-# src/gui/draw.cpp:1915
+# src/gui/draw.cpp:1924
 On: Windows files are compressed =
 
 # src/alerts.cpp:260
@@ -2680,7 +2680,7 @@ once a day =
 # src/protect.cpp:320
 One of your personal library folders. Delete files inside it, not the folder itself. =
 
-# src/gui/actions.cpp:3016
+# src/gui/actions.cpp:3014
 One site per line; cookies of these sites stay. Save, then click Measure in Cleanup =
 
 # src/protect.cpp:343
@@ -2692,7 +2692,7 @@ Only an administrator can install updates for this PC =
 # src/update.cpp:501
 only HTTPS addresses are used, not {0} =
 
-# src/gui/draw.cpp:2468
+# src/gui/draw.cpp:2477
 Only Microsoft's own services and tasks were found. =
 
 # src/diskhealth.cpp:387
@@ -2701,7 +2701,7 @@ Only {0}% spare blocks left (the drive warns at {1}%) =
 # src/gui/actions.cpp:2633
 Open\tEnter =
 
-# src/gui/draw.cpp:3130, src/gui/platform.cpp:243
+# src/gui/draw.cpp:3139, src/gui/platform.cpp:243
 Open a saved scan =
 
 # src/gui/apps_view.cpp:857
@@ -2713,10 +2713,10 @@ Open Disk health =
 # src/gui/actions.cpp:2635
 Open in Explorer =
 
-# src/gui/draw.cpp:2934
+# src/gui/draw.cpp:2943
 Open journal =
 
-# src/gui/actions.cpp:2677
+# src/gui/actions.cpp:2674
 Open saved scan… =
 
 # src/gui/actions.cpp:2640
@@ -2806,7 +2806,7 @@ Part of your personal registry. =
 # src/gui/draw.cpp:710
 Partial =
 
-# src/gui/draw.cpp:2708
+# src/gui/draw.cpp:2717
 Partly inaccessible =
 
 # src/protect.cpp:490, src/protect.cpp:491
@@ -2848,25 +2848,25 @@ Photo search cancelled =
 # src/protect.cpp:470
 Photos, videos and files WhatsApp received. Deleted here, they are gone from this PC; your phone may still have them. =
 
-# src/gui/draw.cpp:2309
+# src/gui/draw.cpp:2318
 PHYSICAL DISKS =
 
-# src/gui/draw.cpp:3080
+# src/gui/draw.cpp:3089
 Pick a drive or folder to see what's using your disk space — then clean it up. =
 
-# src/gui/draw.cpp:1284
+# src/gui/draw.cpp:1293
 Pick a minimum size and press “Find duplicates”. Large drives can take a while; you can cancel any time. =
 
 # src/protect.cpp:327
 Pictures =
 
-# src/gui/draw.cpp:1371
+# src/gui/draw.cpp:1380
 Pictures that look alike: resized, re-saved or lightly edited copies (compared by perceptual hash) =
 
 # src/diskhealth.cpp:314
 Power Mode =
 
-# src/gui/draw.cpp:2138
+# src/gui/draw.cpp:2147
 POWERED ON =
 
 # src/gui/apps_view.cpp:869
@@ -2884,7 +2884,7 @@ PowerShell took longer than 5 minutes and was stopped. =
 # src/diskhealth.cpp:301
 Predictive Failure =
 
-# src/gui/draw.cpp:1424
+# src/gui/draw.cpp:1433
 Press “Find similar photos”. Each image is only read (a small copy is decoded), never changed; results are remembered, so searching again is quick. Nothing is selected for you. =
 
 # src/protect.cpp:269, res/cleaners.ini:279
@@ -2917,7 +2917,7 @@ ProgramData =
 # src/protect.cpp:275, src/gui/theme.h:90
 Programs =
 
-# src/gui/draw.cpp:2564
+# src/gui/draw.cpp:2573
 programs registered to start at sign-in; turned off in StartupApproved, as Task Manager does =
 
 # src/protect.cpp:502
@@ -2935,7 +2935,7 @@ Properties =
 # src/protect.cpp:566
 Protected by your rule in protect.txt. =
 
-# src/gui/draw.cpp:2710
+# src/gui/draw.cpp:2719
 Protected items left out =
 
 # src/gui/actions.cpp:2583
@@ -2944,19 +2944,16 @@ Protected locations =
 # src/gui/actions.cpp:1566
 Protected locations are never deleted =
 
-# src/gui/actions.cpp:2688
+# src/gui/actions.cpp:2685
 Protected locations… =
 
 # src/gui/apps_view.cpp:352
 Protected, so Bytopsy leaves it alone: {0} =
 
-# src/gui/actions.cpp:2675
-Pseudo-language (layout test) =
-
-# src/gui/apps_view.cpp:395, src/gui/apps_view.cpp:736, src/gui/draw.cpp:2474
+# src/gui/apps_view.cpp:395, src/gui/apps_view.cpp:736, src/gui/draw.cpp:2483
 Publisher =
 
-# src/gui/draw.cpp:1747
+# src/gui/draw.cpp:1756
 pulled again when needed  ·  docker image prune -a =
 
 # src/protect.cpp:438
@@ -2965,7 +2962,7 @@ PyPI configuration =
 # src/gui/actions.cpp:1732
 Quick check (first 64 KB) =
 
-# src/gui/draw.cpp:3131
+# src/gui/draw.cpp:3140
 Quick cleanup =
 
 # src/protect.cpp:398
@@ -2980,10 +2977,10 @@ Read =
 # src/vdisks.cpp:201
 read across blocks =
 
-# src/gui/draw.cpp:3132
+# src/gui/draw.cpp:3141
 Read protected system folders too =
 
-# src/gui/draw.cpp:2084
+# src/gui/draw.cpp:2093
 read-only, works without a scan =
 
 # src/gui/actions.cpp:1765
@@ -2995,19 +2992,19 @@ Reading installed apps =
 # src/gui/draw.cpp:555
 Ready =
 
-# src/gui/draw.cpp:1282, src/gui/draw.cpp:1422
+# src/gui/draw.cpp:1291, src/gui/draw.cpp:1431
 Ready when you are =
 
-# src/gui/draw.cpp:1746
+# src/gui/draw.cpp:1755
 rebuilt by the next build  ·  docker builder prune -a =
 
 # res/cleaners.ini:150
 Received photos, videos and files. Gone from this PC for good, except Telegram's cache, which downloads again. =
 
-# src/gui/draw.cpp:3149
+# src/gui/draw.cpp:3158
 RECENT SCANS =
 
-# src/gui/draw.cpp:508, src/gui/draw.cpp:2937, src/gui/uia_app.cpp:42
+# src/gui/draw.cpp:508, src/gui/draw.cpp:2946, src/gui/uia_app.cpp:42
 Recently deleted =
 
 # src/gui/actions.cpp:523
@@ -3019,7 +3016,7 @@ Recycle Bin =
 # src/protect.cpp:256
 Recycle Bin storage =
 
-# src/gui/actions.cpp:891, src/gui/draw.cpp:1906
+# src/gui/actions.cpp:891, src/gui/draw.cpp:1915
 Reduce =
 
 # src/gui/actions.cpp:888
@@ -3028,7 +3025,7 @@ Reduce the hibernation file? =
 # src/gui/actions.cpp:893
 Reducing the hibernation file =
 
-# src/gui/apps_view.cpp:661, src/gui/draw.cpp:1619, src/gui/draw.cpp:1721, src/gui/draw.cpp:1826 (+3 more)
+# src/gui/apps_view.cpp:661, src/gui/draw.cpp:1628, src/gui/draw.cpp:1730, src/gui/draw.cpp:1835 (+3 more)
 Refresh =
 
 # src/aimodels.cpp:553
@@ -3061,13 +3058,13 @@ Removable disk =
 # src/gui/actions.cpp:852
 Remove =
 
-# src/gui/draw.cpp:1874
+# src/gui/draw.cpp:1883
 Remove old =
 
 # src/gui/actions.cpp:2082, src/gui/actions.cpp:2083
 Remove schedule =
 
-# src/gui/actions.cpp:2692
+# src/gui/actions.cpp:2689
 Remove winapp2.ini cleaners =
 
 # src/gui/actions.cpp:845
@@ -3076,10 +3073,10 @@ Remove {0} old driver package ({1})?|Remove {0} old driver packages ({1})? =
 # src/gui/actions.cpp:1586
 Removed =
 
-# src/gui/actions.cpp:2985
+# src/gui/actions.cpp:2983
 Removed from the Explorer menu =
 
-# src/gui/actions.cpp:3039
+# src/gui/actions.cpp:3037
 Removed. Click Measure in a moment to update the list. =
 
 # src/protect.cpp:288
@@ -3121,19 +3118,19 @@ Rescanning {0} =
 # src/gui/actions.cpp:1369
 Rescanning {0} folder|Rescanning {0} folders =
 
-# src/gui/draw.cpp:1437
+# src/gui/draw.cpp:1446
 Resolution =
 
-# src/gui/draw.cpp:1939, src/gui/draw.cpp:2268, src/gui/draw.cpp:2658
+# src/gui/draw.cpp:1948, src/gui/draw.cpp:2277, src/gui/draw.cpp:2667
 Restart as admin =
 
-# src/gui/actions.cpp:2697, src/gui/draw.cpp:386, src/gui/update_gui.cpp:192
+# src/gui/actions.cpp:2694, src/gui/draw.cpp:386, src/gui/update_gui.cpp:192
 Restart as administrator =
 
-# src/gui/draw.cpp:1882
+# src/gui/draw.cpp:1891
 Restart as administrator to see how much it uses =
 
-# src/gui/draw.cpp:2153
+# src/gui/draw.cpp:2162
 Restart as administrator to see wear and temperature =
 
 # src/gui/update_gui.cpp:190
@@ -3148,16 +3145,16 @@ Restart Windows to finish. The apps list was read again. =
 # src/appupdates.cpp:468
 Restart Windows, then update again =
 
-# src/gui/draw.cpp:2971
+# src/gui/draw.cpp:2980
 Restore =
 
 # src/gui/actions.cpp:866
 Restore points may then use at most this share of {0}. When they need more, Windows deletes the oldest ones first. =
 
-# src/gui/draw.cpp:2938
+# src/gui/draw.cpp:2947
 restore what is still in the Recycle Bin =
 
-# src/gui/draw.cpp:2979
+# src/gui/draw.cpp:2988
 Restored =
 
 # src/gui/actions.cpp:2526
@@ -3166,49 +3163,49 @@ Restored {0} =
 # src/gui/uia_app.cpp:49
 Review =
 
-# src/gui/draw.cpp:2707
+# src/gui/draw.cpp:2716
 Review first =
 
-# src/gui/draw.cpp:2754
+# src/gui/draw.cpp:2763
 Review {0} =
 
-# src/gui/draw.cpp:2800
+# src/gui/draw.cpp:2809
 Review: {0} =
 
 # src/gui/draw.cpp:83
 revision {0} =
 
-# src/gui/draw.cpp:3167
+# src/gui/draw.cpp:3176
 right-click any item for more actions =
 
-# src/gui/draw.cpp:3132
+# src/gui/draw.cpp:3141
 Run as administrator =
 
 # src/startup.cpp:636
 Run key =
 
-# src/gui/draw.cpp:2516
+# src/gui/draw.cpp:2525
 Run key · all users =
 
-# src/gui/draw.cpp:2516
+# src/gui/draw.cpp:2525
 Run key · you =
 
-# src/gui/draw.cpp:2562
+# src/gui/draw.cpp:2571
 Run keys =
 
-# src/gui/draw.cpp:2443
+# src/gui/draw.cpp:2452
 Run keys, Startup folders, scheduled tasks and services; turned off, never deleted =
 
 # src/gui/actions.cpp:942
 Run keys, Startup folders, scheduled tasks, services =
 
-# src/startup.cpp:637, src/gui/draw.cpp:2517
+# src/startup.cpp:637, src/gui/draw.cpp:2526
 Run once =
 
-# src/gui/draw.cpp:1774
+# src/gui/draw.cpp:1783
 Running =
 
-# src/gui/draw.cpp:1736
+# src/gui/draw.cpp:1745
 running distros report their own usage, stopped ones are read from the disk file without starting them =
 
 # src/alerts.cpp:521, src/schedule.cpp:279
@@ -3226,7 +3223,7 @@ Runs =
 # src/startup.cpp:293
 Runs once at the next sign-in, then Windows removes it =
 
-# src/gui/draw.cpp:2751
+# src/gui/draw.cpp:2760
 runs {0} =
 
 # src/gui/drivers_view.cpp:442
@@ -3244,7 +3241,7 @@ Save =
 # src/gui/platform.cpp:269
 Save scan =
 
-# src/gui/actions.cpp:2678
+# src/gui/actions.cpp:2675
 Save scan as JSON…\tCtrl+S =
 
 # src/protect.cpp:504
@@ -3280,16 +3277,16 @@ Scan =
 # src/gui/actions.cpp:2327, src/gui/actions.cpp:2382
 Scan a drive or folder first =
 
-# src/gui/draw.cpp:2874
+# src/gui/draw.cpp:2883
 Scan a drive or folder; next time you scan it you can compare the two and see exactly what changed. =
 
-# src/gui/draw.cpp:3129
+# src/gui/draw.cpp:3138
 Scan a folder =
 
-# src/gui/actions.cpp:2676
+# src/gui/actions.cpp:2673
 Scan a folder…\tCtrl+O =
 
-# src/gui/draw.cpp:2915
+# src/gui/draw.cpp:2924
 Scan again =
 
 # src/gui/platform.cpp:240
@@ -3331,16 +3328,16 @@ Scheduled cleanup =
 # src/gui/actions.cpp:2097
 Scheduled cleanup removed =
 
-# src/gui/draw.cpp:2649
+# src/gui/draw.cpp:2658
 Scheduled cleanup: {0} =
 
 # src/startup.cpp:639
 Scheduled task =
 
-# src/gui/draw.cpp:2562
+# src/gui/draw.cpp:2571
 Scheduled tasks =
 
-# src/gui/draw.cpp:2595
+# src/gui/draw.cpp:2604
 Schedule… =
 
 # src/startup.cpp:974
@@ -3349,31 +3346,31 @@ schtasks failed: {0} =
 # src/diskhealth.cpp:273
 SD card =
 
-# src/gui/draw.cpp:1277, src/gui/draw.cpp:1403
+# src/gui/draw.cpp:1286, src/gui/draw.cpp:1412
 Search again =
 
 # src/gui/draw.cpp:366
 Search files & folders =
 
-# src/gui/app.cpp:120
+# src/gui/app.cpp:121
 Search files & folders   e.g.  *.iso   >1G   older:1y   type:d =
 
-# src/gui/uia_app.cpp:642
+# src/gui/uia_app.cpp:643
 Search files and folders =
 
-# src/gui/draw.cpp:449, src/gui/draw.cpp:1089, src/gui/uia_app.cpp:38
+# src/gui/draw.cpp:449, src/gui/draw.cpp:1098, src/gui/uia_app.cpp:38
 Search results =
 
 # src/gui/actions.cpp:2612
 Search syntax: =
 
-# src/gui/draw.cpp:2794
+# src/gui/draw.cpp:2803
 Select all =
 
-# src/gui/draw.cpp:1257
+# src/gui/draw.cpp:1266
 Select all but oldest =
 
-# src/gui/draw.cpp:1382
+# src/gui/draw.cpp:1391
 Select all but suggested =
 
 # src/gui/actions.cpp:1877
@@ -3382,43 +3379,43 @@ Select at least one category with something to clean =
 # src/gui/actions.cpp:637
 Select disks to compact or Docker data to remove first =
 
-# src/gui/draw.cpp:1509
+# src/gui/draw.cpp:1518
 Select inactive 3+ months =
 
 # src/gui/actions.cpp:503
 Select the models to delete first =
 
-# src/gui/draw.cpp:1612
+# src/gui/draw.cpp:1621
 Select unused revisions =
 
-# src/gui/actions.cpp:2819
+# src/gui/actions.cpp:2817
 Selected {0} extra copy ({1}) — the oldest copy of each file is kept|Selected {0} extra copies ({1}) — the oldest copy of each file is kept =
 
-# src/gui/actions.cpp:2806
+# src/gui/actions.cpp:2804
 Selected {0} photo ({1}) — the suggested photo of each group is kept. Review before deleting.|Selected {0} photos ({1}) — the suggested photo of each group is kept. Review before deleting. =
 
 # src/startup.cpp:640
 Service =
 
-# src/gui/draw.cpp:2526
+# src/gui/draw.cpp:2535
 Service {0} =
 
-# src/gui/draw.cpp:2521
+# src/gui/draw.cpp:2530
 Service · automatic =
 
-# src/gui/draw.cpp:2521
+# src/gui/draw.cpp:2530
 Service · delayed =
 
-# src/gui/draw.cpp:2521
+# src/gui/draw.cpp:2530
 Service · manual =
 
-# src/gui/draw.cpp:2562
+# src/gui/draw.cpp:2571
 Services =
 
-# src/gui/draw.cpp:2567
+# src/gui/draw.cpp:2576
 services that start automatically; turned off \= Manual start, which programs can still start =
 
-# src/gui/draw.cpp:1894
+# src/gui/draw.cpp:1903
 Set limit =
 
 # src/gui/cleanup.cpp:426
@@ -3448,7 +3445,7 @@ Setup files from a Windows upgrade or feature update. Removed with Windows Disk 
 # src/games.cpp:223
 Shader cache of an uninstalled game (app {0}) =
 
-# src/gui/draw.cpp:1212
+# src/gui/draw.cpp:1221
 Share =
 
 # src/gui/draw.cpp:885
@@ -3469,25 +3466,25 @@ shares layers with other models =
 # src/gui/apps_view.cpp:830
 shielded folders hold protected data and stay =
 
-# src/gui/draw.cpp:2565
+# src/gui/draw.cpp:2574
 shortcuts and programs in the Startup folders; turned off in StartupApproved, the file stays =
 
 # src/gui/actions.cpp:2610
 Shortcuts:  Enter open · Backspace up · Del delete · Shift+Del delete permanently · Ctrl+F search · Ctrl+E show in Explorer · Ctrl+C copy path · F5 rescan · Alt+←/→ back/forward. =
 
-# src/gui/actions.cpp:2684
+# src/gui/actions.cpp:2681
 Show hidden && system files =
 
 # src/gui/actions.cpp:2636
 Show in Explorer\tCtrl+E =
 
-# src/gui/draw.cpp:2460
+# src/gui/draw.cpp:2469
 Show Microsoft's services and tasks =
 
 # src/gui/draw.cpp:775
 Show treemap =
 
-# src/gui/draw.cpp:3023
+# src/gui/draw.cpp:3032
 showing the folders that explain the change =
 
 # src/vdisks.cpp:484
@@ -3499,7 +3496,7 @@ Signal Desktop =
 # res/cleaners.ini:75
 Signs you out of websites and forgets their settings, except the sites on your keep list. =
 
-# src/gui/draw.cpp:1267, src/gui/draw.cpp:1388, src/gui/draw.cpp:1392
+# src/gui/draw.cpp:1276, src/gui/draw.cpp:1397, src/gui/draw.cpp:1401
 Similar photos =
 
 # src/gui/actions.cpp:1273, src/gui/apps_view.cpp:745, src/gui/draw.cpp:777, src/gui/draw.cpp:884 (+10 more)
@@ -3523,13 +3520,13 @@ Some items could not be deleted =
 # src/schedule.cpp:275
 some items were in use, or a tool's command failed =
 
-# src/gui/draw.cpp:2660
+# src/gui/draw.cpp:2669
 Some locations (Windows Update, system temp) need administrator rights. =
 
-# src/gui/draw.cpp:2019
+# src/gui/draw.cpp:2028
 Sort by =
 
-# src/gui/draw.cpp:1519
+# src/gui/draw.cpp:1528
 Sort projects by =
 
 # src/gui/uia_app.cpp:341
@@ -3538,16 +3535,16 @@ sorted ascending =
 # src/gui/uia_app.cpp:341
 sorted descending =
 
-# src/gui/draw.cpp:1812
+# src/gui/draw.cpp:1821
 space each takes on the drive, and what Linux uses inside =
 
-# src/gui/draw.cpp:1878
+# src/gui/draw.cpp:1887
 Space for restore points. A smaller limit deletes the oldest restore points first. =
 
-# src/gui/draw.cpp:1830
+# src/gui/draw.cpp:1839
 Space Windows keeps for itself, changed with Windows' own tools =
 
-# src/gui/draw.cpp:2147
+# src/gui/draw.cpp:2156
 SPARE =
 
 # src/protect.cpp:412
@@ -3577,19 +3574,19 @@ Starting =
 # src/vdisks.cpp:545
 Starting Docker Desktop again =
 
-# src/gui/draw.cpp:505, src/gui/draw.cpp:2455, src/gui/uia_app.cpp:47
+# src/gui/draw.cpp:505, src/gui/draw.cpp:2464, src/gui/uia_app.cpp:47
 Startup =
 
 # src/startup.cpp:638
 Startup folder =
 
-# src/gui/draw.cpp:2518
+# src/gui/draw.cpp:2527
 Startup folder · all =
 
-# src/gui/draw.cpp:2518
+# src/gui/draw.cpp:2527
 Startup folder · you =
 
-# src/gui/draw.cpp:2562
+# src/gui/draw.cpp:2571
 Startup folders =
 
 # src/gui/uia_app.cpp:250
@@ -3616,7 +3613,7 @@ Stopped =
 # src/alerts.cpp:522, src/schedule.cpp:280, src/schedule.cpp:282
 stopped before it finished =
 
-# src/gui/draw.cpp:1744
+# src/gui/draw.cpp:1753
 Stopped containers =
 
 # src/appupdates.cpp:519
@@ -3631,7 +3628,7 @@ Stopping after this app =
 # src/vdisks.cpp:474
 Stopping Docker Desktop =
 
-# src/gui/draw.cpp:3367
+# src/gui/draw.cpp:3376
 Stopping… =
 
 # src/diskhealth.cpp:277
@@ -3646,19 +3643,19 @@ Store app data =
 # src/protect.cpp:434
 Stored Git passwords and tokens. =
 
-# src/gui/draw.cpp:1914
+# src/gui/draw.cpp:1923
 Stores Windows' own files compressed, usually saving 2 GB or more. Can be turned off again. =
 
 # src/diskhealth.cpp:300
 Stressed =
 
-# src/gui/draw.cpp:1399
+# src/gui/draw.cpp:1408
 Strict =
 
 # src/protect.cpp:488
 Subversion working copy =
 
-# src/gui/draw.cpp:1461
+# src/gui/draw.cpp:1470
 Suggested to keep: the largest picture (then the largest file, then the oldest) =
 
 # src/gui/actions.cpp:2063
@@ -3694,7 +3691,7 @@ System folders are never deleted. For the data below (and Git repositories, pass
 # src/gui/cleanup.cpp:317
 System Protection is turned off for the system drive (System Properties → System Protection). =
 
-# src/gui/draw.cpp:1878
+# src/gui/draw.cpp:1887
 System Restore =
 
 # src/protect.cpp:254
@@ -3718,10 +3715,10 @@ Task Scheduler isn't available =
 # src/startup.cpp:963
 Task Scheduler refused: {0} =
 
-# src/gui/draw.cpp:2519
+# src/gui/draw.cpp:2528
 Task · {0} =
 
-# src/gui/draw.cpp:2566
+# src/gui/draw.cpp:2575
 tasks that run at log on or startup (\\Microsoft\\Windows\\ is left out); turned off in Task Scheduler =
 
 # res/cleaners.ini:105
@@ -3730,7 +3727,7 @@ Teams, Discord and Slack web caches; the apps download them again. Close the app
 # src/protect.cpp:466
 Telegram Desktop =
 
-# src/gui/draw.cpp:2131
+# src/gui/draw.cpp:2140
 TEMPERATURE =
 
 # src/protect.cpp:299
@@ -3745,7 +3742,7 @@ Terraform =
 # src/protect.cpp:440
 Terraform Cloud tokens and plugins. =
 
-# src/gui/draw.cpp:2234
+# src/gui/draw.cpp:2243
 Test =
 
 # src/gui/actions.cpp:2288
@@ -3823,7 +3820,7 @@ The installer was cancelled =
 # src/appupdates.cpp:456
 The installer's hash doesn't match its manifest =
 
-# src/gui/app.cpp:129, src/gui/app.cpp:140
+# src/gui/app.cpp:130, src/gui/app.cpp:143
 The language file has {0} problem: {1}|The language file has {0} problems, the first: {1} =
 
 # src/gui/actions.cpp:507
@@ -3859,13 +3856,13 @@ The task is disabled in Task Scheduler, not deleted: it stops running at log on 
 # src/gui/actions.cpp:979
 The task is enabled again in Task Scheduler. =
 
-# src/gui/draw.cpp:2200
+# src/gui/draw.cpp:2209
 The task runs {0}: Change, then Save, points it at this copy =
 
-# src/gui/draw.cpp:2196
+# src/gui/draw.cpp:2205
 The task that checks is missing (removed in Task Scheduler?): Change, then Save, puts it back =
 
-# src/gui/draw.cpp:2198
+# src/gui/draw.cpp:2207
 The task that checks is turned off in Task Scheduler =
 
 # src/gui/apps_view.cpp:674
@@ -3928,16 +3925,16 @@ The Windows Update service isn't available =
 # src/driverupdates.cpp:541
 The Windows Update service stopped =
 
-# src/gui/draw.cpp:1086
+# src/gui/draw.cpp:1095
 The {0} biggest files of the scan =
 
-# src/gui/draw.cpp:1430
+# src/gui/draw.cpp:1439
 The {0} image found doesn't look like another at this setting. “Loose” finds more.|None of the {0} images look alike at this setting. “Loose” finds more. =
 
-# src/gui/actions.cpp:2681
+# src/gui/actions.cpp:2678
 Theme =
 
-# src/gui/draw.cpp:1151
+# src/gui/draw.cpp:1160
 There are no items for this view. =
 
 # src/update.cpp:1228
@@ -3964,7 +3961,7 @@ this build of Bytopsy has no update key, so it can't check for updates =
 # src/gui/drivers_view.cpp:144
 This can take several minutes. Don't turn the PC off. =
 
-# src/gui/draw.cpp:2808
+# src/gui/draw.cpp:2817
 This category is empty right now. =
 
 # src/gui/actions.cpp:1499
@@ -3973,7 +3970,7 @@ This contains data you may not get back =
 # src/gui/actions.cpp:1499
 This deletes AI assistant data =
 
-# src/gui/draw.cpp:2154
+# src/gui/draw.cpp:2163
 This disk doesn't report wear or temperature to Windows =
 
 # src/gui/winapp2.cpp:255
@@ -3988,7 +3985,7 @@ This is how a low disk space alert looks. Clicking it opens Disk health. =
 # src/gui/actions.cpp:1481
 This location is protected =
 
-# src/gui/draw.cpp:1432
+# src/gui/draw.cpp:1441
 This scan has no images (JPEG, PNG, HEIC, WebP, TIFF, BMP, GIF) above the minimum size. =
 
 # src/gui/actions.cpp:2480
@@ -4009,10 +4006,10 @@ Thursday =
 # src/gui/actions.cpp:2066
 Time =
 
-# src/gui/draw.cpp:1144
+# src/gui/draw.cpp:1153
 Tip: combine terms like   *.mp4 >500M older:1y   or   type:d node_modules =
 
-# src/gui/draw.cpp:3167
+# src/gui/draw.cpp:3176
 Tip: drop a folder onto this window to scan it =
 
 # src/gui/actions.cpp:520
@@ -4042,13 +4039,13 @@ Transient Error =
 # src/gui/draw.cpp:927, src/gui/uia_app.cpp:346
 Treemap =
 
-# src/gui/draw.cpp:2169
+# src/gui/draw.cpp:2178
 TRIM is off: Windows doesn't tell the SSD which blocks are free, so it slows down over time. `fsutil behavior set DisableDeleteNotify 0` (as administrator) turns it on =
 
-# src/gui/draw.cpp:2346
+# src/gui/draw.cpp:2355
 TRIM {0} =
 
-# src/gui/draw.cpp:2346
+# src/gui/draw.cpp:2355
 TRIM {0} ({1}) =
 
 # src/vdisks.cpp:465
@@ -4081,7 +4078,7 @@ turn it on again here any time =
 # src/gui/actions.cpp:884, src/gui/actions.cpp:914, src/gui/actions.cpp:998, src/gui/actions.cpp:2212 (+2 more)
 Turn off =
 
-# src/gui/draw.cpp:2499
+# src/gui/draw.cpp:2508
 Turn off at startup =
 
 # src/gui/actions.cpp:912
@@ -4093,7 +4090,7 @@ Turn off {0} at startup? =
 # src/gui/actions.cpp:900, src/gui/actions.cpp:908, src/gui/actions.cpp:998, src/gui/actions.cpp:2215 (+2 more)
 Turn on =
 
-# src/gui/draw.cpp:2499
+# src/gui/draw.cpp:2508
 Turn on at startup =
 
 # src/gui/actions.cpp:904
@@ -4108,16 +4105,16 @@ Turn on the winget.exe alias =
 # src/gui/actions.cpp:975
 Turn on {0} at startup? =
 
-# src/gui/draw.cpp:2236
+# src/gui/draw.cpp:2245
 Turn on… =
 
 # src/gui/actions.cpp:1036
 Turned off at startup: {0} =
 
-# src/gui/draw.cpp:2637
+# src/gui/draw.cpp:2646
 turned off in Task Scheduler =
 
-# src/gui/draw.cpp:2529
+# src/gui/draw.cpp:2538
 turned off {0} =
 
 # src/gui/actions.cpp:1035
@@ -4135,10 +4132,10 @@ Turning off at startup =
 # src/gui/actions.cpp:1016
 Turning on at startup =
 
-# src/gui/draw.cpp:2446
+# src/gui/draw.cpp:2455
 turning one off keeps it, so it can be turned on again =
 
-# src/gui/draw.cpp:1209
+# src/gui/draw.cpp:1218
 Type =
 
 # src/gui/apps_view.cpp:700
@@ -4147,16 +4144,16 @@ type in the search box to filter =
 # src/games.cpp:98
 Ubisoft Connect asks you to confirm =
 
-# src/gui/draw.cpp:2792
+# src/gui/draw.cpp:2801
 uncheck a profile to leave it alone =
 
-# src/gui/draw.cpp:2784
+# src/gui/draw.cpp:2793
 uncheck what you want to keep =
 
-# src/gui/draw.cpp:2145
+# src/gui/draw.cpp:2154
 uncorrected reads/writes =
 
-# src/gui/draw.cpp:2216
+# src/gui/draw.cpp:2225
 under the limit now =
 
 # src/vdisks.cpp:251
@@ -4174,7 +4171,7 @@ Uninstall =
 # src/gui/apps_view.cpp:48
 Uninstall registry keys, and the size of apps that register none =
 
-# src/gui/apps_view.cpp:656, src/gui/draw.cpp:2004
+# src/gui/apps_view.cpp:656, src/gui/draw.cpp:2013
 Uninstall {0} =
 
 # src/gui/actions.cpp:1095, src/gui/apps_view.cpp:391
@@ -4186,10 +4183,10 @@ Uninstall {0}? =
 # src/gui/apps_view.cpp:641
 uninstalled with their own uninstaller, then leftovers reviewed =
 
-# src/diskhealth.cpp:296, src/diskhealth.cpp:328, src/fsops.cpp:55, src/gui/draw.cpp:2542
+# src/diskhealth.cpp:296, src/diskhealth.cpp:328, src/fsops.cpp:55, src/gui/draw.cpp:2551
 Unknown =
 
-# src/gui/draw.cpp:1798, src/gui/draw.cpp:2055, src/gui/draw.cpp:2512
+# src/gui/draw.cpp:1807, src/gui/draw.cpp:2064, src/gui/draw.cpp:2521
 unknown =
 
 # src/gui/draw.cpp:76
@@ -4222,13 +4219,13 @@ unpacking failed: {0} =
 # src/gui/actions.cpp:1770
 Unreadable =
 
-# src/gui/draw.cpp:1667
+# src/gui/draw.cpp:1676
 Unused =
 
-# src/gui/draw.cpp:1744
+# src/gui/draw.cpp:1753
 Unused images =
 
-# src/gui/draw.cpp:1744
+# src/gui/draw.cpp:1753
 Unused volumes =
 
 # src/gui/draw.cpp:768
@@ -4309,7 +4306,7 @@ Updating {0} =
 # src/diskhealth.cpp:288
 USB hard disk =
 
-# src/gui/draw.cpp:2735
+# src/gui/draw.cpp:2744
 use Windows Disk Cleanup =
 
 # src/gui/actions.cpp:2660
@@ -4321,13 +4318,13 @@ Used by an upgrade in progress or for rollback. =
 # src/protect.cpp:258
 Used by Windows Update for the recovery environment. =
 
-# src/gui/draw.cpp:1742
+# src/gui/draw.cpp:1751
 Used inside =
 
 # src/diskhealth.cpp:719
 Used space =
 
-# src/gui/draw.cpp:2384
+# src/gui/draw.cpp:2393
 USED SPACE OVER TIME =
 
 # src/protect.cpp:261
@@ -4357,10 +4354,10 @@ Virtual =
 # src/protect.cpp:501
 Virtual disk =
 
-# src/gui/draw.cpp:1811
+# src/gui/draw.cpp:1820
 Virtual disks =
 
-# src/gui/draw.cpp:1709
+# src/gui/draw.cpp:1718
 Virtual disks of WSL distros and Docker Desktop =
 
 # src/protect.cpp:483
@@ -4405,13 +4402,13 @@ Wallet =
 # src/diskhealth.cpp:326
 Warning =
 
-# src/gui/draw.cpp:2148
+# src/gui/draw.cpp:2157
 warns at {0}% =
 
-# src/gui/draw.cpp:2126
+# src/gui/draw.cpp:2135
 WEAR =
 
-# src/gui/draw.cpp:2276
+# src/gui/draw.cpp:2285
 Wear, temperature and error counts of some disks need administrator rights. Nothing is changed either way. =
 
 # src/gui/actions.cpp:2063
@@ -4426,7 +4423,7 @@ Weekly =
 # src/schedule.cpp:214
 Weekly on {0} at {1} =
 
-# src/gui/draw.cpp:3078
+# src/gui/draw.cpp:3087
 What would you like to analyze? =
 
 # src/gui/update_gui.cpp:307
@@ -4438,13 +4435,13 @@ WhatsApp & Telegram media =
 # src/protect.cpp:467
 WhatsApp Desktop =
 
-# src/gui/draw.cpp:2475
+# src/gui/draw.cpp:2484
 Where =
 
-# src/gui/actions.cpp:3039
+# src/gui/actions.cpp:3037
 winapp2.ini cleaners removed =
 
-# src/gui/draw.cpp:493, src/gui/draw.cpp:1829, src/gui/uia_app.cpp:45
+# src/gui/draw.cpp:493, src/gui/draw.cpp:1838, src/gui/uia_app.cpp:45
 Windows =
 
 # src/gui/actions.cpp:661
@@ -4468,7 +4465,7 @@ Windows Credential Manager =
 # src/protect.cpp:310
 Windows data protection keys =
 
-# src/gui/actions.cpp:2669
+# src/gui/actions.cpp:2668
 Windows default ({0}) =
 
 # src/gui/update_gui.cpp:188
@@ -4486,7 +4483,7 @@ Windows Installer cache =
 # src/appupdates.cpp:469
 Windows is restarting to finish the update =
 
-# src/gui/draw.cpp:2312
+# src/gui/draw.cpp:2321
 Windows lists no physical disks. =
 
 # src/diskhealth.cpp:346
@@ -4603,7 +4600,7 @@ Windows' boot performance log can't be read: {0} =
 # src/startup.cpp:589
 Windows' boot performance log needs administrator rights =
 
-# src/gui/draw.cpp:1921
+# src/gui/draw.cpp:1930
 Windows' diagnostic history. Clearing loses it for troubleshooting; the Security log is kept. =
 
 # src/startup.cpp:560
@@ -4687,7 +4684,7 @@ winget's source agreements were not accepted =
 # src/protect.cpp:311
 Without these keys Windows can't decrypt your saved passwords, Wi-Fi keys and certificates. =
 
-# src/gui/draw.cpp:1830, src/gui/draw.cpp:2602, src/gui/drivers_view.cpp:232
+# src/gui/draw.cpp:1839, src/gui/draw.cpp:2611, src/gui/drivers_view.cpp:232
 works without a scan =
 
 # src/games.cpp:223
@@ -4699,16 +4696,16 @@ Write error =
 # src/export.cpp:152, src/export.cpp:185
 Write error (disk full?) =
 
-# src/gui/draw.cpp:2151
+# src/gui/draw.cpp:2160
 WRITTEN =
 
 # src/gui/actions.cpp:1711
 Written =
 
-# src/gui/draw.cpp:489, src/gui/draw.cpp:1727, src/gui/uia_app.cpp:44
+# src/gui/draw.cpp:489, src/gui/draw.cpp:1736, src/gui/uia_app.cpp:44
 WSL & Docker =
 
-# src/gui/draw.cpp:1732
+# src/gui/draw.cpp:1741
 WSL 2 distros and Docker Desktop keep Linux files in .vhdx virtual disks. None are registered for this user. =
 
 # src/gui/actions.cpp:659
@@ -4756,7 +4753,7 @@ Your personal registry hive; Windows can't sign you in without it. =
 # src/protect.cpp:304, src/protect.cpp:305
 Your registry =
 
-# src/gui/draw.cpp:2709
+# src/gui/draw.cpp:2718
 Your rule =
 
 # src/protect.cpp:466
@@ -4774,19 +4771,19 @@ Zed (AI threads, history) =
 # src/protect.cpp:406
 Zed (settings) =
 
-# src/gui/draw.cpp:2208
+# src/gui/draw.cpp:2217
 {0}  not watched =
 
-# src/gui/draw.cpp:2215
+# src/gui/draw.cpp:2224
 {0}  {1} free  ·  alert below {2} =
 
-# src/gui/draw.cpp:2053
+# src/gui/draw.cpp:2062
 {0} (approx.) =
 
-# src/gui/draw.cpp:2543
+# src/gui/draw.cpp:2552
 {0} (est.) =
 
-# src/gui/draw.cpp:2500
+# src/gui/draw.cpp:2509
 {0} (needs administrator permission) =
 
 # src/gui/actions.cpp:2021
@@ -4801,10 +4798,10 @@ Zed (settings) =
 # src/gui/actions.cpp:2190
 {0} ({1} free) =
 
-# src/gui/draw.cpp:1888
+# src/gui/draw.cpp:1897
 {0} ({1}% of {2}) =
 
-# src/alerts.cpp:369, src/driverupdates.cpp:562, src/driverupdates.cpp:565, src/gui/draw.cpp:2212 (+1 more)
+# src/alerts.cpp:369, src/driverupdates.cpp:562, src/driverupdates.cpp:565, src/gui/draw.cpp:2221 (+1 more)
 {0} ({1}) =
 
 # src/alerts.cpp:365
@@ -4816,13 +4813,13 @@ Zed (settings) =
 # src/protect.cpp:932
 {0} and other protected items =
 
-# src/fsops.cpp:523, src/gui/draw.cpp:2121
+# src/fsops.cpp:523, src/gui/draw.cpp:2130
 {0} and {1} =
 
 # src/gui/apps_view.cpp:640
 {0} app|{0} apps =
 
-# src/gui/draw.cpp:2673
+# src/gui/draw.cpp:2682
 {0} app on this PC has something to clean|{0} apps on this PC have something to clean =
 
 # src/gui/apps_view.cpp:239
@@ -4834,31 +4831,31 @@ Zed (settings) =
 # src/gui/draw.cpp:550
 {0} apparent =
 
-# src/gui/draw.cpp:2122
+# src/gui/draw.cpp:2131
 {0} are on it =
 
-# src/gui/draw.cpp:1246
+# src/gui/draw.cpp:1255
 {0} can be reclaimed =
 
 # src/gui/apps_view.cpp:634
 {0} checked|{0} checked =
 
-# src/gui/draw.cpp:1499
+# src/gui/draw.cpp:1508
 {0} comes back with the next build or install =
 
-# src/gui/draw.cpp:1853
+# src/gui/draw.cpp:1862
 {0} component replaced by newer updates|{0} components replaced by newer updates =
 
-# src/gui/cleanup.cpp:739, src/gui/draw.cpp:2747
+# src/gui/cleanup.cpp:739, src/gui/draw.cpp:2756
 {0} cookie|{0} cookies =
 
-# src/gui/draw.cpp:2790
+# src/gui/draw.cpp:2799
 {0} cookie would be removed for good|{0} cookies would be removed for good =
 
-# src/gui/draw.cpp:1711
+# src/gui/draw.cpp:1720
 {0} could go back to Windows =
 
-# src/diskhealth.cpp:251, src/gui/draw.cpp:2137
+# src/diskhealth.cpp:251, src/gui/draw.cpp:2146
 {0} day|{0} days =
 
 # src/gui/draw.cpp:53, src/gui/draw.cpp:63
@@ -4870,7 +4867,7 @@ Zed (settings) =
 # src/gui/drivers_view.cpp:368
 {0} driver update offered|{0} driver updates offered =
 
-# src/gui/draw.cpp:2444
+# src/gui/draw.cpp:2453
 {0} entry starts with Windows|{0} entries start with Windows =
 
 # src/gui/cleanup.cpp:905
@@ -4879,7 +4876,7 @@ Zed (settings) =
 # src/gui/actions.cpp:777
 {0} failed: {1} =
 
-# src/gui/draw.cpp:1246, src/gui/draw.cpp:2746, src/gui/draw.cpp:3000
+# src/gui/draw.cpp:1255, src/gui/draw.cpp:2755, src/gui/draw.cpp:3009
 {0} file|{0} files =
 
 # src/gui/draw.cpp:842
@@ -4888,13 +4885,13 @@ Zed (settings) =
 # src/gui/actions.cpp:1586
 {0} file or folder|{0} files and folders =
 
-# src/gui/draw.cpp:842, src/gui/draw.cpp:1100, src/gui/draw.cpp:1498
+# src/gui/draw.cpp:842, src/gui/draw.cpp:1109, src/gui/draw.cpp:1507
 {0} folder|{0} folders =
 
 # src/gui/draw.cpp:553
 {0} folder unreadable|{0} folders unreadable =
 
-# src/gui/draw.cpp:568, src/gui/draw.cpp:3109
+# src/gui/draw.cpp:568, src/gui/draw.cpp:3118
 {0} free of {1} =
 
 # src/alerts.cpp:371
@@ -4903,7 +4900,7 @@ Zed (settings) =
 # src/update.cpp:1160
 {0} from the last update is still in use: close every Bytopsy window and try again =
 
-# src/gui/draw.cpp:1991
+# src/gui/draw.cpp:2000
 {0} game|{0} games =
 
 # src/gui/apps_view.cpp:873
@@ -4915,10 +4912,10 @@ Zed (settings) =
 # src/diskhealth.cpp:592
 {0} grew {1} {2} =
 
-# src/gui/draw.cpp:1368
+# src/gui/draw.cpp:1377
 {0} group|{0} groups =
 
-# src/gui/draw.cpp:2138
+# src/gui/draw.cpp:2147
 {0} h =
 
 # src/gui/draw.cpp:51
@@ -4927,16 +4924,16 @@ Zed (settings) =
 # src/gui/drivers_view.cpp:264
 {0} has no driver tool: its support page has the drivers =
 
-# src/gui/draw.cpp:1318
+# src/gui/draw.cpp:1327
 {0} identical copy of {1}|{0} identical copies of {1} =
 
-# src/gui/draw.cpp:1363
+# src/gui/draw.cpp:1372
 {0} image compared|{0} images compared =
 
-# src/gui/draw.cpp:1369
+# src/gui/draw.cpp:1378
 {0} in the copies not suggested to keep =
 
-# src/gui/draw.cpp:1483
+# src/gui/draw.cpp:1492
 {0} in the others =
 
 # src/update.cpp:1136
@@ -4945,7 +4942,7 @@ Zed (settings) =
 # src/update.cpp:1132
 {0} in the update isn't validly signed, but this copy of Bytopsy is =
 
-# src/gui/draw.cpp:1601
+# src/gui/draw.cpp:1610
 {0} in {1} =
 
 # src/gui/draw.cpp:707
@@ -4963,7 +4960,7 @@ Zed (settings) =
 # src/gui/apps_view.cpp:542
 {0} is installed again: its folders are left alone =
 
-# src/gui/draw.cpp:2122
+# src/gui/draw.cpp:2131
 {0} is on it =
 
 # src/gui/actions.cpp:1163, src/gui/apps_view.cpp:578
@@ -4996,7 +4993,7 @@ Zed (settings) =
 # src/gui/drivers_view.cpp:265
 {0} isn't installed: get it from {1}'s site =
 
-# src/gui/actions.cpp:1711, src/gui/draw.cpp:420, src/gui/draw.cpp:549, src/gui/draw.cpp:1081 (+4 more)
+# src/gui/actions.cpp:1711, src/gui/draw.cpp:420, src/gui/draw.cpp:549, src/gui/draw.cpp:1090 (+4 more)
 {0} item|{0} items =
 
 # src/gui/actions.cpp:1954
@@ -5008,22 +5005,22 @@ Zed (settings) =
 # src/gui/actions.cpp:1275
 {0} items/s =
 
-# src/gui/draw.cpp:2749
+# src/gui/draw.cpp:2758
 {0} kept|{0} kept =
 
-# src/gui/draw.cpp:1175
+# src/gui/draw.cpp:1184
 {0} kind of file|{0} kinds of files =
 
 # src/aimodels.cpp:438
 {0} layer|{0} layers =
 
-# src/gui/draw.cpp:1992
+# src/gui/draw.cpp:2001
 {0} left behind by uninstalled games =
 
 # src/gui/uia_app.cpp:247
 {0} list =
 
-# src/gui/draw.cpp:1922
+# src/gui/draw.cpp:1931
 {0} log|{0} logs =
 
 # src/diskhealth.cpp:378
@@ -5032,10 +5029,10 @@ Zed (settings) =
 # src/gui/draw.cpp:50
 {0} min ago|{0} min ago =
 
-# src/gui/draw.cpp:1601
+# src/gui/draw.cpp:1610
 {0} model folder|{0} model folders =
 
-# src/diskhealth.cpp:252, src/gui/draw.cpp:1123, src/gui/draw.cpp:1124
+# src/diskhealth.cpp:252, src/gui/draw.cpp:1132, src/gui/draw.cpp:1133
 {0} month|{0} months =
 
 # src/gui/draw.cpp:64
@@ -5047,16 +5044,16 @@ Zed (settings) =
 # src/gui/drivers_view.cpp:272
 {0} motherboard {1} =
 
-# src/gui/draw.cpp:2712
+# src/gui/draw.cpp:2721
 {0} not found on PATH =
 
-# src/gui/draw.cpp:2602
+# src/gui/draw.cpp:2611
 {0} of caches and leftovers found =
 
 # src/gui/draw.cpp:844
 {0} of parent =
 
-# src/gui/draw.cpp:3410
+# src/gui/draw.cpp:3419
 {0} of this folder =
 
 # src/gui/actions.cpp:1585, src/gui/apps_view.cpp:197, src/gui/update_gui.cpp:246
@@ -5068,25 +5065,25 @@ Zed (settings) =
 # src/gui/apps_view.cpp:240
 {0} of {1} updated =
 
-# src/gui/draw.cpp:2399
+# src/gui/draw.cpp:2408
 {0} of {1} used =
 
-# src/gui/draw.cpp:549, src/gui/draw.cpp:2924
+# src/gui/draw.cpp:549, src/gui/draw.cpp:2933
 {0} on disk =
 
-# src/gui/draw.cpp:1368
+# src/gui/draw.cpp:1377
 {0} photo|{0} photos =
 
-# src/gui/draw.cpp:1479
+# src/gui/draw.cpp:1488
 {0} photo that looks the same|{0} photos that look the same =
 
 # src/gui/apps_view.cpp:706
 {0} pinned app isn't listed|{0} pinned apps aren't listed =
 
-# src/gui/draw.cpp:1498
+# src/gui/draw.cpp:1507
 {0} project|{0} projects =
 
-# src/gui/draw.cpp:2785
+# src/gui/draw.cpp:2794
 {0} protected item left out|{0} protected items left out =
 
 # src/gui/actions.cpp:1505
@@ -5095,7 +5092,7 @@ Zed (settings) =
 # src/diskhealth.cpp:382
 {0} read/write error the drive couldn't correct.|{0} read/write errors the drive couldn't correct. =
 
-# src/gui/draw.cpp:1321
+# src/gui/draw.cpp:1330
 {0} reclaimable =
 
 # src/gui/apps_view.cpp:389
@@ -5104,16 +5101,16 @@ Zed (settings) =
 # src/gui/draw.cpp:583
 {0} selected|{0} selected =
 
-# src/gui/draw.cpp:1245
+# src/gui/draw.cpp:1254
 {0} set of identical files|{0} sets of identical files =
 
 # src/diskhealth.cpp:593
 {0} shrank {1} {2} =
 
-# src/gui/draw.cpp:1480
+# src/gui/draw.cpp:1489
 {0} similar photo|{0} similar photos =
 
-# src/gui/draw.cpp:2912
+# src/gui/draw.cpp:2921
 {0} since =
 
 # src/diskhealth.cpp:289
@@ -5122,7 +5119,7 @@ Zed (settings) =
 # src/diskhealth.cpp:591
 {0} stayed about the same {1} =
 
-# src/gui/draw.cpp:2445
+# src/gui/draw.cpp:2454
 {0} turned off|{0} turned off =
 
 # src/gui/actions.cpp:1769
@@ -5134,16 +5131,16 @@ Zed (settings) =
 # src/gui/apps_view.cpp:633
 {0} update from winget|{0} updates from winget =
 
-# src/gui/draw.cpp:3107
+# src/gui/draw.cpp:3116
 {0} used =
 
-# src/gui/draw.cpp:1891
+# src/gui/draw.cpp:1900
 {0} uses {1}, limit {2} =
 
-# src/gui/cleanup.cpp:743, src/gui/draw.cpp:2748
+# src/gui/cleanup.cpp:743, src/gui/draw.cpp:2757
 {0} visit|{0} visits =
 
-# src/gui/draw.cpp:2791
+# src/gui/draw.cpp:2800
 {0} visit would be removed for good|{0} visits would be removed for good =
 
 # src/gui/draw.cpp:501
@@ -5155,22 +5152,22 @@ Zed (settings) =
 # src/gui/actions.cpp:1545
 {0} will be freed. This can't be undone. =
 
-# src/gui/draw.cpp:2784
+# src/gui/draw.cpp:2793
 {0} would be deleted permanently =
 
-# src/gui/draw.cpp:1125, src/gui/draw.cpp:1126, src/gui/draw.cpp:1127
+# src/gui/draw.cpp:1134, src/gui/draw.cpp:1135, src/gui/draw.cpp:1136
 {0} year|{0} years =
 
 # src/gui/draw.cpp:65
 {0} year ago|{0} years ago =
 
-# src/diskhealth.cpp:253, src/gui/draw.cpp:2137
+# src/diskhealth.cpp:253, src/gui/draw.cpp:2146
 {0} years =
 
 # src/gui/drivers_view.cpp:272
 {0} {1} =
 
-# src/gui/draw.cpp:2543
+# src/gui/draw.cpp:2552
 {0} · measured =
 
 # src/gui/actions.cpp:1546
@@ -5185,7 +5182,7 @@ Zed (settings) =
 # src/gui/actions.cpp:1096
 {0}, just as from its own library. Bytopsy deletes nothing itself here; press Refresh when it is done. =
 
-# src/fsops.cpp:523, src/gui/draw.cpp:842, src/gui/draw.cpp:2120
+# src/fsops.cpp:523, src/gui/draw.cpp:842, src/gui/draw.cpp:2129
 {0}, {1} =
 
 # src/gui/actions.cpp:1655
@@ -5224,25 +5221,25 @@ Zed (settings) =
 # src/gui/apps_view.cpp:637
 {1} of {0} app match “{2}”|{1} of {0} apps match “{2}” =
 
-# src/gui/draw.cpp:2789
+# src/gui/draw.cpp:2798
 {1} of {0} browser profile|{1} of {0} browser profiles =
 
-# src/gui/draw.cpp:2783
+# src/gui/draw.cpp:2792
 {1} of {0} selected|{1} of {0} selected =
 
-# src/gui/draw.cpp:1872
+# src/gui/draw.cpp:1881
 {1} old of {0} third-party driver package|{1} old of {0} third-party driver packages =
 
 # src/gui/drivers_view.cpp:405
 “Check Windows Update” asks it which driver updates it has for this PC's devices. Windows does the asking, as Settings > Windows Update does; nothing is downloaded until you choose to install. =
 
-# src/gui/draw.cpp:1602
+# src/gui/draw.cpp:1611
 “Frees” is what deleting that model alone frees =
 
-# src/gui/draw.cpp:1629
+# src/gui/draw.cpp:1638
 “Last used” is unknown: Windows doesn't record file access on this PC =
 
-# src/gui/draw.cpp:1090
+# src/gui/draw.cpp:1099
 “{0}” =
 
 # src/gui/actions.cpp:518, src/gui/actions.cpp:851, src/gui/actions.cpp:1127, src/gui/actions.cpp:1530 (+4 more)

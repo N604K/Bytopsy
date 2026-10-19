@@ -46,7 +46,7 @@ for %t in (build\bytopsy-*-test.exe) do %t
 | `bytopsy-apps-test` | which Uninstall entries are listed, which folders count as leftovers |
 | `bytopsy-phash-test` | similar photos: hashes of re-encoded and rotated images, grouping, cache |
 | `bytopsy-uia-test` | accessibility tree: element identity across frames, reading order, names, patterns |
-| `bytopsy-i18n-test` | translations: `.lang` parsing, placeholders, plural rules, pseudo-language, every `res/lang` file |
+| `bytopsy-i18n-test` | translations: `.lang` parsing, placeholders, plural rules, every `res/lang` file |
 
 The devjunk test builds its fixture next to the test program, so it finds nothing (and fails) when
 the build folder sits inside a dot folder such as `.claude\worktrees\...`.
@@ -189,8 +189,8 @@ Names from the system or from data (paths, file and app names, distro and model 
 are. Cleaner names and descriptions from `res/cleaners.ini` are translated when shown. After
 changing texts, run `python -I tools/extract_strings.py` to regenerate `res/lang/template.lang`;
 CI fails when it is out of date, or when a `TrF`/`TrN` call passes fewer values than its text uses.
-Check new layouts with `⋯` > *Language* > *Pseudo-language*, which makes every text about 40%
-longer and adds accents.
+Keep new labels short (a third longer than the English still has to fit; Hebrew mirrors the whole
+layout, so check a new view with `BYTOPSY_LANG=he` too).
 
 ## Releases
 

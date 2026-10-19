@@ -290,7 +290,7 @@ if(MSVC)
 endif()
 add_test(NAME uia COMMAND bytopsy-uia-test)
 
-# Translations (parsing, placeholders, plural rules, pseudo-language, res/lang/*.lang): build/bytopsy-i18n-test.exe
+# Translations (parsing, placeholders, plural rules, res/lang/*.lang): build/bytopsy-i18n-test.exe
 add_executable(bytopsy-i18n-test tests/i18n_test.cpp)
 target_link_libraries(bytopsy-i18n-test PRIVATE bytopsy_core)
 target_compile_definitions(bytopsy-i18n-test PRIVATE BYTOPSY_SOURCE_DIR=L"${CMAKE_SOURCE_DIR}")

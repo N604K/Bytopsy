@@ -137,7 +137,7 @@ enum Cmd : int {
     CMD_ALERTS,
     CMD_ALERT_TEST,
     CMD_WIN_ACT = 600,  // + WinAction
-    CMD_LANG = 800,     // + 0 Windows' language, 1 the pseudo-language, 2 + an index into langMenu_
+    CMD_LANG = 800,     // + 0 Windows' language, 1 + an index into langMenu_
     CMD_DRV_ROW = 1000,   // + index into drvSearch_.updates: check / uncheck it
     CMD_DRV_TOOL = 1500,  // + index into drvLinks_: open a vendor's tool or page
     CMD_DRV_END = 1600,
@@ -308,6 +308,8 @@ private:
     void UpdateSearchBox();
     void CreateSearchBox();
     float Px2Dip(int px) const { return px * 96.0f / gfx_.Dpi(); }
+    // A client x in pixels as an x of the (unmirrored) layout.
+    float MouseX(int px) const { return gfx_.MirrorX(Px2Dip(px)); }
     int Dip2Px(float d) const { return static_cast<int>(d * gfx_.Dpi() / 96.0f + 0.5f); }
     void Invalidate() { InvalidateRect(hwnd_, nullptr, FALSE); }
     void EnsureTimer();

@@ -12,8 +12,6 @@
 
 namespace i18n {
 
-const wchar_t* const kPseudoCode = L"qps-ploc";
-
 namespace {
 
 // The catalog in use. Replaced ones are kept (a few per run at most), so a string another thread
@@ -51,6 +49,7 @@ int RuleLithuanian(uint64_t n) {
     return n % 10 == 1 && n % 100 != 11 ? 0 : n % 10 >= 2 && (n % 100 < 10 || n % 100 >= 20) ? 1 : 2;
 }
 int RuleSlovenian(uint64_t n) { return n % 100 == 1 ? 0 : n % 100 == 2 ? 1 : n % 100 == 3 || n % 100 == 4 ? 2 : 3; }
+int RuleHebrew(uint64_t n) { return n == 1 ? 0 : n == 2 ? 1 : 2; }
 int RuleArabic(uint64_t n) {
     return n == 0 ? 0 : n == 1 ? 1 : n == 2 ? 2 : n % 100 >= 3 && n % 100 <= 10 ? 3 : n % 100 >= 11 ? 4 : 5;
 }
@@ -134,10 +133,6 @@ std::set<int> Placeholders(std::wstring_view s) {
     return out;
 }
 
-// Pseudo-language letters: accented look-alikes of a-z and A-Z (all in Segoe UI).
-const wchar_t kPseudoLower[] = L"åƀçďéƒĝĥîĵķĺḿñöþǫŕšţûṽŵẋýž";
-const wchar_t kPseudoUpper[] = L"ÅƁÇĎÉƑĜĤÎĴĶĹḾÑÖÞǪŔŠŢÛṼŴẊÝŽ";
-
 }  // namespace
 
 // =============================================================================================
@@ -146,11 +141,6 @@ const wchar_t kPseudoUpper[] = L"ÅƁÇĎÉƑĜĤÎĴĶĹḾÑÖÞǪŔŠŢÛṼ�
 std::wstring Tr(std::wstring_view english) {
     const Catalog* c = Active();
     if (!c || english.empty()) return std::wstring(english);
-    // A text that is already pseudo ("[...~]", passed through Tr twice) stays as it is.
-    if (c->pseudo) {
-        bool already = english.size() > 2 && english.front() == L'[' && english.substr(english.size() - 2) == L"~]";
-        return already ? std::wstring(english) : Pseudo(english);
-    }
     auto it = c->strings.find(english);
     return it == c->strings.end() || it->second.empty() ? std::wstring(english) : it->second;
 }
@@ -186,7 +176,6 @@ std::wstring PluralPattern(uint64_t n, std::wstring_view one, std::wstring_view 
     std::wstring_view english = n == 1 ? one : other;
     const Catalog* c = Active();
     if (!c) return std::wstring(english);
-    if (c->pseudo) return Pseudo(english);
     auto it = c->plurals.find(PluralKey(one, other));
     if (it == c->plurals.end() || it->second.empty()) return std::wstring(english);
     const PluralRule& rule = c->plural ? *c->plural : PluralRuleFor(c->code);
@@ -211,6 +200,7 @@ const std::vector<PluralRule>& PluralRules() {
         {L"romanian", 3, RuleRomanian, L"1 | 0, 2-19, 101 | 20, 21, ..."},
         {L"lithuanian", 3, RuleLithuanian, L"1, 21 | 2-9, 22 | 0, 10-20"},
         {L"slovenian", 4, RuleSlovenian, L"1, 101 | 2, 102 | 3, 4 | 0, 5, ..."},
+        {L"hebrew", 3, RuleHebrew, L"1 | 2 | 0, 3, ..."},
         {L"arabic", 6, RuleArabic, L"0 | 1 | 2 | 3-10 | 11-99 | 100-102"},
     };
     return rules;
@@ -237,6 +227,7 @@ const PluralRule& PluralRuleFor(std::wstring_view code) {
     else if (lang == L"lt") name = L"lithuanian";
     else if (lang == L"sl") name = L"slovenian";
     else if (lang == L"ar") name = L"arabic";
+    else if (lang == L"he" || lang == L"iw") name = L"hebrew";
     return *FindPluralRule(name);
 }
 
@@ -350,33 +341,6 @@ Catalog ParseCatalog(std::wstring_view text, std::vector<std::wstring>* problems
 }
 
 // =============================================================================================
-// Pseudo-language
-
-std::wstring Pseudo(std::wstring_view s) {
-    if (s.empty()) return std::wstring();
-    std::wstring o = L"[";
-    size_t letters = 0;
-    for (size_t i = 0; i < s.size(); ++i) {
-        wchar_t c = s[i];
-        if (c == L'{' && i + 2 < s.size() && iswdigit(s[i + 1]) && s[i + 2] == L'}') {  // a placeholder stays
-            o.append(s.substr(i, 3));
-            i += 2;
-            continue;
-        }
-        if (c >= L'a' && c <= L'z') c = kPseudoLower[c - L'a'];
-        else if (c >= L'A' && c <= L'Z') c = kPseudoUpper[c - L'A'];
-        if (iswalpha(s[i])) ++letters;
-        o += c;
-    }
-    // German and French run about 30% longer than English; short labels more.
-    size_t extra = std::max<size_t>(2, (letters * 40 + 99) / 100);
-    o += L' ';
-    o.append(extra, L'~');
-    o += L']';
-    return o;
-}
-
-// =============================================================================================
 // The language in use
 
 void SetCatalog(std::unique_ptr<Catalog> c) {
@@ -390,6 +354,16 @@ std::wstring CurrentCode() {
     const Catalog* c = g_catalog.load(std::memory_order_acquire);
     return c ? c->code : L"en";
 }
+
+bool IsRtlLanguage(std::wstring_view code) {
+    std::wstring c = LowerAscii(code);
+    std::wstring lang = c.substr(0, c.find_first_of(L"-_"));
+    for (const wchar_t* r : {L"he", L"iw", L"ar", L"fa", L"ur", L"yi", L"ps", L"sd", L"ug", L"dv", L"ckb"})
+        if (lang == r) return true;
+    return false;
+}
+
+bool IsRtl() { return IsRtlLanguage(CurrentCode()); }
 
 EnglishScope::EnglishScope() { ++t_english; }
 EnglishScope::~EnglishScope() { --t_english; }
@@ -570,14 +544,6 @@ std::wstring LoadLanguage(const std::wstring& requested, std::vector<std::wstrin
     wchar_t env[64];
     DWORD n = GetEnvironmentVariableW(L"BYTOPSY_LANG", env, 64);
     if (n > 0 && n < 64) code = env;
-    if (SameCode(code, L"pseudo") || SameCode(code, kPseudoCode)) {
-        auto c = std::make_unique<Catalog>();
-        c->code = kPseudoCode;
-        c->name = L"Pseudo";
-        c->pseudo = true;
-        SetCatalog(std::move(c));
-        return kPseudoCode;
-    }
     std::vector<Source> sources = Sources();
     if (code.empty()) {
         std::vector<LanguageInfo> avail{{L"en", L"English", L""}};

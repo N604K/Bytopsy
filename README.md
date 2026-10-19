@@ -298,9 +298,10 @@ Start it, pick a drive (or drop a folder onto the window) and see what takes up 
   translated without touching the code ([how](#translations)). It starts in Windows' display
   language when a translation for it exists, otherwise in English; `⋯` > *Language* overrides that
   (remembered in `settings.ini`). Numbers and dates follow your Windows region settings in every
-  language. No translation ships yet: the menu offers English and a *pseudo-language* that
-  lengthens and accents every text, for checking that layouts cope with longer languages. The
-  terminal app, the journal, logs and command lines stay English.
+  language. **Hebrew** (עברית) ships, with a fully mirrored right-to-left layout (sidebar,
+  columns, treemap, dialogs, menus, arrow keys); the menu offers English and Hebrew.
+  Any language written right to left gets the mirrored layout. The terminal
+  app, the journal, logs and command lines stay English.
 
 Command line: `bytopsy.exe [folder]` scans a folder, `bytopsy.exe -f scan.json` opens a saved scan,
 `bytopsy.exe --check-space` runs the low disk space check without opening a window (what the alert
@@ -485,7 +486,7 @@ do: Steam or Docker Desktop, for example, may connect on their own, and winget c
 
 ## Translations
 
-Bytopsy is in English only so far, and translations are welcome. Each language is one UTF-8 text
+Bytopsy ships in English and Hebrew so far, and translations are welcome. Each language is one UTF-8 text
 file, `res/lang/<code>.lang` (e.g. `de.lang`, `pt-BR.lang`), with one line per text:
 
 ```text
@@ -507,7 +508,7 @@ python -I tools/extract_strings.py --new de --name Deutsch
 **Try it without building**: put the file in a `lang` folder next to `bytopsy.exe` (or in
 `%LOCALAPPDATA%\Bytopsy\lang`, `Bytopsy-data\lang` in portable mode), restart Bytopsy and pick it
 under `⋯` > *Language*. Mistakes in the file (such as a `{1}` the English text doesn't have) are
-shown as a message. Setting `BYTOPSY_LANG=de` (or `BYTOPSY_LANG=pseudo`) starts in that language
+shown as a message. Setting `BYTOPSY_LANG=de` starts in that language
 whatever the menu says. Files in `res/lang` are built into `bytopsy.exe`; a file in a `lang` folder
 replaces the built-in one of the same code. Paths, registry keys, command lines, cleanup rule ids,
 the journal and logs are never translated. See [CONTRIBUTING.md](CONTRIBUTING.md#translate-bytopsy)
@@ -720,7 +721,7 @@ src/                  core engine + terminal app
   appupdates.cpp      app updates through winget: upgrade table parsing, matching to apps, updating
   driverupdates.cpp   driver updates through Windows Update (search, match, install); PC maker and GPU vendor tools
   phash.cpp           similar photos: WIC decoding, dHash/pHash, hash index, grouping, cache
-  i18n.cpp            translations: Tr/TrF/TrN, .lang files, plural rules, pseudo-language
+  i18n.cpp            translations: Tr/TrF/TrN, .lang files, plural rules
   update.cpp          self-update: signed update.json, WinHTTP download, SHA-256, unpack, file swap
   updatekey.h         the public key update.json is checked with
   runtool.cpp         running console tools without a window, and as administrator
@@ -764,7 +765,7 @@ tests/apps_test.cpp     apps: which entries are listed, which folders count as l
 tests/appupdates_test.cpp app updates: winget upgrade tables (cut names, pins, other languages, spinner), matching, a fake winget, why winget is missing and the repair (stand-ins only) (ctest)
 tests/phash_test.cpp    similar photos: hashes of re-encoded/rotated images, hash index, grouping, cache (ctest)
 tests/uia_test.cpp      accessibility tree: element identity across frames, reading order, names from text, patterns (ctest)
-tests/i18n_test.cpp     translations: .lang parsing, placeholders, plural rules, pseudo-language, res/lang files (ctest)
+tests/i18n_test.cpp     translations: .lang parsing, placeholders, plural rules, res/lang files (ctest)
 tests/update_test.cpp   self-update: signatures (throwaway key), versions, pinned URLs, SHA-256, file swap and rollback, package managers; offline (ctest)
 res/bytopsy.ico       app icon
 res/cleaners.ini      built-in Cleanup categories (format documented at the top)

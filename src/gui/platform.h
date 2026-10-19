@@ -20,7 +20,7 @@ struct Settings {
     RECT window{};
     bool hasWindow = false;
     bool maximized = false;
-    std::wstring language;  // "" Windows' display language, "en", "qps-ploc" (pseudo), or a code from res/lang
+    std::wstring language;  // "" Windows' display language, "en", or a code from res/lang
     // Update checks: 0 off, 1 once a day (notify). Asked once, on the first start; off until answered.
     int updates = 0;
     bool updatesAsked = false;

@@ -73,10 +73,9 @@ struct TransparentHash {
     size_t operator()(std::wstring_view s) const { return std::hash<std::wstring_view>()(s); }
 };
 struct Catalog {
-    std::wstring code;  // "de", "pt-BR"; "qps-ploc" for the pseudo-language
+    std::wstring code;  // "de", "pt-BR"
     std::wstring name;  // "Deutsch" (@name)
     const PluralRule* plural = nullptr;
-    bool pseudo = false;
     std::unordered_map<std::wstring, std::wstring, TransparentHash, std::equal_to<>> strings;
     // TrN entries, keyed by one + U+001F + other.
     std::unordered_map<std::wstring, std::vector<std::wstring>, TransparentHash, std::equal_to<>> plurals;
@@ -96,14 +95,12 @@ Catalog ParseCatalog(std::wstring_view text, std::vector<std::wstring>* problems
 // Escapes text for the left or right side of a line (the inverse of what ParseCatalog reads).
 std::wstring EscapeEntry(std::wstring_view s);
 
-// The pseudo-language: every string bracketed, accented and about 40% longer, made from the
-// English text, so untranslated or cut-off text shows in screenshots. "{0}" etc. stay intact.
-std::wstring Pseudo(std::wstring_view english);
-extern const wchar_t* const kPseudoCode;  // "qps-ploc"
-
 // ---- The language in use (process-wide; switching is safe while other threads translate).
 void SetCatalog(std::unique_ptr<Catalog> c);  // null: English
 std::wstring CurrentCode();                   // "en" when English
+// Whether a language is written right to left (Hebrew, Arabic, Persian, Urdu, ...), by its code.
+bool IsRtlLanguage(std::wstring_view code);
+bool IsRtl();  // the language in use
 // Text in English on this thread while it lives (journal and log text), including the number
 // format (util::SetNumberFormat).
 class EnglishScope {
@@ -124,12 +121,12 @@ struct LanguageInfo {
     std::wstring code, name;  // name: @name, or the code
     std::wstring file;        // empty: built in
 };
-std::vector<LanguageInfo> AvailableLanguages();  // English first, then by name; no pseudo-language
+std::vector<LanguageInfo> AvailableLanguages();  // English first, then by name
 // The Windows display language(s) (GetUserPreferredUILanguages) matched against `available`:
 // "de-AT" takes "de-AT", else "de". "en" when nothing matches.
 std::wstring WindowsLanguage(const std::vector<LanguageInfo>& available);
 std::wstring WindowsLanguageFor(const std::vector<std::wstring>& preferred, const std::vector<LanguageInfo>& available);
-// Loads a language by code ("en", "qps-ploc" or "pseudo", or one of AvailableLanguages). An empty
+// Loads a language by code ("en", or one of AvailableLanguages). An empty
 // code means the Windows language. The BYTOPSY_LANG environment variable overrides `code`.
 // Returns the code in use; problems in the file go to `problems`.
 std::wstring LoadLanguage(const std::wstring& code, std::vector<std::wstring>* problems = nullptr);

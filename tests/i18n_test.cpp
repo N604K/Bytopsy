@@ -1,6 +1,6 @@
 // Self-check of translations: bytopsy-i18n-test.exe
 // Language file parsing (escapes, comments, malformed lines, placeholder checks), {n} substitution
-// and reordering, plural rules, the fallback to English, the pseudo-language, regional number
+// and reordering, plural rules, the fallback to English, regional number
 // formats, and that res/lang/template.lang and every shipped translation parse cleanly.
 #include <windows.h>
 
@@ -156,6 +156,9 @@ int main() {
     Check(pick(L"arabic", 0) == 0 && pick(L"arabic", 2) == 2 && pick(L"arabic", 7) == 3 && pick(L"arabic", 50) == 4 &&
               pick(L"arabic", 100) == 5,
           L"rule arabic");
+    Check(pick(L"hebrew", 1) == 0 && pick(L"hebrew", 2) == 1 && pick(L"hebrew", 0) == 2 && pick(L"hebrew", 5) == 2 &&
+              &PluralRuleFor(L"he") == FindPluralRule(L"hebrew"),
+          L"rule hebrew");
     Check(pick(L"slovenian", 101) == 0 && pick(L"slovenian", 2) == 1 && pick(L"slovenian", 4) == 2 && pick(L"slovenian", 5) == 3,
           L"rule slovenian");
     bool formsOk = true;
@@ -166,29 +169,17 @@ int main() {
               std::wstring(PluralRuleFor(L"ru").name) == L"east-slavic" && std::wstring(PluralRuleFor(L"de-AT").name) == L"one",
           L"rules by language code");
 
-    // ---- Pseudo-language
-    std::wstring ps = Pseudo(L"Freed {0} in {1} categories");
-    Check(ps.front() == L'[' && ps.back() == L']', L"pseudo: bracketed");
-    Check(ps.find(L"{0}") != std::wstring::npos && ps.find(L"{1}") != std::wstring::npos, L"pseudo: placeholders intact");
-    Check(ps.find(L"Freed") == std::wstring::npos && ps.size() >= 28 * 13 / 10, L"pseudo: accented and at least 30% longer");
-    Check(Pseudo(L"").empty(), L"pseudo: empty stays empty");
-    auto pc = std::make_unique<Catalog>();
-    pc->pseudo = true;
-    pc->code = kPseudoCode;
-    SetCatalog(std::move(pc));
-    std::wstring pf = TrF(L"Moved {0}", L"README.md");
-    Check(pf.find(L"README.md") != std::wstring::npos && pf.find(L"Moved") == std::wstring::npos, L"pseudo: values are not changed");
-    Check(TrN(2, L"{0} item", L"{0} items").find(L"2 ") == 1, L"pseudo: plural forms");
-    SetCatalog(nullptr);
-
     // ---- Matching the Windows language
-    std::vector<LanguageInfo> avail = {{L"en", L"English", L""}, {L"de", L"Deutsch", L""}, {L"pt-BR", L"Português", L""}};
+    std::vector<LanguageInfo> avail = {{L"en", L"English", L""}, {L"de", L"Deutsch", L""}, {L"pt-BR", L"Português", L""}, {L"he", L"עברית", L""}};
     Check(WindowsLanguageFor({L"de-AT", L"en-US"}, avail) == L"de", L"Windows language: de-AT takes de");
     Check(WindowsLanguageFor({L"pt-BR"}, avail) == L"pt-BR", L"Windows language: exact region");
     Check(WindowsLanguageFor({L"pt-PT"}, avail) == L"en", L"Windows language: pt-PT doesn't take pt-BR");
     Check(WindowsLanguageFor({L"fr-FR", L"de-DE"}, avail) == L"de", L"Windows language: the first available preference");
     Check(WindowsLanguageFor({L"en-GB", L"de-DE"}, avail) == L"en", L"Windows language: English before a later preference");
     Check(WindowsLanguageFor({}, avail) == L"en", L"Windows language: nothing: English");
+    Check(WindowsLanguageFor({L"he-IL", L"en-US"}, avail) == L"he", L"Windows language: he-IL takes he");
+    Check(IsRtlLanguage(L"he") && IsRtlLanguage(L"he-IL") && IsRtlLanguage(L"ar-SA") && !IsRtlLanguage(L"de") && !IsRtlLanguage(L"pt-BR"),
+          L"right-to-left languages");
 
     // ---- Regional number formats
     Check(util::FormatSizeShort(1536) == L"1.5 KiB" && util::FormatCount(1234567) == L"1,234,567", L"numbers: defaults");

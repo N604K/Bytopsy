@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cwctype>
 #include <vector>
 
 #pragma comment(lib, "d2d1.lib")
@@ -21,6 +22,11 @@ bool FontExists(IDWriteFactory* dw, const wchar_t* family) {
 }
 
 std::vector<IDWriteInlineObject*> g_ellipses;
+
+// Segoe Fluent Icons glyphs that point left or right: back, forward, chevrons, undo.
+bool IsDirectionalGlyph(wchar_t g) {
+    return g == 0xE72B || g == 0xE72A || g == 0xE76B || g == 0xE76C || g == 0xE7A7 || g == 0xE96F || g == 0xE970;
+}
 
 }  // namespace
 
@@ -83,11 +89,46 @@ void Gfx::SetDpi(float dpi) {
 
 D2D1_SIZE_F Gfx::Size() const { return rt_ ? rt_->GetSize() : D2D1::SizeF(1, 1); }
 
+D2D1_MATRIX_3X2_F Gfx::BaseTransform() const {
+    return mirror_ ? D2D1::Matrix3x2F(-1, 0, 0, 1, rt_->GetSize().width, 0) : D2D1::Matrix3x2F::Identity();
+}
+
+bool StartsRtl(const std::wstring& s) {
+    for (wchar_t ch : s) {
+        if ((ch >= 0x0590 && ch <= 0x08FF) || (ch >= 0xFB1D && ch <= 0xFDFF) || (ch >= 0xFE70 && ch <= 0xFEFC)) return true;
+        if (iswalpha(ch)) return false;
+    }
+    return false;
+}
+
+// Right-to-left text: a parenthesized group without a right-to-left letter, such as "(C:)", is set
+// off with left-to-right marks so its brackets and colon keep their place.
+static std::wstring IsolateLatinGroups(const std::wstring& s) {
+    std::wstring o;
+    o.reserve(s.size() + 8);
+    for (size_t i = 0; i < s.size(); ++i) {
+        size_t close = s[i] == L'(' ? s.find(L')', i) : std::wstring::npos;
+        if (close != std::wstring::npos) {
+            bool rtlInside = false;
+            for (size_t k = i + 1; k < close; ++k) rtlInside |= s[k] >= 0x0590 && s[k] <= 0x08FF;
+            if (!rtlInside) {
+                o += static_cast<wchar_t>(0x200E);  // LEFT-TO-RIGHT MARK
+                o.append(s, i, close - i + 1);
+                o += static_cast<wchar_t>(0x200E);
+                i = close;
+                continue;
+            }
+        }
+        o += s[i];
+    }
+    return o;
+}
+
 bool Gfx::Begin() {
     CreateTarget();
     if (!rt_) return false;
     rt_->BeginDraw();
-    rt_->SetTransform(D2D1::Matrix3x2F::Identity());
+    rt_->SetTransform(BaseTransform());
     return true;
 }
 
@@ -189,9 +230,9 @@ void Gfx::Shadow(const RectF& r, float radius, float spread) {
     }
 }
 
-IDWriteTextFormat* Gfx::Format(const TextStyle& st) {
+IDWriteTextFormat* Gfx::Format(const TextStyle& st, bool rtl) {
     auto key = std::make_tuple(static_cast<int>(st.size * 10), static_cast<int>(st.weight), static_cast<int>(st.align),
-                               st.center ? 1 : 0, st.wrap ? 1 : 0, static_cast<int>(st.font));
+                               st.center ? 1 : 0, st.wrap ? 1 : 0, static_cast<int>(st.font), rtl ? 1 : 0);
     auto it = formats_.find(key);
     if (it != formats_.end()) return it->second;
     const std::wstring& family = st.font == FontKind::Icons ? iconFont_
@@ -202,9 +243,11 @@ IDWriteTextFormat* Gfx::Format(const TextStyle& st) {
     dw_->CreateTextFormat(family.c_str(), nullptr, st.weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, st.size,
                           locale_.c_str(), &f);
     if (!f) return nullptr;
-    f->SetTextAlignment(st.align == Align::Left    ? DWRITE_TEXT_ALIGNMENT_LEADING
-                        : st.align == Align::Right ? DWRITE_TEXT_ALIGNMENT_TRAILING
-                                                   : DWRITE_TEXT_ALIGNMENT_CENTER);
+    // st.align is where the text sits on screen; with a right-to-left reading direction the line's start is on the right.
+    f->SetReadingDirection(rtl ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
+    bool lead = rtl ? st.align == Align::Right : st.align == Align::Left;
+    bool trail = rtl ? st.align == Align::Left : st.align == Align::Right;
+    f->SetTextAlignment(lead ? DWRITE_TEXT_ALIGNMENT_LEADING : trail ? DWRITE_TEXT_ALIGNMENT_TRAILING : DWRITE_TEXT_ALIGNMENT_CENTER);
     f->SetParagraphAlignment(st.center ? DWRITE_PARAGRAPH_ALIGNMENT_CENTER : DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
     f->SetWordWrapping(st.wrap ? DWRITE_WORD_WRAPPING_WRAP : DWRITE_WORD_WRAPPING_NO_WRAP);
     if (!st.wrap && st.font != FontKind::Icons) {
@@ -227,10 +270,26 @@ void Gfx::SetLocale(const std::wstring& name) {
 
 void Gfx::Text(const std::wstring& s, const RectF& r, D2D1_COLOR_F c, const TextStyle& st) {
     if (s.empty() || W(r) <= 0) return;
-    IDWriteTextFormat* f = Format(st);
-    if (!f) return;
     brush_->SetColor(c);
-    rt_->DrawText(s.c_str(), static_cast<UINT32>(s.size()), f, r, brush_, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    if (mirror_ && st.font != FontKind::Icons) {
+        // Upright text in the mirrored place: the start of a line is on the right.
+        TextStyle v = st;
+        if (st.align != Align::Center) v.align = st.align == Align::Left ? Align::Right : Align::Left;
+        bool rtl = StartsRtl(s);
+        IDWriteTextFormat* f = Format(v, rtl);
+        if (!f) return;
+        std::wstring shown = rtl ? IsolateLatinGroups(s) : std::wstring();
+        const std::wstring& text = rtl ? shown : s;
+        D2D1_MATRIX_3X2_F cur;
+        rt_->GetTransform(&cur);
+        rt_->SetTransform(D2D1::Matrix3x2F::Identity());
+        rt_->DrawText(text.c_str(), static_cast<UINT32>(text.size()), f, MirrorRect(r), brush_, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        rt_->SetTransform(cur);
+    } else {
+        IDWriteTextFormat* f = Format(st);
+        if (!f) return;
+        rt_->DrawText(s.c_str(), static_cast<UINT32>(s.size()), f, r, brush_, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
     if (recording_) Record(s, r, st);
 }
 
@@ -288,11 +347,26 @@ void Gfx::Icon(wchar_t glyph, const RectF& r, D2D1_COLOR_F c, float size) {
     IDWriteTextFormat* f = Format(st);
     if (!f) return;
     brush_->SetColor(c);
+    D2D1_MATRIX_3X2_F cur;
+    rt_->GetTransform(&cur);
+    // Upright in the mirrored place (flipped back about its own center), unless the glyph points left or right.
+    bool upright = mirror_ && !IsDirectionalGlyph(glyph);
+    if (upright) rt_->SetTransform(D2D1::Matrix3x2F(-1, 0, 0, 1, r.left + r.right, 0) * cur);
     rt_->DrawText(s, 1, f, r, brush_, D2D1_DRAW_TEXT_OPTIONS_NONE);
+    if (upright) rt_->SetTransform(cur);
 }
 
-void Gfx::Bitmap(ID2D1Bitmap* bmp, const RectF& r, float opacity) {
-    if (bmp) rt_->DrawBitmap(bmp, r, opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+void Gfx::Bitmap(ID2D1Bitmap* bmp, const RectF& r, float opacity, bool withLayout) {
+    if (!bmp) return;
+    if (mirror_ && !withLayout) {
+        D2D1_MATRIX_3X2_F cur;
+        rt_->GetTransform(&cur);
+        rt_->SetTransform(D2D1::Matrix3x2F(-1, 0, 0, 1, r.left + r.right, 0) * cur);
+        rt_->DrawBitmap(bmp, r, opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+        rt_->SetTransform(cur);
+        return;
+    }
+    rt_->DrawBitmap(bmp, r, opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
 }
 
 void Gfx::PushClip(const RectF& r) {

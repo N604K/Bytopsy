@@ -2647,7 +2647,7 @@ void App::ShowContextMenu(int sx, int sy) {
         add(MF_STRING, CMD_DELETE, Tr(L"Move to Recycle Bin\tDel"));
         add(MF_STRING, CMD_DELETE_PERM, Tr(L"Delete permanently\tShift+Del"));
     }
-    int cmd = TrackPopupMenuEx(m, TPM_RETURNCMD | TPM_RIGHTBUTTON, sx, sy, hwnd_, nullptr);
+    int cmd = TrackPopupMenuEx(m, TPM_RETURNCMD | TPM_RIGHTBUTTON | (gfx_.Mirror() ? TPM_LAYOUTRTL : 0), sx, sy, hwnd_, nullptr);
     DestroyMenu(m);
     if (cmd) OnCommand(cmd);
 }
@@ -2660,8 +2660,7 @@ void App::ShowMoreMenu() {
     add(theme, MF_STRING | (settings_.theme == 0 ? MF_CHECKED : 0), CMD_SET_THEME_SYS, Tr(L"Use Windows setting"));
     add(theme, MF_STRING | (settings_.theme == 1 ? MF_CHECKED : 0), CMD_SET_THEME_LIGHT, Tr(L"Light"));
     add(theme, MF_STRING | (settings_.theme == 2 ? MF_CHECKED : 0), CMD_SET_THEME_DARK, Tr(L"Dark"));
-    // Language: Windows' display language (when Bytopsy has it), every language found, and the
-    // pseudo-language that shows untranslated and cut-off text.
+    // Language: Windows' display language (when Bytopsy has it), then every language found.
     langMenu_ = i18n::AvailableLanguages();
     std::wstring winCode = i18n::WindowsLanguage(langMenu_), winName = L"English";
     for (auto& l : langMenu_)
@@ -2670,9 +2669,7 @@ void App::ShowMoreMenu() {
     AppendMenuW(lang, MF_SEPARATOR, 0, nullptr);
     for (size_t i = 0; i < langMenu_.size() && i < 150; ++i)
         add(lang, MF_STRING | (_wcsicmp(settings_.language.c_str(), langMenu_[i].code.c_str()) == 0 ? MF_CHECKED : 0),
-            CMD_LANG + 2 + i, langMenu_[i].name);
-    AppendMenuW(lang, MF_SEPARATOR, 0, nullptr);
-    add(lang, MF_STRING | (settings_.language == i18n::kPseudoCode ? MF_CHECKED : 0), CMD_LANG + 1, Tr(L"Pseudo-language (layout test)"));
+            CMD_LANG + 1 + i, langMenu_[i].name);
     add(m, MF_STRING, CMD_SCAN_FOLDER, Tr(L"Scan a folder…\tCtrl+O"));
     add(m, MF_STRING, CMD_OPEN_SCAN, Tr(L"Open saved scan…"));
     add(m, MF_STRING | (root_ ? 0 : MF_GRAYED), CMD_EXPORT_JSON, Tr(L"Save scan as JSON…\tCtrl+S"));
@@ -2698,9 +2695,10 @@ void App::ShowMoreMenu() {
     add(m, MF_STRING, CMD_ABOUT, Tr(L"About && shortcuts\tF1"));
     RECT rc;
     GetClientRect(hwnd_, &rc);
-    POINT pt{rc.right - Dip2Px(12), Dip2Px(50)};
+    // The menu hangs from the "more" button: at the right edge, or the left one when mirrored.
+    POINT pt{gfx_.Mirror() ? Dip2Px(12) : rc.right - Dip2Px(12), Dip2Px(50)};
     ClientToScreen(hwnd_, &pt);
-    int cmd = TrackPopupMenuEx(m, TPM_RETURNCMD | TPM_RIGHTALIGN, pt.x, pt.y, hwnd_, nullptr);
+    int cmd = TrackPopupMenuEx(m, TPM_RETURNCMD | (gfx_.Mirror() ? TPM_LEFTALIGN | TPM_LAYOUTRTL : TPM_RIGHTALIGN), pt.x, pt.y, hwnd_, nullptr);
     DestroyMenu(m);
     if (cmd) OnCommand(cmd);
 }
@@ -2715,8 +2713,8 @@ void App::OnCommand(int cmd) {
         Invalidate();
         return;
     }
-    if (cmd >= CMD_LANG && cmd < CMD_LANG + 2 + static_cast<int>(langMenu_.size())) {
-        settings_.language = cmd == CMD_LANG ? L"" : cmd == CMD_LANG + 1 ? std::wstring(i18n::kPseudoCode) : langMenu_[cmd - CMD_LANG - 2].code;
+    if (cmd >= CMD_LANG && cmd < CMD_LANG + 1 + static_cast<int>(langMenu_.size())) {
+        settings_.language = cmd == CMD_LANG ? L"" : langMenu_[cmd - CMD_LANG - 1].code;
         ApplyLanguage(true);
         SaveSettings(settings_);
         return;

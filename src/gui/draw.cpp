@@ -1006,6 +1006,7 @@ void App::DrawTreemap(const RectF& area) {
             DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&dw));
             if (dw) dw->CreateTextFormat(L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL,
                                          DWRITE_FONT_STRETCH_NORMAL, 11.5f, L"", &fmt);
+            const bool mirror = gfx_.Mirror();
             if (fmt) {
                 fmt->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
                 DWRITE_TRIMMING trim = {DWRITE_TRIMMING_GRANULARITY_CHARACTER, 0, 0};
@@ -1017,6 +1018,14 @@ void App::DrawTreemap(const RectF& area) {
                     if (t.depth != 1 || W(t.r) < 70 || H(t.r) < 34) continue;
                     std::wstring label = t.node->name + L"  " + util::FormatSizeShort(Val(t.node));
                     RectF lr = R(t.r.left + 6, t.r.top + 4, t.r.right - (shielded[i] ? 24 : 4), t.r.top + 20);
+                    if (mirror) {
+                        // The picture is drawn mirrored with the layout: mirror the label in its place so it reads
+                        // right, and start it on the right.
+                        bool rtlLabel = StartsRtl(label);
+                        fmt->SetReadingDirection(rtlLabel ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT);
+                        fmt->SetTextAlignment(rtlLabel ? DWRITE_TEXT_ALIGNMENT_LEADING : DWRITE_TEXT_ALIGNMENT_TRAILING);
+                        brt->SetTransform(D2D1::Matrix3x2F(-1, 0, 0, 1, lr.left + lr.right - map.left, -map.top));
+                    }
                     br->SetColor(D2D1::ColorF(0, 0, 0, 0.45f));
                     brt->DrawText(label.c_str(), static_cast<UINT32>(label.size()), fmt, R(lr.left + 1, lr.top + 1, lr.right + 1, lr.bottom + 1), br,
                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
@@ -1038,7 +1047,7 @@ void App::DrawTreemap(const RectF& area) {
     }
     if (tmBitmap_) {
         gfx_.PushClip(map);
-        gfx_.Bitmap(tmBitmap_, RWH(tmArea_.left, tmArea_.top, W(tmArea_), H(tmArea_)));
+        gfx_.Bitmap(tmBitmap_, RWH(tmArea_.left, tmArea_.top, W(tmArea_), H(tmArea_)), 1.0f, true);
         gfx_.PopClip();
     }
     for (int i : tmShields_) {

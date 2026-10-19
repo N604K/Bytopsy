@@ -149,18 +149,21 @@ the user can't get back without saying so.** That is the gap CCleaner-style tool
       themselves (nobody can listen here). Not done: rows off screen are not exposed (no
       virtualized list), the treemap is one image.*
 - [x] Localization: move strings to a table; start with the languages of the first contributors.
-      *Done: the mechanism, not a translation; none ships yet (the languages wait for their first
-      contributors). `src/i18n.cpp`: `Tr`, `TrF` with numbered `{0}` values, `TrN` plurals with a
+      *Done: the mechanism, and Hebrew (`res/lang/he.lang`, all texts, machine-assisted: native
+      review is welcome) with a mirrored right-to-left layout: the whole window is drawn flipped
+      and text, icons and pictures are put upright into the mirrored place, mouse input, popup
+      menus, the search box, UI Automation and the arrow keys follow; a right-to-left language is
+      recognized by its code. Other languages wait for their first contributors. `src/i18n.cpp`: `Tr`, `TrF` with numbered `{0}` values, `TrN` plurals with a
       per-language rule (one, zero-one, none, East Slavic, Polish, Czech, Romanian, Lithuanian,
-      Slovenian, Arabic), English as the key and the fallback. Every text of the windowed app goes
+      Slovenian, Arabic, Hebrew), English as the key and the fallback. Every text of the windowed app goes
       through it, including cleaner names and descriptions, dialogs, toasts and accessibility
       names; the journal, logs, paths, command lines and the terminal app stay English. Languages
       are UTF-8 `res/lang/<code>.lang` files built into the exe, or loaded from a `lang` folder next
       to it; Windows' display language picks one, `⋯` > *Language* overrides it. Numbers and dates
-      follow the Windows region settings. A pseudo-language (menu, or `BYTOPSY_LANG=pseudo`)
-      lengthens every text by about 40%; with it, Home, Folders, Largest files, File types,
+      follow the Windows region settings. A pseudo-language (since removed; it lengthened
+      every text by about 40%) was used to check Home, Folders, Largest files, File types,
       Duplicates, Similar photos, Old files, Developer junk, Cleanup, AI models, WSL, Windows, Games,
-      Disk health, Startup, Apps, History, Recently deleted and the delete dialog were checked in
+      Disk health, Startup, Apps, History, Recently deleted and the delete dialog in
       screenshots, and the layouts were made to measure their texts (buttons, chips, labels,
       dialog columns) rather than assume English widths. `tools/extract_strings.py` writes
       `res/lang/template.lang` (about 1400 texts), starts and updates translations, and its

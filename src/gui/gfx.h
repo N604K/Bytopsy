@@ -25,6 +25,8 @@ inline RectF R(float l, float t, float r, float b) { return D2D1::RectF(l, t, r,
 inline RectF RWH(float x, float y, float w, float h) { return D2D1::RectF(x, y, x + w, y + h); }
 inline float W(const RectF& r) { return r.right - r.left; }
 inline float H(const RectF& r) { return r.bottom - r.top; }
+// True when the first letter with a direction in `s` is Hebrew, Arabic or another right-to-left script.
+bool StartsRtl(const std::wstring& s);
 inline bool Inside(const RectF& r, float x, float y) { return x >= r.left && x < r.right && y >= r.top && y < r.bottom; }
 inline RectF Inset(const RectF& r, float dx, float dy) { return R(r.left + dx, r.top + dy, r.right - dx, r.bottom - dy); }
 
@@ -78,11 +80,21 @@ public:
     void GradientH(const RectF& r, float radius, D2D1_COLOR_F a, D2D1_COLOR_F b);
     void Shadow(const RectF& r, float radius, float spread);
 
+    // Right-to-left layout: everything is drawn mirrored (a flip of the whole target), except text,
+    // icons and bitmaps, which are drawn upright into the mirrored place. Rectangles passed to the
+    // drawing functions stay in the unmirrored ("logical") layout; Align::Left means the start of the line.
+    void SetMirror(bool on) { mirror_ = on; }
+    bool Mirror() const { return mirror_; }
+    float MirrorX(float x) const { return mirror_ ? Size().width - x : x; }
+    RectF MirrorRect(const RectF& r) const { return mirror_ ? R(MirrorX(r.right), r.top, MirrorX(r.left), r.bottom) : r; }
+
     void Text(const std::wstring& s, const RectF& r, D2D1_COLOR_F c, const TextStyle& st);
     float Measure(const std::wstring& s, const TextStyle& st);
     float MeasureHeight(const std::wstring& s, float width, const TextStyle& st);
+    // Mirrored layout: an icon keeps its look unless it points somewhere (arrows, chevrons).
     void Icon(wchar_t glyph, const RectF& r, D2D1_COLOR_F c, float size = 16.0f);
-    void Bitmap(ID2D1Bitmap* bmp, const RectF& r, float opacity = 1.0f);
+    // Mirrored layout: `withLayout` mirrors the picture too (a drawing made for the layout), otherwise it stays upright.
+    void Bitmap(ID2D1Bitmap* bmp, const RectF& r, float opacity = 1.0f, bool withLayout = false);
 
     void PushClip(const RectF& r);
     void PopClip();
@@ -102,7 +114,8 @@ public:
     const std::vector<TextRun>& Runs() const { return runs_; }
 
 private:
-    IDWriteTextFormat* Format(const TextStyle& st);
+    IDWriteTextFormat* Format(const TextStyle& st, bool rtl = false);
+    D2D1_MATRIX_3X2_F BaseTransform() const;
     void CreateTarget();
     void DiscardTarget();
     void Record(const std::wstring& s, const RectF& r, const TextStyle& st);
@@ -114,9 +127,10 @@ private:
     ID2D1HwndRenderTarget* rt_ = nullptr;
     ID2D1SolidColorBrush* brush_ = nullptr;
     IDWriteInlineObject* ellipsis_ = nullptr;
-    std::map<std::tuple<int, int, int, int, int, int>, IDWriteTextFormat*> formats_;
+    std::map<std::tuple<int, int, int, int, int, int, int>, IDWriteTextFormat*> formats_;
     std::wstring uiFont_, displayFont_, iconFont_, locale_;
     bool fluentIcons_ = false;
+    bool mirror_ = false;
     float dpi_ = 96.0f;
     unsigned generation_ = 1;
     bool recording_ = false;

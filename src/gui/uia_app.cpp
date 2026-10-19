@@ -470,7 +470,8 @@ const AccTree* App::AccCurrent() {
 }
 
 RECT App::AccScreenRect(const RectF& r) const {
-    POINT a{Dip2Px(r.left), Dip2Px(r.top)}, b{Dip2Px(r.right), Dip2Px(r.bottom)};
+    RectF m = gfx_.MirrorRect(r);
+    POINT a{Dip2Px(m.left), Dip2Px(m.top)}, b{Dip2Px(m.right), Dip2Px(m.bottom)};
     ClientToScreen(hwnd_, &a);
     ClientToScreen(hwnd_, &b);
     return RECT{a.x, a.y, b.x, b.y};
@@ -482,7 +483,7 @@ bool App::AccClientPoint(double sx, double sy, float* x, float* y) const {
     RECT rc;
     GetClientRect(hwnd_, &rc);
     if (!PtInRect(&rc, p)) return false;
-    *x = Px2Dip(p.x);
+    *x = MouseX(p.x);
     *y = Px2Dip(p.y);
     return true;
 }
@@ -685,7 +686,7 @@ bool App::DialogKey(WPARAM vk, bool shift) {
         case VK_DOWN: moveTo(pos + 1); return true;
         case VK_LEFT:
         case VK_RIGHT: {
-            int d = vk == VK_RIGHT ? 1 : -1;
+            int d = (vk == VK_RIGHT) != gfx_.Mirror() ? 1 : -1;
             dialog_.kbd = true;
             if (cur >= kChoiceSlot) {
                 DialogChoice& ch = dialog_.choices[static_cast<size_t>(cur - kChoiceSlot)];
