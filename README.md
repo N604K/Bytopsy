@@ -571,7 +571,8 @@ GitHub Actions builds and runs the self-tests on every push and pull request
 ([.github/workflows/build.yml](.github/workflows/build.yml)). A tag `v*` publishes a release with
 `bytopsy-<version>-x64.zip` (both programs and this README) and its SHA-256 in a `.sha256` file; see
 [docs/RELEASING.md](docs/RELEASING.md). Releases are not code-signed yet, so SmartScreen may warn
-before the first start; the workflow is prepared for SignPath signing (same document).
+before the first start; the workflow is prepared for SignPath signing (same document, and the
+[code signing policy](#code-signing-policy)).
 
 ## The terminal app (`bytopsy-cli.exe`)
 
@@ -779,6 +780,25 @@ packaging/signpath/   SignPath artifact configuration for code signing
 packaging/winget/, scoop/, chocolatey/  package manager manifests (templates)
 packaging/update-manifests.ps1  fills them in for a release
 ```
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org) (once the project is accepted; until then releases are
+unsigned).
+
+- Only `bytopsy.exe` and `bytopsy-cli.exe` are signed, and only when this repository's public
+  GitHub Actions workflow built them from a `v*` tag of this repository
+  ([.github/workflows/build.yml](.github/workflows/build.yml), [docs/RELEASING.md](docs/RELEASING.md)).
+  Nothing built anywhere else is signed.
+- Committers and reviewers: [Nativ Kdoshim](https://github.com/N604K).
+- Approvers (each signing request is approved by hand): [Nativ Kdoshim](https://github.com/N604K).
+- Everyone with these roles uses multi-factor authentication for GitHub and SignPath.
+
+Privacy: this program will not transfer any information to other networked systems unless
+specifically requested by the user or the person installing or operating it. The update check is
+off until you turn it on, and the programs it starts on request (Windows Update, winget) are listed
+under [Privacy](#privacy).
 
 ## License
 
